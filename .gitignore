@@ -1,0 +1,66 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-journal
+data/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+*.out
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Docker
+.docker/
+
+# Go
+*.test
+__debug_bin
+
+# Backend binaries
+backend/server
+backend/prism
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/dev-dist/
+frontend/.cache/
+
+# Uploads
+uploads/
