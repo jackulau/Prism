@@ -56,13 +56,16 @@ func handleChatMessage(deps *Dependencies, client *websocket.Client, msg *websoc
 	userMsg, err := deps.MessageRepo.Create(msg.ConversationID, "user", msg.Content, nil, "")
 	if err != nil {
 		log.Printf("Failed to save user message: %v", err)
+		client.SendMessage(websocket.NewError("database_error", "failed to save message: "+err.Error()))
+		return
 	}
 
 	// Get message history
 	messages, err := deps.MessageRepo.ListByConversationID(msg.ConversationID)
 	if err != nil {
 		log.Printf("Failed to get message history: %v", err)
-		messages = []*repository.Message{}
+		client.SendMessage(websocket.NewError("database_error", "failed to get message history: "+err.Error()))
+		return
 	}
 
 	// Build LLM messages
@@ -298,6 +301,13 @@ func streamLLMResponseWithMCP(ctx context.Context, deps *Dependencies, client *w
 	// Check if provider is set
 	if provider == "" {
 		client.SendMessage(websocket.NewError("provider_error", "no LLM provider configured for this conversation"))
+		return
+	}
+
+	// Check if provider has a valid API key configured
+	if !deps.LLMManager.HasValidKey(provider) {
+		client.SendMessage(websocket.NewError("api_key_missing",
+			"API key not configured for provider: "+provider+". Please add your API key in Settings."))
 		return
 	}
 

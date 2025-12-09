@@ -2,6 +2,8 @@
 
 **Prism** is a free and open-source, self-hosted web agent. It supports multiple LLM providers, GitHub integration, and secure sandboxed tool execution.
 
+![Prism Dashboard](dashboard.png)
+
 ## Features
 
 - **Multi-Provider LLM Support**: OpenAI, Anthropic, Google AI, and Ollama (local LLMs)
@@ -134,8 +136,6 @@ prism/
   - Read-only root filesystem
 
 ## API
-
-See [API Documentation](/api/docs) for the full API reference.
 
 ### WebSocket
 

@@ -38,25 +38,25 @@ func (c *Client) Name() string {
 func (c *Client) Models() []llm.Model {
 	return []llm.Model{
 		{
-			ID:             "gemini-2.0-flash-exp",
-			Name:           "Gemini 2.0 Flash",
-			Description:    "Latest multimodal model with enhanced capabilities",
+			ID:             "gemini-2.5-flash",
+			Name:           "Gemini 2.5 Flash",
+			Description:    "Fast and capable for most tasks",
 			ContextWindow:  1000000,
 			SupportsTools:  true,
 			SupportsVision: true,
 		},
 		{
-			ID:             "gemini-1.5-pro",
-			Name:           "Gemini 1.5 Pro",
+			ID:             "gemini-2.5-pro",
+			Name:           "Gemini 2.5 Pro",
 			Description:    "Best for complex reasoning tasks",
-			ContextWindow:  2000000,
+			ContextWindow:  1000000,
 			SupportsTools:  true,
 			SupportsVision: true,
 		},
 		{
-			ID:             "gemini-1.5-flash",
-			Name:           "Gemini 1.5 Flash",
-			Description:    "Fast and versatile for most tasks",
+			ID:             "gemini-2.0-flash",
+			Name:           "Gemini 2.0 Flash",
+			Description:    "Stable multimodal model",
 			ContextWindow:  1000000,
 			SupportsTools:  true,
 			SupportsVision: true,
@@ -93,6 +93,16 @@ func (c *Client) ValidateKey(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+// HasConfiguredKey returns whether the provider has an API key configured
+func (c *Client) HasConfiguredKey() bool {
+	return c.apiKey != ""
+}
+
+// SetAPIKey updates the provider's API key
+func (c *Client) SetAPIKey(key string) {
+	c.apiKey = key
 }
 
 // Chat sends a chat request and returns a streaming response

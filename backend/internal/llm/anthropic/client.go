@@ -38,25 +38,25 @@ func (c *Client) Name() string {
 func (c *Client) Models() []llm.Model {
 	return []llm.Model{
 		{
-			ID:             "claude-3-5-sonnet-20241022",
-			Name:           "Claude 3.5 Sonnet",
-			Description:    "Most intelligent model, best for complex tasks",
+			ID:             "claude-sonnet-4-5-20250929",
+			Name:           "Claude Sonnet 4.5",
+			Description:    "Best balance of intelligence, speed, and cost",
 			ContextWindow:  200000,
 			SupportsTools:  true,
 			SupportsVision: true,
 		},
 		{
-			ID:             "claude-3-5-haiku-20241022",
-			Name:           "Claude 3.5 Haiku",
-			Description:    "Fastest and most cost-effective",
+			ID:             "claude-haiku-4-5-20251001",
+			Name:           "Claude Haiku 4.5",
+			Description:    "Fastest model with near-frontier intelligence",
 			ContextWindow:  200000,
 			SupportsTools:  true,
 			SupportsVision: true,
 		},
 		{
-			ID:             "claude-3-opus-20240229",
-			Name:           "Claude 3 Opus",
-			Description:    "Powerful model for complex analysis",
+			ID:             "claude-opus-4-5-20251101",
+			Name:           "Claude Opus 4.5",
+			Description:    "Premium model with maximum intelligence",
 			ContextWindow:  200000,
 			SupportsTools:  true,
 			SupportsVision: true,
@@ -79,7 +79,7 @@ func (c *Client) ValidateKey(ctx context.Context, key string) error {
 	// Anthropic doesn't have a simple key validation endpoint
 	// We'll try a minimal request
 	body := map[string]interface{}{
-		"model":      "claude-3-5-haiku-20241022",
+		"model":      "claude-haiku-4-5-20251001",
 		"max_tokens": 1,
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": "Hi"},
@@ -107,6 +107,16 @@ func (c *Client) ValidateKey(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+// HasConfiguredKey returns whether the provider has an API key configured
+func (c *Client) HasConfiguredKey() bool {
+	return c.apiKey != ""
+}
+
+// SetAPIKey updates the provider's API key
+func (c *Client) SetAPIKey(key string) {
+	c.apiKey = key
 }
 
 // Chat sends a chat request and returns a streaming response

@@ -23,6 +23,13 @@ type Provider interface {
 
 	// ValidateKey validates an API key
 	ValidateKey(ctx context.Context, key string) error
+
+	// HasConfiguredKey returns whether the provider has an API key configured
+	// Returns true for providers that don't require an API key (e.g., Ollama)
+	HasConfiguredKey() bool
+
+	// SetAPIKey updates the provider's API key
+	SetAPIKey(key string)
 }
 
 // Model represents an available model

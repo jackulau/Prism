@@ -243,7 +243,15 @@ export const logoutUser = async () => {
   clearAuth();
 };
 
-export const refreshAuth = async () => {
+// Track ongoing refresh to prevent concurrent refresh attempts
+let refreshPromise: Promise<boolean> | null = null;
+
+export const refreshAuth = async (): Promise<boolean> => {
+  // If refresh is already in progress, wait for it
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
   const { refreshToken, setUser, setTokens, clearAuth } = useAuthStore.getState();
 
   if (!refreshToken) {
@@ -251,24 +259,32 @@ export const refreshAuth = async () => {
     return false;
   }
 
-  try {
-    const response = await authApi.refreshTokens(refreshToken);
-    setTokens(response.access_token, response.refresh_token);
-    setUser(response.user);
+  // Create the refresh promise
+  refreshPromise = (async () => {
+    try {
+      const response = await authApi.refreshTokens(refreshToken);
+      setTokens(response.access_token, response.refresh_token);
+      setUser(response.user);
 
-    // Reconnect services with new token
-    apiService.setToken(response.access_token);
-    wsService.disconnect();
-    wsService.connect(response.access_token);
+      // Reconnect services with new token
+      apiService.setToken(response.access_token);
+      wsService.disconnect();
+      wsService.connect(response.access_token);
 
-    return true;
-  } catch {
-    // Token refresh failed - clearing auth
-    wsService.disconnect();
-    apiService.setToken(null);
-    clearAuth();
-    return false;
-  }
+      return true;
+    } catch {
+      // Token refresh failed - clearing auth
+      wsService.disconnect();
+      apiService.setToken(null);
+      clearAuth();
+      return false;
+    } finally {
+      // Clear the promise when done
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 };
 
 // Initialize auth on app load

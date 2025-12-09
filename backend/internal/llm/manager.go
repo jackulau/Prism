@@ -64,6 +64,31 @@ func (m *Manager) Chat(ctx context.Context, providerName string, req *ChatReques
 	return provider.Chat(ctx, req)
 }
 
+// HasValidKey checks if a provider has a valid API key configured
+func (m *Manager) HasValidKey(providerName string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	provider, ok := m.providers[providerName]
+	if !ok {
+		return false
+	}
+	return provider.HasConfiguredKey()
+}
+
+// SetAPIKey sets the API key for a provider
+func (m *Manager) SetAPIKey(providerName, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	provider, ok := m.providers[providerName]
+	if !ok {
+		return fmt.Errorf("provider not found: %s", providerName)
+	}
+	provider.SetAPIKey(key)
+	return nil
+}
+
 // ProviderInfo contains information about a provider
 type ProviderInfo struct {
 	Name           string  `json:"name"`

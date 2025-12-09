@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -21,6 +22,9 @@ type EncryptionService struct {
 func NewEncryptionService(key string) (*EncryptionService, error) {
 	if key == "" {
 		// Generate a random key for development (should be set in production)
+		log.Println("WARNING: No ENCRYPTION_KEY provided. Generating random key for this session.")
+		log.Println("WARNING: Encrypted data (API keys, tokens) will be lost on server restart!")
+		log.Println("WARNING: Generate a persistent key with: openssl rand -hex 32")
 		randomKey := make([]byte, 32)
 		if _, err := rand.Read(randomKey); err != nil {
 			return nil, fmt.Errorf("failed to generate random key: %w", err)

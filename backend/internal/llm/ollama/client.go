@@ -107,6 +107,16 @@ func (c *Client) ValidateKey(ctx context.Context, key string) error {
 	return nil
 }
 
+// HasConfiguredKey returns true since Ollama doesn't require an API key
+func (c *Client) HasConfiguredKey() bool {
+	return true // Ollama is local and doesn't need an API key
+}
+
+// SetAPIKey is a no-op for Ollama since it doesn't use API keys
+func (c *Client) SetAPIKey(key string) {
+	// No-op: Ollama doesn't use API keys
+}
+
 // Chat sends a chat request and returns a streaming response
 func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) (<-chan llm.StreamChunk, error) {
 	// Build request body

@@ -3,7 +3,6 @@ import { MessageSquare, Settings, FolderTree, ChevronLeft, ChevronRight, Plus, G
 import { useAppStore } from '../../store'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { toast } from '../../store/toastStore'
-import { ModelSelector } from '../ModelSelector'
 
 interface SidebarProps {
   isCollapsed: boolean
@@ -119,16 +118,6 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             onClick={handleSettingsClick}
           />
         </div>
-
-        {/* Model Selector */}
-        {!isCollapsed && (
-          <div className="mt-4 px-2">
-            <span className="text-xs font-semibold text-editor-muted uppercase tracking-wider block mb-2">
-              Model
-            </span>
-            <ModelSelector />
-          </div>
-        )}
 
         {/* Conversations List */}
         {!isCollapsed && (

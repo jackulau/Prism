@@ -174,6 +174,10 @@ func Setup(deps *Dependencies) *fiber.App {
 		// Start read/write pumps
 		go client.WritePump()
 		client.ReadPump()
+	}, websocket.Config{
+		// Accept "auth" subprotocol - required for browser to keep connection open
+		// when client sends Sec-WebSocket-Protocol: auth, <token>
+		Subprotocols: []string{"auth"},
 	}))
 
 	// Provider routes (auth required)
@@ -213,6 +217,8 @@ func Setup(deps *Dependencies) *fiber.App {
 		workspace := v1.Group("/workspace", middleware.AuthMiddleware(deps.JWTService))
 		workspace.Get("/directory", workspaceHandler.GetDirectory)
 		workspace.Post("/directory", workspaceHandler.SetDirectory)
+		workspace.Get("/browse", workspaceHandler.BrowseDirectories)
+		workspace.Post("/pick-folder", workspaceHandler.OpenFolderPicker)
 	}
 
 	// GitHub webhook routes

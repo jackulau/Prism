@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacklau/prism/internal/sandbox"
+	"github.com/sqweek/dialog"
 )
 
 // WorkspaceHandler handles workspace-related HTTP requests
@@ -203,6 +204,156 @@ func (h *WorkspaceHandler) CloneGitHubRepo(c *fiber.Ctx) error {
 		"success": true,
 		"path":    clonePath,
 		"message": fmt.Sprintf("Successfully cloned %s", repoName),
+	})
+}
+
+// OpenFolderPicker opens the native OS folder picker dialog and returns the selected path
+func (h *WorkspaceHandler) OpenFolderPicker(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+
+	// Get the current workspace as the starting directory
+	startDir, _ := h.sandboxService.GetOrCreateWorkDir(userID)
+	if startDir == "" {
+		startDir, _ = os.Getwd()
+	}
+
+	// Open native folder picker dialog
+	selectedPath, err := dialog.Directory().Title("Select Workspace Folder").SetStartDir(startDir).Browse()
+	if err != nil {
+		if err == dialog.ErrCancelled {
+			return c.JSON(fiber.Map{
+				"cancelled": true,
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to open folder picker: %v", err),
+		})
+	}
+
+	// Verify the selected path is a directory
+	info, err := os.Stat(selectedPath)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "selected path does not exist",
+		})
+	}
+	if !info.IsDir() {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "selected path is not a directory",
+		})
+	}
+
+	// Set the workspace directory
+	if err := h.sandboxService.SetWorkDir(userID, selectedPath); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to set workspace: %v", err),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"path":    selectedPath,
+	})
+}
+
+// BrowseDirectories lists directories at a given path for folder picker UI
+func (h *WorkspaceHandler) BrowseDirectories(c *fiber.Ctx) error {
+	path := c.Query("path", "/")
+
+	// Validate path length
+	if len(path) > maxPathLength {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": fmt.Sprintf("path too long (max %d characters)", maxPathLength),
+		})
+	}
+
+	// Validate no null bytes
+	if strings.ContainsRune(path, '\x00') {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "path contains invalid characters",
+		})
+	}
+
+	// Resolve the path
+	resolvedPath := path
+	if path == "." || path == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get current directory",
+			})
+		}
+		resolvedPath = cwd
+	} else if !filepath.IsAbs(path) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to get current directory",
+			})
+		}
+		resolvedPath = filepath.Join(cwd, path)
+	}
+
+	// Clean the path
+	resolvedPath = filepath.Clean(resolvedPath)
+
+	// Verify the path exists and is a directory
+	info, err := os.Stat(resolvedPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "path does not exist",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to access path: %v", err),
+		})
+	}
+
+	if !info.IsDir() {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "path is not a directory",
+		})
+	}
+
+	// Read directory entries
+	entries, err := os.ReadDir(resolvedPath)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to read directory: %v", err),
+		})
+	}
+
+	// Filter to only directories
+	type DirEntry struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+
+	directories := make([]DirEntry, 0)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// Skip hidden directories (starting with .)
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+			directories = append(directories, DirEntry{
+				Name: entry.Name(),
+				Path: filepath.Join(resolvedPath, entry.Name()),
+			})
+		}
+	}
+
+	// Calculate parent path
+	parentPath := filepath.Dir(resolvedPath)
+	if parentPath == resolvedPath {
+		parentPath = "" // At root, no parent
+	}
+
+	return c.JSON(fiber.Map{
+		"current_path": resolvedPath,
+		"parent_path":  parentPath,
+		"directories":  directories,
 	})
 }
 

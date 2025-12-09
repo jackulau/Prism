@@ -1,79 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Editor, { OnMount, OnChange, DiffEditor } from '@monaco-editor/react'
-import { ChevronRight, ChevronDown, File, Folder, Copy, Check, Loader2, Save, History, X, RotateCcw } from 'lucide-react'
+import { File, Copy, Check, Loader2, Save, History, X, RotateCcw } from 'lucide-react'
 import { useSandboxStore } from '../../store/sandboxStore'
 import { wsService } from '../../services/websocket'
 import { apiService } from '../../services/api'
 
-import type { FileNode, FileHistoryEntry } from '../../store/sandboxStore'
+import type { FileHistoryEntry } from '../../store/sandboxStore'
 import type { editor } from 'monaco-editor'
-
-interface FileTreeItemProps extends FileNode {
-  level: number
-  selectedFile: string | null
-  onSelect: (path: string | null) => void
-  dirtyFiles: Set<string>
-}
-
-function FileTreeItem({ name, path, isDirectory, children, level, selectedFile, onSelect, dirtyFiles }: FileTreeItemProps) {
-  const [isExpanded, setIsExpanded] = useState(level < 2)
-
-  const handleClick = () => {
-    if (isDirectory) {
-      setIsExpanded(!isExpanded)
-    } else {
-      onSelect(path)
-    }
-  }
-
-  const isDirty = dirtyFiles.has(path)
-
-  return (
-    <div>
-      <button
-        onClick={handleClick}
-        className={`w-full flex items-center gap-1 px-2 py-1 text-sm hover:bg-editor-border/50 transition-colors ${
-          selectedFile === path ? 'bg-editor-accent/20 text-editor-accent' : 'text-editor-text'
-        }`}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
-      >
-        {isDirectory ? (
-          <>
-            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            <Folder size={14} className="text-editor-warning" />
-          </>
-        ) : (
-          <>
-            <span className="w-3.5" />
-            <File size={14} className="text-editor-muted" />
-          </>
-        )}
-        <span className="truncate">{name}</span>
-        {isDirty && <span className="ml-1 text-editor-warning">●</span>}
-      </button>
-      {isDirectory && isExpanded && children?.map((child) => (
-        <FileTreeItem
-          key={child.path}
-          name={child.name}
-          path={child.path}
-          isDirectory={child.isDirectory}
-          children={child.children}
-          content={child.content}
-          level={level + 1}
-          selectedFile={selectedFile}
-          onSelect={onSelect}
-          dirtyFiles={dirtyFiles}
-        />
-      ))}
-    </div>
-  )
-}
 
 export function CodeViewer() {
   const {
-    files,
     selectedFile,
-    setSelectedFile,
     getFileContent,
     setFileContent,
     fileHistory,
@@ -248,40 +185,9 @@ export function CodeViewer() {
   }
 
   return (
-    <div className="h-full flex">
-      {/* File Tree */}
-      <div className="w-64 border-r border-editor-border bg-editor-bg overflow-y-auto flex-shrink-0">
-        <div className="p-2 text-xs font-semibold text-editor-muted uppercase tracking-wider border-b border-editor-border">
-          Files
-        </div>
-        <div className="py-1">
-          {files.length > 0 ? (
-            files.map((file) => (
-              <FileTreeItem
-                key={file.path}
-                name={file.name}
-                path={file.path}
-                isDirectory={file.isDirectory}
-                children={file.children}
-                content={file.content}
-                level={0}
-                selectedFile={selectedFile}
-                onSelect={setSelectedFile}
-                dirtyFiles={dirtyFiles}
-              />
-            ))
-          ) : (
-            <div className="p-4 text-sm text-editor-muted text-center">
-              No files available
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Code Editor */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {selectedFile ? (
-          <>
+    <div className="h-full flex flex-col overflow-hidden">
+      {selectedFile ? (
+        <>
             {/* File Header */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-editor-border bg-editor-bg">
               <div className="flex items-center gap-2 text-sm">
@@ -456,16 +362,15 @@ export function CodeViewer() {
               )}
             </div>
           </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-editor-muted">
-            <div className="text-center">
-              <File size={48} className="mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Select a file to edit</p>
-              <p className="text-sm mt-1">Choose a file from the tree on the left</p>
-            </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-editor-muted">
+          <div className="text-center">
+            <File size={48} className="mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">Select a file to edit</p>
+            <p className="text-sm mt-1">Choose a file from the sidebar explorer</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

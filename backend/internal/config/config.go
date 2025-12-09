@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -158,11 +160,49 @@ func Load() (*Config, error) {
 		CodeRunnerCPULimit:    getEnv("CODE_RUNNER_CPU_LIMIT", "0.5"),
 		CodeRunnerTimeout:     getDurationEnv("CODE_RUNNER_TIMEOUT", 5*time.Minute),
 
-		// Guest Mode - enabled by default for easy access
-		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", true),
+		// Guest Mode - disabled by default for security
+		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+	}
+
+	// Validate security configuration in production
+	if err := cfg.validateSecurity(); err != nil {
+		return nil, err
 	}
 
 	return cfg, nil
+}
+
+// validateSecurity checks security-critical configuration values
+func (cfg *Config) validateSecurity() error {
+	isProduction := cfg.Environment == "production"
+
+	// Validate JWT secret
+	if cfg.JWTSecret == "change-me-in-production" {
+		if isProduction {
+			return fmt.Errorf("JWT_SECRET must be changed from the default value in production. Generate one with: openssl rand -base64 48")
+		}
+		log.Println("WARNING: Using default JWT_SECRET. Set a secure value for production.")
+	} else if len(cfg.JWTSecret) < 32 {
+		if isProduction {
+			return fmt.Errorf("JWT_SECRET must be at least 32 characters in production")
+		}
+		log.Println("WARNING: JWT_SECRET is shorter than recommended (32+ characters)")
+	}
+
+	// Validate encryption key
+	if cfg.EncryptionKey == "" {
+		if isProduction {
+			return fmt.Errorf("ENCRYPTION_KEY must be set in production. Generate one with: openssl rand -hex 32")
+		}
+		log.Println("WARNING: ENCRYPTION_KEY not set. A random key will be generated (data will be lost on restart)")
+	}
+
+	// Warn about guest mode in production
+	if cfg.GuestModeEnabled && isProduction {
+		log.Println("WARNING: Guest mode is enabled in production. This allows unauthenticated access.")
+	}
+
+	return nil
 }
 
 func getEnv(key, defaultValue string) string {

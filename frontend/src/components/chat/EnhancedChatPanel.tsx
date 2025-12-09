@@ -1,10 +1,29 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X } from 'lucide-react'
+import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Terminal, Plus, HelpCircle, Cpu, Download } from 'lucide-react'
 import { Highlight, themes, type RenderProps } from 'prism-react-renderer'
 import { useAppStore } from '../../store'
 import { wsService } from '../../services/websocket'
 import { MessageQueue } from './MessageQueue'
+import { ModelSelector } from '../ModelSelector'
+import { toast } from '../../store/toastStore'
 import type { Message } from '../../types'
+
+// Command definition
+interface Command {
+  name: string
+  description: string
+  icon: React.ReactNode
+  hasArgs?: boolean
+}
+
+// Available commands
+const COMMANDS: Command[] = [
+  { name: '/clear', description: 'Clear message context', icon: <Trash2 size={14} /> },
+  { name: '/new', description: 'Start new conversation', icon: <Plus size={14} /> },
+  { name: '/help', description: 'Show available commands', icon: <HelpCircle size={14} /> },
+  { name: '/model', description: 'Switch model', icon: <Cpu size={14} />, hasArgs: true },
+  { name: '/export', description: 'Export conversation', icon: <Download size={14} /> },
+]
 
 // Code block component with syntax highlighting
 function CodeBlock({ code, language, isStreaming }: { code: string; language: string; isStreaming?: boolean }) {
@@ -229,6 +248,9 @@ function MessageBubble({ message, onRollback, isGenerating, onStopAndRollback }:
 export function EnhancedChatPanel() {
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<File[]>([])
+  const [showCommands, setShowCommands] = useState(false)
+  const [filteredCommands, setFilteredCommands] = useState<Command[]>([])
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -242,9 +264,16 @@ export function EnhancedChatPanel() {
     rollbackToMessage,
     messageQueue,
     endGeneration,
+    clearMessages,
+    createNewConversation,
+    providers,
+    setSelectedProvider,
+    setSelectedModel,
+    addMessage,
   } = useAppStore()
 
   const isGenerating = metrics.isGenerating
+  const isConnected = connectionStatus === 'connected'
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -262,24 +291,201 @@ export function EnhancedChatPanel() {
     }
   }, [input])
 
+  // Filter commands when input starts with /
+  useEffect(() => {
+    if (input.startsWith('/')) {
+      const search = input.toLowerCase()
+      const matches = COMMANDS.filter(cmd => cmd.name.toLowerCase().startsWith(search))
+      setFilteredCommands(matches)
+      setShowCommands(matches.length > 0)
+      setSelectedCommandIndex(0)
+    } else {
+      setShowCommands(false)
+      setFilteredCommands([])
+    }
+  }, [input])
+
+  // Execute a command
+  const executeCommand = async (command: string) => {
+    const parts = command.trim().split(/\s+/)
+    const cmd = parts[0].toLowerCase()
+    const args = parts.slice(1).join(' ')
+
+    switch (cmd) {
+      case '/clear':
+        clearMessages()
+        toast.success('Context cleared')
+        break
+
+      case '/new':
+        await createNewConversation()
+        toast.success('New conversation started')
+        break
+
+      case '/help':
+        // Show help as a system message
+        const helpText = COMMANDS.map(c => `**${c.name}** - ${c.description}`).join('\n')
+        addMessage({
+          id: `help-${Date.now()}`,
+          role: 'assistant',
+          content: `## Available Commands\n\n${helpText}\n\n*Type a command and press Tab to autocomplete*`,
+          timestamp: new Date(),
+        })
+        break
+
+      case '/model':
+        if (args) {
+          // Find matching model
+          for (const provider of providers) {
+            const model = provider.models.find(m =>
+              m.id.toLowerCase().includes(args.toLowerCase()) ||
+              m.name.toLowerCase().includes(args.toLowerCase())
+            )
+            if (model) {
+              setSelectedProvider(provider.name)
+              setSelectedModel(model.id)
+              toast.success(`Switched to ${provider.name} / ${model.name}`)
+              return
+            }
+          }
+          toast.error(`Model "${args}" not found`)
+        } else {
+          // Show available models
+          const modelList = providers.flatMap(p =>
+            p.models.map(m => `- **${p.name}**: ${m.name}`)
+          ).join('\n')
+          addMessage({
+            id: `models-${Date.now()}`,
+            role: 'assistant',
+            content: `## Available Models\n\n${modelList || 'No models available'}\n\n*Usage: /model <name>*`,
+            timestamp: new Date(),
+          })
+        }
+        break
+
+      case '/export':
+        if (messages.length === 0) {
+          toast.error('No messages to export')
+          return
+        }
+        const exportContent = messages.map(m =>
+          `## ${m.role === 'user' ? 'You' : 'Assistant'}\n${m.content}`
+        ).join('\n\n---\n\n')
+        const blob = new Blob([exportContent], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `conversation-${new Date().toISOString().split('T')[0]}.md`
+        a.click()
+        URL.revokeObjectURL(url)
+        toast.success('Conversation exported')
+        break
+
+      default:
+        toast.error(`Unknown command: ${cmd}`)
+    }
+  }
+
+  // Helper function to convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.readAsDataURL(file)
+      reader.onload = () => {
+        const result = reader.result as string
+        // Remove the data URL prefix (e.g., "data:image/png;base64,")
+        const base64 = result.split(',')[1]
+        resolve(base64)
+      }
+      reader.onerror = (error) => reject(error)
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || !currentConversationId) return
+    if (!input.trim() && attachments.length === 0) return
 
     const userMessage = input.trim()
     setInput('')
+    setShowCommands(false)
 
-    // If generating, queue the message instead of sending immediately
-    if (isGenerating) {
+    // Handle commands
+    if (userMessage.startsWith('/')) {
+      setAttachments([]) // Clear attachments if command
+      await executeCommand(userMessage)
+      return
+    }
+
+    // Process attachments to base64
+    let attachmentData: Array<{ name: string; type: string; data: string }> = []
+    if (attachments.length > 0) {
+      try {
+        attachmentData = await Promise.all(
+          attachments.map(async (file) => ({
+            name: file.name,
+            type: file.type,
+            data: await fileToBase64(file),
+          }))
+        )
+      } catch {
+        toast.error('Failed to process attachments')
+        return
+      }
+    }
+    setAttachments([]) // Clear attachments after processing
+
+    // If no conversation, create one first
+    if (!currentConversationId) {
+      const newConvId = await createNewConversation()
+      if (!newConvId) {
+        toast.error('No model selected - please select a model first')
+        return
+      }
+      // Queue the message to be sent after conversation is created
       addToQueue(userMessage)
       return
     }
 
-    // Send message via WebSocket
-    wsService.sendChatMessage(currentConversationId, userMessage)
+    // If not connected or generating, queue the message
+    if (!isConnected || isGenerating) {
+      addToQueue(userMessage)
+      if (!isConnected) {
+        toast.info('Message queued - will send when connected')
+      }
+      return
+    }
+
+    // Send message via WebSocket with attachments
+    wsService.sendChatMessage(currentConversationId, userMessage, attachmentData.length > 0 ? attachmentData : undefined)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Handle command autocomplete navigation
+    if (showCommands && filteredCommands.length > 0) {
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        const cmd = filteredCommands[selectedCommandIndex]
+        setInput(cmd.name + (cmd.hasArgs ? ' ' : ''))
+        setShowCommands(false)
+        return
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedCommandIndex(i => (i + 1) % filteredCommands.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedCommandIndex(i => i === 0 ? filteredCommands.length - 1 : i - 1)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowCommands(false)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit(e)
@@ -300,8 +506,6 @@ export function EnhancedChatPanel() {
     rollbackToMessage(messageId)
   }
 
-  const isConnected = connectionStatus === 'connected'
-
   const handleAttachClick = () => {
     fileInputRef.current?.click()
   }
@@ -318,6 +522,26 @@ export function EnhancedChatPanel() {
 
   return (
     <div className="h-full flex flex-col bg-editor-bg">
+      {/* Chat Header with Model Selector */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-editor-border bg-editor-surface/30">
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-editor-text">Model</span>
+          <ModelSelector />
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              clearMessages()
+              toast.success('Context cleared')
+            }}
+            className="p-2 rounded-lg text-editor-muted hover:text-editor-text hover:bg-editor-surface transition-colors"
+            title="Clear context (/clear)"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
@@ -392,7 +616,7 @@ export function EnhancedChatPanel() {
 
       {/* Input */}
       <div className="p-4 border-t border-editor-border">
-        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+        <form onSubmit={handleSubmit} className="max-w-3xl mx-auto relative">
           {/* Attachment Preview */}
           {attachments.length > 0 && (
             <div className="flex gap-2 mb-2 flex-wrap">
@@ -411,6 +635,38 @@ export function EnhancedChatPanel() {
                     <X size={12} />
                   </button>
                 </div>
+              ))}
+            </div>
+          )}
+
+          {/* Command Autocomplete Dropdown */}
+          {showCommands && filteredCommands.length > 0 && (
+            <div className="absolute bottom-full left-0 right-0 mb-2 bg-editor-surface border border-editor-border rounded-lg shadow-lg overflow-hidden z-10">
+              <div className="px-3 py-2 border-b border-editor-border bg-editor-bg/50">
+                <span className="text-xs text-editor-muted">Commands</span>
+                <span className="text-xs text-editor-muted/50 ml-2">Tab to complete, ↑↓ to navigate</span>
+              </div>
+              {filteredCommands.map((cmd, i) => (
+                <button
+                  key={cmd.name}
+                  type="button"
+                  className={`w-full px-4 py-2.5 text-left flex items-center gap-3 transition-colors ${
+                    i === selectedCommandIndex
+                      ? 'bg-editor-accent/20 text-editor-accent'
+                      : 'hover:bg-editor-surface text-editor-text'
+                  }`}
+                  onClick={() => {
+                    setInput(cmd.name + (cmd.hasArgs ? ' ' : ''))
+                    setShowCommands(false)
+                    textareaRef.current?.focus()
+                  }}
+                >
+                  <span className={`${i === selectedCommandIndex ? 'text-editor-accent' : 'text-editor-muted'}`}>
+                    {cmd.icon}
+                  </span>
+                  <span className="font-mono text-sm">{cmd.name}</span>
+                  <span className="text-editor-muted text-sm">{cmd.description}</span>
+                </button>
               ))}
             </div>
           )}
@@ -449,17 +705,22 @@ export function EnhancedChatPanel() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={!isConnected ? "Connecting..." : !currentConversationId ? "Select or create a conversation..." : isGenerating ? "Type to queue message..." : "Send a message..."}
-              disabled={!isConnected || !currentConversationId}
+              placeholder={
+                !isConnected
+                  ? "Type message (will queue until connected)..."
+                  : isGenerating
+                    ? "Type to queue message..."
+                    : "Send a message... (type / for commands)"
+              }
               rows={1}
-              className="flex-1 bg-transparent text-editor-text placeholder-editor-muted py-3 pr-2 resize-none focus:outline-none max-h-48 disabled:opacity-50"
+              className="flex-1 bg-transparent text-editor-text placeholder-editor-muted py-3 pr-2 resize-none focus:outline-none max-h-48"
             />
 
             <button
               type="submit"
-              disabled={!input.trim() || !isConnected || !currentConversationId}
+              disabled={!input.trim()}
               className="m-2 p-2.5 rounded-lg bg-editor-accent text-white hover:bg-editor-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title={isGenerating ? "Queue message" : "Send message"}
+              title={!isConnected ? "Queue message (not connected)" : isGenerating ? "Queue message" : "Send message"}
             >
               <Send size={20} />
             </button>

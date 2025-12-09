@@ -10,8 +10,29 @@ class WebSocketService {
   private reconnectDelay = 1000;
   private token: string | null = null;
   private messageQueue: IncomingWSMessage[] = [];
+  private isConnecting = false;
+  private intentionalDisconnect = false;
 
   connect(token?: string) {
+    // Prevent multiple simultaneous connections
+    if (this.isConnecting) {
+      return;
+    }
+
+    // If already connected with same token, don't reconnect
+    if (this.ws && this.ws.readyState === WebSocket.OPEN && this.token === token) {
+      return;
+    }
+
+    // Close existing connection if any
+    if (this.ws) {
+      this.intentionalDisconnect = true;
+      this.ws.close();
+      this.ws = null;
+    }
+
+    this.isConnecting = true;
+    this.intentionalDisconnect = false;
     this.token = token || null;
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/ws`;
 
@@ -22,6 +43,7 @@ class WebSocketService {
     this.ws = token ? new WebSocket(wsUrl, ['auth', token]) : new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
+      this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('connected');
       this.reconnectAttempts = 0;
 
@@ -42,11 +64,17 @@ class WebSocketService {
     };
 
     this.ws.onclose = () => {
+      this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('disconnected');
-      this.attemptReconnect();
+
+      // Only attempt reconnect if this wasn't an intentional disconnect
+      if (!this.intentionalDisconnect) {
+        this.attemptReconnect();
+      }
     };
 
     this.ws.onerror = () => {
+      this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('error');
     };
   }
@@ -297,6 +325,7 @@ class WebSocketService {
 
   // Manual reconnect method for when automatic reconnection fails
   manualReconnect() {
+    this.intentionalDisconnect = false;
     this.reconnectAttempts = 0;
     this.connect(this.token || undefined);
   }
@@ -309,14 +338,18 @@ class WebSocketService {
     }
   }
 
-  sendChatMessage(conversationId: string, content: string) {
+  sendChatMessage(conversationId: string, content: string, attachments?: Array<{ name: string; type: string; data: string }>) {
     const store = useAppStore.getState();
 
-    // Create user message
+    // Create user message with attachment info if present
+    const attachmentInfo = attachments && attachments.length > 0
+      ? `\n\n📎 *Attached: ${attachments.map(a => a.name).join(', ')}*`
+      : '';
+
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content,
+      content: content + attachmentInfo,
       timestamp: new Date(),
     };
     store.addMessage(userMessage);
@@ -335,11 +368,12 @@ class WebSocketService {
     // Start tracking metrics
     store.startGeneration();
 
-    // Send message
+    // Send message with attachments
     this.send({
       type: 'chat.message',
       conversation_id: conversationId,
       content,
+      attachments,
     });
   }
 
@@ -424,6 +458,9 @@ class WebSocketService {
   }
 
   disconnect() {
+    this.intentionalDisconnect = true;
+    this.isConnecting = false;
+    this.reconnectAttempts = 0;
     if (this.ws) {
       this.ws.close();
       this.ws = null;

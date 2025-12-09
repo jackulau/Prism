@@ -238,6 +238,21 @@ class ApiService {
     return this.request<{ path: string }>('/workspace/directory');
   }
 
+  async browseDirectories(path: string = '/') {
+    return this.request<{
+      current_path: string;
+      parent_path: string;
+      directories: Array<{ name: string; path: string }>;
+    }>(`/workspace/browse?path=${encodeURIComponent(path)}`);
+  }
+
+  async openFolderPicker() {
+    return this.request<{ success?: boolean; path?: string; cancelled?: boolean }>(
+      '/workspace/pick-folder',
+      { method: 'POST' }
+    );
+  }
+
   // GitHub Integration
   async getGitHubStatus() {
     return this.request<{

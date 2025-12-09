@@ -359,7 +359,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
   createNewConversation: async () => {
-    const { selectedProvider, selectedModel } = get();
+    let { selectedProvider, selectedModel } = get();
+
+    // Ensure we have a valid model selected
+    if (!selectedModel) {
+      // Try loading providers first
+      await get().loadProviders();
+      const state = get();
+      selectedProvider = state.selectedProvider;
+      selectedModel = state.selectedModel;
+
+      // If still no model, cannot create conversation
+      if (!selectedModel) {
+        console.error('No model selected - cannot create conversation');
+        return null;
+      }
+    }
+
     const response = await apiService.createConversation(selectedProvider, selectedModel);
     if (response.data) {
       const newConv = response.data;

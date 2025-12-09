@@ -19,6 +19,7 @@ import { useSandboxStore, FileNode } from './store/sandboxStore'
 import { apiService } from './services/api'
 import { wsService } from './services/websocket'
 import { applyTheme } from './config/themes'
+import { initAuth, useAuthStore } from './store/authStore'
 
 // Helper to convert API sandbox files to FileNode format
 function convertToFileNodes(files: Array<{
@@ -68,10 +69,9 @@ function App() {
 
   const isConnected = connectionStatus === 'connected'
 
-  // Connect WebSocket on mount
+  // Initialize auth on mount (handles WebSocket connection with token)
   useEffect(() => {
-    wsService.connect()
-    return () => wsService.disconnect()
+    initAuth()
   }, [])
 
   // Load initial sandbox files when connected

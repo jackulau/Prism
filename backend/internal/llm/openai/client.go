@@ -38,9 +38,41 @@ func (c *Client) Name() string {
 func (c *Client) Models() []llm.Model {
 	return []llm.Model{
 		{
+			ID:             "o3",
+			Name:           "OpenAI o3",
+			Description:    "Most powerful reasoning model",
+			ContextWindow:  200000,
+			SupportsTools:  true,
+			SupportsVision: true,
+		},
+		{
+			ID:             "o4-mini",
+			Name:           "OpenAI o4-mini",
+			Description:    "Fast, cost-efficient reasoning",
+			ContextWindow:  128000,
+			SupportsTools:  true,
+			SupportsVision: true,
+		},
+		{
+			ID:             "gpt-4.1",
+			Name:           "GPT-4.1",
+			Description:    "Latest flagship model",
+			ContextWindow:  128000,
+			SupportsTools:  true,
+			SupportsVision: true,
+		},
+		{
+			ID:             "gpt-4.1-mini",
+			Name:           "GPT-4.1 Mini",
+			Description:    "Fast and affordable",
+			ContextWindow:  128000,
+			SupportsTools:  true,
+			SupportsVision: true,
+		},
+		{
 			ID:             "gpt-4o",
 			Name:           "GPT-4o",
-			Description:    "Most capable model, great for complex tasks",
+			Description:    "Legacy multimodal model",
 			ContextWindow:  128000,
 			SupportsTools:  true,
 			SupportsVision: true,
@@ -48,26 +80,10 @@ func (c *Client) Models() []llm.Model {
 		{
 			ID:             "gpt-4o-mini",
 			Name:           "GPT-4o Mini",
-			Description:    "Fast and affordable for simple tasks",
+			Description:    "Legacy fast model",
 			ContextWindow:  128000,
 			SupportsTools:  true,
 			SupportsVision: true,
-		},
-		{
-			ID:             "gpt-4-turbo",
-			Name:           "GPT-4 Turbo",
-			Description:    "High capability with vision support",
-			ContextWindow:  128000,
-			SupportsTools:  true,
-			SupportsVision: true,
-		},
-		{
-			ID:             "gpt-3.5-turbo",
-			Name:           "GPT-3.5 Turbo",
-			Description:    "Fast and efficient for most tasks",
-			ContextWindow:  16385,
-			SupportsTools:  true,
-			SupportsVision: false,
 		},
 	}
 }
@@ -102,6 +118,16 @@ func (c *Client) ValidateKey(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+// HasConfiguredKey returns whether the provider has an API key configured
+func (c *Client) HasConfiguredKey() bool {
+	return c.apiKey != ""
+}
+
+// SetAPIKey updates the provider's API key
+func (c *Client) SetAPIKey(key string) {
+	c.apiKey = key
 }
 
 // Chat sends a chat request and returns a streaming response

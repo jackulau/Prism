@@ -191,27 +191,36 @@ export const FileTree: React.FC = () => {
   const [newFileName, setNewFileName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [workspacePath, setWorkspacePath] = useState<string>('.');
-  const [showWorkspaceInput, setShowWorkspaceInput] = useState(false);
+  const [currentWorkspacePath, setCurrentWorkspacePath] = useState<string>('');
   const [showGitHubPanel, setShowGitHubPanel] = useState(false);
   const [gitHubStatus, setGitHubStatus] = useState<{ connected: boolean; username?: string } | null>(null);
   const [gitHubRepos, setGitHubRepos] = useState<Array<{ id: number; name: string; full_name: string; clone_url: string }>>([]);
   const [isCloning, setIsCloning] = useState(false);
+  const [visibleReposCount, setVisibleReposCount] = useState(10);
 
   // Load files from backend API
   const loadFiles = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await apiService.getSandboxFiles();
-      if (response.data?.files) {
-        const nodes = convertApiFilesToFileNodes(response.data.files);
+      // Load files and workspace path in parallel
+      const [filesResponse, workspaceResponse] = await Promise.all([
+        apiService.getSandboxFiles(),
+        apiService.getWorkspaceDirectory(),
+      ]);
+
+      if (filesResponse.data?.files) {
+        const nodes = convertApiFilesToFileNodes(filesResponse.data.files);
         setFileTree(nodes);
         // Also sync to sandbox store for CodeViewer
         const sandboxNodes = nodes.map(convertToSandboxFileNode);
         setSandboxFiles(sandboxNodes);
-      } else if (response.error) {
-        setError(response.error);
+      } else if (filesResponse.error) {
+        setError(filesResponse.error);
+      }
+
+      if (workspaceResponse.data?.path) {
+        setCurrentWorkspacePath(workspaceResponse.data.path);
       }
     } catch (err) {
       setError('Failed to load files');
@@ -243,20 +252,22 @@ export const FileTree: React.FC = () => {
     loadFiles();
   };
 
-  // Set workspace directory
-  const handleSetWorkspace = async () => {
-    if (!workspacePath.trim()) return;
+  // Open native folder picker
+  const handleOpenFolderPicker = async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      const response = await apiService.setWorkspaceDirectory(workspacePath.trim());
-      if (response.data?.success) {
-        setShowWorkspaceInput(false);
+      const response = await apiService.openFolderPicker();
+      if (response.data?.success && response.data.path) {
+        setCurrentWorkspacePath(response.data.path);
         loadFiles();
+      } else if (response.data?.cancelled) {
+        // User cancelled, do nothing
       } else if (response.error) {
         setError(response.error);
       }
     } catch {
-      setError('Failed to set workspace directory');
+      setError('Failed to open folder picker');
     } finally {
       setIsLoading(false);
     }
@@ -368,9 +379,10 @@ export const FileTree: React.FC = () => {
         </span>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setShowWorkspaceInput(!showWorkspaceInput)}
-            className="p-1 hover:bg-sidebar-hover rounded transition-smooth"
-            title="Set Workspace Directory"
+            onClick={handleOpenFolderPicker}
+            disabled={isLoading}
+            className="p-1 hover:bg-sidebar-hover rounded transition-smooth disabled:opacity-50"
+            title="Open Folder"
           >
             <FolderInput className="w-3.5 h-3.5 text-editor-muted" />
           </button>
@@ -416,30 +428,11 @@ export const FileTree: React.FC = () => {
         </div>
       )}
 
-      {/* Workspace Directory Input */}
-      {showWorkspaceInput && (
-        <div className="px-2 py-2 border-b border-editor-border bg-editor-surface/50">
-          <div className="text-xs text-editor-muted mb-1">Workspace Directory</div>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={workspacePath}
-              onChange={(e) => setWorkspacePath(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSetWorkspace();
-                if (e.key === 'Escape') setShowWorkspaceInput(false);
-              }}
-              placeholder=". (current directory)"
-              className="flex-1 bg-editor-surface text-editor-text text-sm px-2 py-1.5 rounded border border-editor-border focus:border-editor-accent focus:outline-none"
-              autoFocus
-            />
-            <button
-              onClick={handleSetWorkspace}
-              disabled={isLoading}
-              className="px-2 py-1.5 bg-editor-accent text-white text-xs rounded hover:bg-editor-accent/80 disabled:opacity-50"
-            >
-              Set
-            </button>
+      {/* Current Workspace Path Display */}
+      {currentWorkspacePath && (
+        <div className="px-2 py-1.5 border-b border-editor-border bg-editor-surface/30">
+          <div className="text-xs text-editor-muted truncate font-mono" title={currentWorkspacePath}>
+            {currentWorkspacePath}
           </div>
         </div>
       )}
@@ -463,7 +456,7 @@ export const FileTree: React.FC = () => {
               </div>
               {gitHubRepos.length > 0 ? (
                 <div className="space-y-1">
-                  {gitHubRepos.slice(0, 10).map((repo) => (
+                  {gitHubRepos.slice(0, visibleReposCount).map((repo) => (
                     <div
                       key={repo.id}
                       className="flex items-center justify-between p-2 bg-editor-surface rounded hover:bg-sidebar-hover cursor-pointer"
@@ -477,6 +470,14 @@ export const FileTree: React.FC = () => {
                       )}
                     </div>
                   ))}
+                  {gitHubRepos.length > visibleReposCount && (
+                    <button
+                      onClick={() => setVisibleReposCount(prev => prev + 10)}
+                      className="w-full px-3 py-1.5 text-xs text-editor-accent hover:text-editor-text hover:bg-editor-surface rounded transition-colors"
+                    >
+                      Load more ({gitHubRepos.length - visibleReposCount} remaining)
+                    </button>
+                  )}
                 </div>
               ) : (
                 <button
