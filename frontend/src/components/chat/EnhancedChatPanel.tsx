@@ -484,6 +484,21 @@ export function EnhancedChatPanel() {
         setShowCommands(false)
         return
       }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        const cmd = filteredCommands[selectedCommandIndex]
+        if (cmd.hasArgs) {
+          // Commands with args: just autocomplete (let user type args)
+          setInput(cmd.name + ' ')
+          setShowCommands(false)
+        } else {
+          // Commands without args: execute immediately
+          setInput('')
+          setShowCommands(false)
+          executeCommand(cmd.name)
+        }
+        return
+      }
     }
 
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -665,7 +680,7 @@ export function EnhancedChatPanel() {
             <div className="absolute bottom-full left-0 right-0 mb-2 bg-editor-surface border border-editor-border rounded-lg shadow-lg overflow-hidden z-10">
               <div className="px-3 py-2 border-b border-editor-border bg-editor-bg/50">
                 <span className="text-xs text-editor-muted">Commands</span>
-                <span className="text-xs text-editor-muted/50 ml-2">Tab to complete, ↑↓ to navigate</span>
+                <span className="text-xs text-editor-muted/50 ml-2">Enter or Tab to select, ↑↓ to navigate</span>
               </div>
               {filteredCommands.map((cmd, i) => (
                 <button
@@ -677,9 +692,15 @@ export function EnhancedChatPanel() {
                       : 'hover:bg-editor-surface text-editor-text'
                   }`}
                   onClick={() => {
-                    setInput(cmd.name + (cmd.hasArgs ? ' ' : ''))
-                    setShowCommands(false)
-                    textareaRef.current?.focus()
+                    if (cmd.hasArgs) {
+                      setInput(cmd.name + ' ')
+                      setShowCommands(false)
+                      textareaRef.current?.focus()
+                    } else {
+                      setInput('')
+                      setShowCommands(false)
+                      executeCommand(cmd.name)
+                    }
                   }}
                 >
                   <span className={`${i === selectedCommandIndex ? 'text-editor-accent' : 'text-editor-muted'}`}>
