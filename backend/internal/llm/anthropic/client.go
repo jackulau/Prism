@@ -135,6 +135,44 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) (<-chan llm.Str
 			"role": msg.Role,
 		}
 
+		// Handle tool results (from tool role messages)
+		if msg.ToolCallID != "" {
+			m["role"] = "user"
+			m["content"] = []map[string]interface{}{
+				{
+					"type":        "tool_result",
+					"tool_use_id": msg.ToolCallID,
+					"content":     msg.Content,
+				},
+			}
+			messages = append(messages, m)
+			continue
+		}
+
+		// Handle assistant messages with tool calls
+		if msg.Role == "assistant" && len(msg.ToolCalls) > 0 {
+			content := []map[string]interface{}{}
+			// Add text content if present
+			if msg.Content != "" {
+				content = append(content, map[string]interface{}{
+					"type": "text",
+					"text": msg.Content,
+				})
+			}
+			// Add tool_use blocks for each tool call
+			for _, tc := range msg.ToolCalls {
+				content = append(content, map[string]interface{}{
+					"type":  "tool_use",
+					"id":    tc.ID,
+					"name":  tc.Name,
+					"input": tc.Parameters,
+				})
+			}
+			m["content"] = content
+			messages = append(messages, m)
+			continue
+		}
+
 		// Handle content with images
 		if len(msg.Images) > 0 {
 			content := []map[string]interface{}{}
@@ -159,18 +197,6 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) (<-chan llm.Str
 			m["content"] = content
 		} else {
 			m["content"] = msg.Content
-		}
-
-		// Handle tool results
-		if msg.ToolCallID != "" {
-			m["role"] = "user"
-			m["content"] = []map[string]interface{}{
-				{
-					"type":        "tool_result",
-					"tool_use_id": msg.ToolCallID,
-					"content":     msg.Content,
-				},
-			}
 		}
 
 		messages = append(messages, m)

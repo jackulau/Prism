@@ -1,6 +1,6 @@
 import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
-import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile } from '../types';
+import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall } from '../types';
 import type { FileNode } from '../store/sandboxStore';
 
 class WebSocketService {
@@ -131,18 +131,36 @@ class WebSocketService {
 
       case 'tool.started':
         if (store.streamingMessageId) {
+          // Create a new tool call entry with 'running' status
+          const newToolCall: ToolCall = {
+            id: message.execution_id || `tool-${Date.now()}`,
+            name: message.tool_name || 'unknown',
+            parameters: (message.parameters as Record<string, unknown>) || {},
+            status: 'running',
+          };
+          store.addToolCallToMessage(store.streamingMessageId, newToolCall);
+
+          // Also append text for inline display
           const toolInfo = `\n\n**Using tool:** \`${message.tool_name}\`\n`;
           store.appendToMessage(store.streamingMessageId, toolInfo);
         }
         break;
 
       case 'tool.completed':
-        if (store.streamingMessageId && message.result) {
-          const resultStr = typeof message.result === 'string'
-            ? message.result
-            : JSON.stringify(message.result, null, 2);
-          const toolResult = `\n\`\`\`\n${resultStr}\n\`\`\`\n`;
-          store.appendToMessage(store.streamingMessageId, toolResult);
+        if (store.streamingMessageId) {
+          // Update the tool call status
+          const toolCallId = message.execution_id || '';
+          const status: ToolCall['status'] = message.status === 'completed' ? 'completed' : 'failed';
+          store.updateToolCallStatus(store.streamingMessageId, toolCallId, status, message.result);
+
+          // Also append result as text for inline display
+          if (message.result) {
+            const resultStr = typeof message.result === 'string'
+              ? message.result
+              : JSON.stringify(message.result, null, 2);
+            const toolResult = `\n\`\`\`\n${resultStr}\n\`\`\`\n`;
+            store.appendToMessage(store.streamingMessageId, toolResult);
+          }
         }
         break;
 

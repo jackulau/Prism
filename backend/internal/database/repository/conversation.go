@@ -150,6 +150,46 @@ func (r *ConversationRepository) Delete(id string) error {
 	return nil
 }
 
+// Search searches conversations by title or message content for a user
+func (r *ConversationRepository) Search(userID, query string, limit int) ([]*Conversation, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	// Search in conversation titles and message content
+	searchPattern := "%" + query + "%"
+	rows, err := r.db.Query(
+		`SELECT DISTINCT c.id, c.user_id, c.title, c.provider, c.model, c.system_prompt, c.created_at, c.updated_at
+		 FROM conversations c
+		 LEFT JOIN messages m ON c.id = m.conversation_id
+		 WHERE c.user_id = ? AND (c.title LIKE ? OR m.content LIKE ?)
+		 ORDER BY c.updated_at DESC
+		 LIMIT ?`,
+		userID, searchPattern, searchPattern, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search conversations: %w", err)
+	}
+	defer rows.Close()
+
+	var conversations []*Conversation
+	for rows.Next() {
+		conv := &Conversation{}
+		var title, systemPrompt sql.NullString
+
+		err := rows.Scan(&conv.ID, &conv.UserID, &title, &conv.Provider, &conv.Model, &systemPrompt, &conv.CreatedAt, &conv.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan conversation: %w", err)
+		}
+
+		conv.Title = title.String
+		conv.SystemPrompt = systemPrompt.String
+		conversations = append(conversations, conv)
+	}
+
+	return conversations, nil
+}
+
 // MessageRepository handles message database operations
 type MessageRepository struct {
 	db *sql.DB

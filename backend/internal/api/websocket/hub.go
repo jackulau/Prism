@@ -128,6 +128,13 @@ const (
 	TypeBuildOutput     = "build.output"
 	TypeBuildCompleted  = "build.completed"
 	TypeBuildStop       = "build.stop"
+
+	// Shell execution message types
+	TypeShellStart     = "shell.start"
+	TypeShellOutput    = "shell.output"
+	TypeShellCompleted = "shell.completed"
+	TypeShellFailed    = "shell.failed"
+	TypeShellStop      = "shell.stop"
 	TypeFilesUpdated       = "files.updated"
 	TypeFileContent        = "file.content"
 	TypeFileRequest        = "file.request"
@@ -539,6 +546,56 @@ func NewBuildCompleted(buildID string, success bool, previewURL string, duration
 		PreviewURL: previewURL,
 		Status:     status,
 		Duration:   durationMs,
+	}
+}
+
+// Shell command message constructors
+
+// NewShellStarted creates a new shell command started message
+func NewShellStarted(commandID, command string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeShellStart,
+		BuildID: commandID, // Reusing BuildID for command ID
+		Content: command,
+		Status:  "running",
+	}
+}
+
+// NewShellOutput creates a new shell output message
+func NewShellOutput(commandID, content, stream string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeShellOutput,
+		BuildID: commandID,
+		Content: content,
+		Stream:  stream, // "stdout" or "stderr"
+	}
+}
+
+// NewShellCompleted creates a new shell command completed message
+func NewShellCompleted(commandID string, exitCode int, success bool, durationMs int64) *OutgoingMessage {
+	status := "success"
+	if !success {
+		status = "error"
+	}
+	return &OutgoingMessage{
+		Type:     TypeShellCompleted,
+		BuildID:  commandID,
+		Success:  success,
+		Status:   status,
+		Duration: durationMs,
+		Metadata: map[string]interface{}{
+			"exit_code": exitCode,
+		},
+	}
+}
+
+// NewShellFailed creates a new shell command failed message
+func NewShellFailed(commandID, errorMsg string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeShellFailed,
+		BuildID: commandID,
+		Error:   errorMsg,
+		Status:  "failed",
 	}
 }
 

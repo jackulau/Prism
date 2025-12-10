@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jacklau/prism/internal/config"
+	"github.com/jacklau/prism/internal/database/repository"
 )
 
 // BuildStatus represents the status of a build
@@ -67,11 +68,12 @@ type FileInfo struct {
 
 // Service manages sandbox environments
 type Service struct {
-	config       *config.Config
-	builds       map[string]*Build
-	userWorkDirs map[string]string
-	mu           sync.RWMutex
-	baseDir      string
+	config        *config.Config
+	builds        map[string]*Build
+	userWorkDirs  map[string]string
+	workspaceRepo *repository.WorkspaceRepository
+	mu            sync.RWMutex
+	baseDir       string
 }
 
 // NewService creates a new sandbox service
@@ -89,15 +91,38 @@ func NewService(cfg *config.Config) (*Service, error) {
 	}, nil
 }
 
+// SetWorkspaceRepository sets the workspace repository for persistent storage
+func (s *Service) SetWorkspaceRepository(repo *repository.WorkspaceRepository) {
+	s.workspaceRepo = repo
+}
+
 // GetOrCreateWorkDir gets or creates a working directory for a user
 func (s *Service) GetOrCreateWorkDir(userID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Check memory cache first
 	if dir, ok := s.userWorkDirs[userID]; ok {
 		return dir, nil
 	}
 
+	// Try to load from database if repository is available
+	if s.workspaceRepo != nil {
+		workspace, err := s.workspaceRepo.GetCurrent(userID)
+		if err != nil {
+			log.Printf("Warning: failed to get current workspace from DB: %v", err)
+		} else if workspace != nil {
+			// Verify the path still exists
+			if info, statErr := os.Stat(workspace.Path); statErr == nil && info.IsDir() {
+				s.userWorkDirs[userID] = workspace.Path
+				// Update last accessed time
+				_ = s.workspaceRepo.UpdateLastAccessed(workspace.ID)
+				return workspace.Path, nil
+			}
+		}
+	}
+
+	// Fall back to default sandbox directory
 	dir := filepath.Join(s.baseDir, userID)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create user sandbox directory: %w", err)
@@ -121,7 +146,22 @@ func (s *Service) SetWorkDir(userID string, dir string) error {
 		return fmt.Errorf("path is not a directory")
 	}
 
+	// Update memory cache
 	s.userWorkDirs[userID] = dir
+
+	// Persist to database if repository is available
+	if s.workspaceRepo != nil {
+		name := filepath.Base(dir)
+		workspace, err := s.workspaceRepo.Create(userID, dir, name)
+		if err != nil {
+			log.Printf("Warning: failed to create workspace in DB: %v", err)
+		} else if workspace != nil {
+			if err := s.workspaceRepo.SetCurrent(userID, workspace.ID); err != nil {
+				log.Printf("Warning: failed to set current workspace in DB: %v", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -455,4 +495,81 @@ func (s *Service) GetPreviewServer(userID string) string {
 		baseURL = s.config.FrontendURL
 	}
 	return fmt.Sprintf("%s/preview/%s", baseURL, userID)
+}
+
+// RenameFile renames or moves a file within the sandbox
+func (s *Service) RenameFile(userID, srcPath, destPath string) error {
+	workDir, err := s.GetOrCreateWorkDir(userID)
+	if err != nil {
+		return err
+	}
+
+	// Validate source path is within sandbox
+	safeSrc, err := s.validateSandboxPath(workDir, srcPath)
+	if err != nil {
+		return fmt.Errorf("invalid source path: %w", err)
+	}
+
+	// Validate destination path is within sandbox
+	safeDest, err := s.validateSandboxPath(workDir, destPath)
+	if err != nil {
+		return fmt.Errorf("invalid destination path: %w", err)
+	}
+
+	// Ensure source exists
+	if _, err := os.Stat(safeSrc); os.IsNotExist(err) {
+		return fmt.Errorf("source file does not exist")
+	}
+
+	// Ensure destination directory exists
+	destDir := filepath.Dir(safeDest)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("failed to create destination directory: %w", err)
+	}
+
+	// Check if destination already exists
+	if _, err := os.Stat(safeDest); err == nil {
+		return fmt.Errorf("destination already exists")
+	}
+
+	// Rename/move the file
+	if err := os.Rename(safeSrc, safeDest); err != nil {
+		return fmt.Errorf("failed to rename file: %w", err)
+	}
+
+	return nil
+}
+
+// CreateDirectory creates a directory in the sandbox
+func (s *Service) CreateDirectory(userID, dirPath string) error {
+	workDir, err := s.GetOrCreateWorkDir(userID)
+	if err != nil {
+		return err
+	}
+
+	// Validate path is within sandbox
+	safePath, err := s.validateSandboxPath(workDir, dirPath)
+	if err != nil {
+		return err
+	}
+
+	// Check if path already exists
+	if info, err := os.Stat(safePath); err == nil {
+		if info.IsDir() {
+			return nil // Directory already exists, that's fine
+		}
+		return fmt.Errorf("path exists but is not a directory")
+	}
+
+	// Create the directory
+	if err := os.MkdirAll(safePath, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	return nil
+}
+
+// GetWorkspaceRepository returns the workspace repository (for handlers that need direct access)
+func (s *Service) GetWorkspaceRepository() *repository.WorkspaceRepository {
+	return s.workspaceRepo
 }

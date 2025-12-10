@@ -7,7 +7,8 @@ import type {
   Conversation,
   QueuedMessage,
   Theme,
-  Provider
+  Provider,
+  ToolCall
 } from '../types';
 import { apiService } from '../services/api';
 import { applyTheme, getStoredTheme } from '../config/themes';
@@ -23,6 +24,10 @@ interface AppState {
   updateMessage: (id: string, updates: Partial<Message>) => void;
   appendToMessage: (id: string, delta: string) => void;
   clearMessages: () => void;
+
+  // Tool Call Management
+  addToolCallToMessage: (messageId: string, toolCall: ToolCall) => void;
+  updateToolCallStatus: (messageId: string, toolCallId: string, status: ToolCall['status'], result?: unknown) => void;
 
   // Current streaming message
   streamingMessageId: string | null;
@@ -135,6 +140,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     ),
   })),
   clearMessages: () => set({ messages: [] }),
+
+  // Tool Call Management
+  addToolCallToMessage: (messageId, toolCall) => set((state) => ({
+    messages: state.messages.map((msg) =>
+      msg.id === messageId
+        ? { ...msg, toolCalls: [...(msg.toolCalls || []), toolCall] }
+        : msg
+    ),
+  })),
+  updateToolCallStatus: (messageId, toolCallId, status, result) => set((state) => ({
+    messages: state.messages.map((msg) =>
+      msg.id === messageId
+        ? {
+            ...msg,
+            toolCalls: msg.toolCalls?.map((tc) =>
+              tc.id === toolCallId ? { ...tc, status, ...(result !== undefined && { result }) } : tc
+            ),
+          }
+        : msg
+    ),
+  })),
 
   // Streaming
   streamingMessageId: null,

@@ -102,6 +102,19 @@ class ApiService {
     }>(`/conversations?limit=${limit}&offset=${offset}`);
   }
 
+  async searchConversations(query: string, limit = 20) {
+    return this.request<{
+      conversations: Array<{
+        id: string;
+        title: string;
+        provider: string;
+        model: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>(`/conversations/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+  }
+
   async createConversation(provider: string, model: string, systemPrompt?: string) {
     return this.request<{
       id: string;
@@ -251,6 +264,43 @@ class ApiService {
       '/workspace/pick-folder',
       { method: 'POST' }
     );
+  }
+
+  async listRecentWorkspaces() {
+    return this.request<{
+      workspaces: Array<{
+        id: string;
+        path: string;
+        name: string;
+        is_current: boolean;
+        last_accessed_at?: string;
+      }>;
+    }>('/workspace/recent');
+  }
+
+  async removeWorkspace(id: string) {
+    return this.request(`/workspace/${id}`, { method: 'DELETE' });
+  }
+
+  async setCurrentWorkspace(id: string) {
+    return this.request<{ success: boolean; path: string }>(
+      `/workspace/${id}/current`,
+      { method: 'POST' }
+    );
+  }
+
+  async renameSandboxFile(sourcePath: string, destPath: string) {
+    return this.request<{ success: boolean }>('/sandbox/files/rename', {
+      method: 'POST',
+      body: JSON.stringify({ source_path: sourcePath, dest_path: destPath }),
+    });
+  }
+
+  async createSandboxDirectory(path: string) {
+    return this.request<{ success: boolean }>('/sandbox/files/mkdir', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    });
   }
 
   // GitHub Integration

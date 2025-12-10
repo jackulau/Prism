@@ -181,7 +181,15 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) (<-chan llm.Str
 		defer resp.Body.Close()
 
 		scanner := bufio.NewScanner(resp.Body)
-		var currentToolCalls []llm.ToolCall
+
+		// Accumulator for tool calls - we need to accumulate arguments as strings
+		// before parsing, since they come in partial JSON chunks
+		type toolCallAccumulator struct {
+			ID        string
+			Name      string
+			Arguments strings.Builder
+		}
+		var toolCallAccumulators []toolCallAccumulator
 
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -195,9 +203,27 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) (<-chan llm.Str
 
 			// Check for stream end
 			if data == "[DONE]" {
-				if len(currentToolCalls) > 0 {
+				// Parse accumulated arguments and emit final tool calls
+				if len(toolCallAccumulators) > 0 {
+					finalToolCalls := make([]llm.ToolCall, len(toolCallAccumulators))
+					for i, acc := range toolCallAccumulators {
+						var params map[string]interface{}
+						argsStr := acc.Arguments.String()
+						if argsStr != "" {
+							if err := json.Unmarshal([]byte(argsStr), &params); err != nil {
+								params = make(map[string]interface{})
+							}
+						} else {
+							params = make(map[string]interface{})
+						}
+						finalToolCalls[i] = llm.ToolCall{
+							ID:         acc.ID,
+							Name:       acc.Name,
+							Parameters: params,
+						}
+					}
 					chunks <- llm.StreamChunk{
-						ToolCalls:    currentToolCalls,
+						ToolCalls:    finalToolCalls,
 						FinishReason: "tool_calls",
 					}
 				}
@@ -223,29 +249,25 @@ func (c *Client) Chat(ctx context.Context, req *llm.ChatRequest) (<-chan llm.Str
 				}
 			}
 
-			// Handle tool calls
+			// Handle tool calls - accumulate arguments as strings
 			if len(choice.Delta.ToolCalls) > 0 {
 				for _, tc := range choice.Delta.ToolCalls {
-					// Find or create tool call
-					if tc.Index >= len(currentToolCalls) {
-						currentToolCalls = append(currentToolCalls, llm.ToolCall{
-							ID:   tc.ID,
-							Name: tc.Function.Name,
-						})
+					// Extend accumulators if needed
+					for tc.Index >= len(toolCallAccumulators) {
+						toolCallAccumulators = append(toolCallAccumulators, toolCallAccumulator{})
 					}
-					// Append arguments
+
+					// Set ID and Name if provided (they come in the first chunk)
+					if tc.ID != "" {
+						toolCallAccumulators[tc.Index].ID = tc.ID
+					}
+					if tc.Function.Name != "" {
+						toolCallAccumulators[tc.Index].Name = tc.Function.Name
+					}
+
+					// Accumulate argument chunks (partial JSON strings)
 					if tc.Function.Arguments != "" {
-						idx := tc.Index
-						if currentToolCalls[idx].Parameters == nil {
-							currentToolCalls[idx].Parameters = make(map[string]interface{})
-						}
-						// Parse accumulated arguments
-						var args map[string]interface{}
-						if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err == nil {
-							for k, v := range args {
-								currentToolCalls[idx].Parameters[k] = v
-							}
-						}
+						toolCallAccumulators[tc.Index].Arguments.WriteString(tc.Function.Arguments)
 					}
 				}
 			}

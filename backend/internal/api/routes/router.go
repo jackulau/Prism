@@ -107,6 +107,7 @@ func Setup(deps *Dependencies) *fiber.App {
 	chatHandler := handlers.NewChatHandler(deps.ConversationRepo, deps.MessageRepo)
 	conversations := v1.Group("/conversations", middleware.AuthMiddleware(deps.JWTService))
 	conversations.Get("/", chatHandler.ListConversations)
+	conversations.Get("/search", chatHandler.SearchConversations)
 	conversations.Post("/", chatHandler.CreateConversation)
 	conversations.Get("/:id", chatHandler.GetConversation)
 	conversations.Patch("/:id", chatHandler.UpdateConversation)
