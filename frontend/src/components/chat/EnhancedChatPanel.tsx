@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Terminal, Plus, HelpCircle, Cpu, Download } from 'lucide-react'
+import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download } from 'lucide-react'
 import { Highlight, themes, type RenderProps } from 'prism-react-renderer'
 import { useAppStore } from '../../store'
 import { wsService } from '../../services/websocket'
@@ -251,6 +251,9 @@ export function EnhancedChatPanel() {
   const [showCommands, setShowCommands] = useState(false)
   const [filteredCommands, setFilteredCommands] = useState<Command[]>([])
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const [inputHistory, setInputHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [tempInput, setTempInput] = useState('') // Store current input when navigating history
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -328,7 +331,7 @@ export function EnhancedChatPanel() {
         addMessage({
           id: `help-${Date.now()}`,
           role: 'assistant',
-          content: `## Available Commands\n\n${helpText}\n\n*Type a command and press Tab to autocomplete*`,
+          content: `## Available Commands\n\n${helpText}\n\n*Type a command and press Enter to execute*`,
           timestamp: new Date(),
         })
         break
@@ -406,6 +409,14 @@ export function EnhancedChatPanel() {
     if (!input.trim() && attachments.length === 0) return
 
     const userMessage = input.trim()
+
+    // Add to input history (avoid duplicates of last entry)
+    if (userMessage && (inputHistory.length === 0 || inputHistory[inputHistory.length - 1] !== userMessage)) {
+      setInputHistory(prev => [...prev, userMessage])
+    }
+    setHistoryIndex(-1)
+    setTempInput('')
+
     setInput('')
     setShowCommands(false)
 
@@ -484,6 +495,53 @@ export function EnhancedChatPanel() {
         setShowCommands(false)
         return
       }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        const cmd = filteredCommands[selectedCommandIndex]
+        if (cmd.hasArgs) {
+          // Commands with args: just autocomplete (let user type args)
+          setInput(cmd.name + ' ')
+          setShowCommands(false)
+        } else {
+          // Commands without args: execute immediately
+          setInput('')
+          setShowCommands(false)
+          executeCommand(cmd.name)
+        }
+        return
+      }
+    }
+
+    // Handle input history navigation (when command dropdown is not visible)
+    if (e.key === 'ArrowUp' && inputHistory.length > 0) {
+      // Only navigate history if cursor is at start or input is empty
+      const textarea = textareaRef.current
+      if (textarea && (textarea.selectionStart === 0 || input === '')) {
+        e.preventDefault()
+        if (historyIndex === -1) {
+          // Save current input before navigating
+          setTempInput(input)
+          setHistoryIndex(inputHistory.length - 1)
+          setInput(inputHistory[inputHistory.length - 1])
+        } else if (historyIndex > 0) {
+          setHistoryIndex(historyIndex - 1)
+          setInput(inputHistory[historyIndex - 1])
+        }
+        return
+      }
+    }
+
+    if (e.key === 'ArrowDown' && historyIndex !== -1) {
+      e.preventDefault()
+      if (historyIndex < inputHistory.length - 1) {
+        setHistoryIndex(historyIndex + 1)
+        setInput(inputHistory[historyIndex + 1])
+      } else {
+        // Return to current input
+        setHistoryIndex(-1)
+        setInput(tempInput)
+      }
+      return
     }
 
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -511,8 +569,29 @@ export function EnhancedChatPanel() {
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB per file
+    const MAX_TOTAL_SIZE = 25 * 1024 * 1024 // 25MB total
+
     const files = Array.from(e.target.files || [])
-    setAttachments((prev) => [...prev, ...files])
+    const validFiles: File[] = []
+    let totalSize = attachments.reduce((sum, f) => sum + f.size, 0)
+
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        console.error(`File "${file.name}" exceeds 10MB limit`)
+        continue
+      }
+      if (totalSize + file.size > MAX_TOTAL_SIZE) {
+        console.error('Total attachment size would exceed 25MB limit')
+        break
+      }
+      totalSize += file.size
+      validFiles.push(file)
+    }
+
+    if (validFiles.length > 0) {
+      setAttachments((prev) => [...prev, ...validFiles])
+    }
     e.target.value = '' // Reset for same file selection
   }
 
@@ -644,7 +723,7 @@ export function EnhancedChatPanel() {
             <div className="absolute bottom-full left-0 right-0 mb-2 bg-editor-surface border border-editor-border rounded-lg shadow-lg overflow-hidden z-10">
               <div className="px-3 py-2 border-b border-editor-border bg-editor-bg/50">
                 <span className="text-xs text-editor-muted">Commands</span>
-                <span className="text-xs text-editor-muted/50 ml-2">Tab to complete, ↑↓ to navigate</span>
+                <span className="text-xs text-editor-muted/50 ml-2">Enter or Tab to select, ↑↓ to navigate</span>
               </div>
               {filteredCommands.map((cmd, i) => (
                 <button
@@ -656,9 +735,15 @@ export function EnhancedChatPanel() {
                       : 'hover:bg-editor-surface text-editor-text'
                   }`}
                   onClick={() => {
-                    setInput(cmd.name + (cmd.hasArgs ? ' ' : ''))
-                    setShowCommands(false)
-                    textareaRef.current?.focus()
+                    if (cmd.hasArgs) {
+                      setInput(cmd.name + ' ')
+                      setShowCommands(false)
+                      textareaRef.current?.focus()
+                    } else {
+                      setInput('')
+                      setShowCommands(false)
+                      executeCommand(cmd.name)
+                    }
                   }}
                 >
                   <span className={`${i === selectedCommandIndex ? 'text-editor-accent' : 'text-editor-muted'}`}>

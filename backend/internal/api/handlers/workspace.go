@@ -416,3 +416,213 @@ func sanitizeRepoName(name string) string {
 
 	return sanitized
 }
+
+// ListRecentWorkspaces lists recent workspaces for the user
+func (h *WorkspaceHandler) ListRecentWorkspaces(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+
+	repo := h.sandboxService.GetWorkspaceRepository()
+	if repo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "workspace persistence not available",
+		})
+	}
+
+	workspaces, err := repo.ListRecent(userID, 10)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to list workspaces: %v", err),
+		})
+	}
+
+	// Convert to response format
+	type WorkspaceResponse struct {
+		ID             string `json:"id"`
+		Path           string `json:"path"`
+		Name           string `json:"name"`
+		IsCurrent      bool   `json:"is_current"`
+		LastAccessedAt string `json:"last_accessed_at,omitempty"`
+	}
+
+	result := make([]WorkspaceResponse, 0, len(workspaces))
+	for _, ws := range workspaces {
+		resp := WorkspaceResponse{
+			ID:        ws.ID,
+			Path:      ws.Path,
+			Name:      ws.Name,
+			IsCurrent: ws.IsCurrent,
+		}
+		if ws.LastAccessedAt != nil {
+			resp.LastAccessedAt = ws.LastAccessedAt.Format("2006-01-02T15:04:05Z")
+		}
+		result = append(result, resp)
+	}
+
+	return c.JSON(fiber.Map{
+		"workspaces": result,
+	})
+}
+
+// RemoveWorkspace removes a workspace from the recent list
+func (h *WorkspaceHandler) RemoveWorkspace(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	workspaceID := c.Params("id")
+
+	if workspaceID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "workspace id is required",
+		})
+	}
+
+	repo := h.sandboxService.GetWorkspaceRepository()
+	if repo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "workspace persistence not available",
+		})
+	}
+
+	// Verify the workspace belongs to the user
+	workspace, err := repo.GetByID(workspaceID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to get workspace: %v", err),
+		})
+	}
+	if workspace == nil || workspace.UserID != userID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "workspace not found",
+		})
+	}
+
+	if err := repo.Delete(workspaceID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to remove workspace: %v", err),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+	})
+}
+
+// SetCurrentWorkspace sets a workspace as the current one
+func (h *WorkspaceHandler) SetCurrentWorkspace(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	workspaceID := c.Params("id")
+
+	if workspaceID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "workspace id is required",
+		})
+	}
+
+	repo := h.sandboxService.GetWorkspaceRepository()
+	if repo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "workspace persistence not available",
+		})
+	}
+
+	// Verify the workspace belongs to the user
+	workspace, err := repo.GetByID(workspaceID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to get workspace: %v", err),
+		})
+	}
+	if workspace == nil || workspace.UserID != userID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "workspace not found",
+		})
+	}
+
+	// Verify the path still exists
+	info, err := os.Stat(workspace.Path)
+	if err != nil || !info.IsDir() {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "workspace path no longer exists",
+		})
+	}
+
+	// Set as current in database
+	if err := repo.SetCurrent(userID, workspaceID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to set current workspace: %v", err),
+		})
+	}
+
+	// Update in-memory cache via SetWorkDir
+	if err := h.sandboxService.SetWorkDir(userID, workspace.Path); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("failed to update workspace: %v", err),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"path":    workspace.Path,
+	})
+}
+
+// RenameFile renames a file in the workspace
+func (h *WorkspaceHandler) RenameFile(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+
+	var req struct {
+		SourcePath string `json:"source_path"`
+		DestPath   string `json:"dest_path"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if req.SourcePath == "" || req.DestPath == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "source_path and dest_path are required",
+		})
+	}
+
+	if err := h.sandboxService.RenameFile(userID, req.SourcePath, req.DestPath); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+	})
+}
+
+// CreateDirectory creates a directory in the workspace
+func (h *WorkspaceHandler) CreateDirectory(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+
+	var req struct {
+		Path string `json:"path"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if req.Path == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "path is required",
+		})
+	}
+
+	if err := h.sandboxService.CreateDirectory(userID, req.Path); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+	})
+}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 
 	"github.com/jacklau/prism/internal/database/repository"
+	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/services/coderunner"
 	"github.com/jacklau/prism/internal/tools"
@@ -21,6 +22,15 @@ type Config struct {
 
 	// File history repository for tracking file changes
 	FileHistoryRepo *repository.FileHistoryRepository
+
+	// Shell execution configuration
+	ShellExecConfig *ShellExecConfig
+
+	// Todo repository for task tracking
+	TodoRepo *repository.TodoRepository
+
+	// LLM provider for WebFetch AI analysis (optional)
+	LLMProvider llm.Provider
 }
 
 // RegisterAll registers all built-in tools with the registry
@@ -36,6 +46,12 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		return err
 	}
 	if err := registry.Register(NewFileDeleteTool(sandbox, config.FileHistoryRepo)); err != nil {
+		return err
+	}
+	if err := registry.Register(NewFileRenameTool(sandbox, config.FileHistoryRepo)); err != nil {
+		return err
+	}
+	if err := registry.Register(NewFileCreateDirectoryTool(sandbox)); err != nil {
 		return err
 	}
 
@@ -55,6 +71,80 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 	// Code execution tool
 	if err := registry.Register(NewCodeExecutionTool(runner)); err != nil {
 		return err
+	}
+
+	// Shell execution tool for running commands like npm, git, pip, etc.
+	shellConfig := DefaultShellExecConfig()
+	if config.ShellExecConfig != nil {
+		shellConfig = *config.ShellExecConfig
+	}
+	shellExecTool := NewShellExecTool(sandbox, shellConfig)
+
+	// Background shell manager for background execution
+	backgroundMgr := NewBackgroundShellManager(sandbox, shellConfig)
+	shellExecTool.SetBackgroundManager(backgroundMgr)
+
+	if err := registry.Register(shellExecTool); err != nil {
+		return err
+	}
+
+	// Background shell tools (bash_output, kill_shell)
+	if err := registry.Register(NewBashOutputTool(backgroundMgr)); err != nil {
+		return err
+	}
+	if err := registry.Register(NewKillShellTool(backgroundMgr)); err != nil {
+		return err
+	}
+
+	// Glob tool for file pattern matching
+	if err := registry.Register(NewGlobTool(sandbox)); err != nil {
+		return err
+	}
+
+	// Grep tool for content search
+	if err := registry.Register(NewGrepTool(sandbox)); err != nil {
+		return err
+	}
+
+	// Edit tool for precise string replacement
+	if err := registry.Register(NewEditTool(sandbox, config.FileHistoryRepo)); err != nil {
+		return err
+	}
+
+	// MultiEdit tool for batch edits
+	if err := registry.Register(NewMultiEditTool(sandbox, config.FileHistoryRepo)); err != nil {
+		return err
+	}
+
+	// LS tool for enhanced directory listing
+	if err := registry.Register(NewLSTool(sandbox)); err != nil {
+		return err
+	}
+
+	// WebFetch tool for fetching web content
+	webFetchConfig := WebFetchConfig{
+		LLMManager: config.LLMProvider,
+	}
+	if err := registry.Register(NewWebFetchTool(webFetchConfig)); err != nil {
+		return err
+	}
+
+	// Notebook tools for Jupyter notebook support
+	if err := registry.Register(NewNotebookReadTool(sandbox)); err != nil {
+		return err
+	}
+	if err := registry.Register(NewNotebookEditTool(sandbox, config.FileHistoryRepo)); err != nil {
+		return err
+	}
+
+	// Todo tools for task tracking
+	if config.TodoRepo != nil {
+		if err := registry.Register(NewTodoReadTool(sandbox, config.TodoRepo)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewTodoWriteTool(sandbox, config.TodoRepo)); err != nil {
+			return err
+		}
 	}
 
 	// Web search tool (only if configured)

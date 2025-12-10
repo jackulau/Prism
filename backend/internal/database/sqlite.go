@@ -285,6 +285,30 @@ func (db *DB) Migrate() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// User workspaces for persistent project directory storage
+		`CREATE TABLE IF NOT EXISTS user_workspaces (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			path TEXT NOT NULL,
+			name TEXT,
+			is_current INTEGER DEFAULT 0,
+			last_accessed_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, path)
+		)`,
+
+		// Workspace todos for task tracking
+		`CREATE TABLE IF NOT EXISTS workspace_todos (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			workspace_path TEXT NOT NULL,
+			content TEXT NOT NULL,
+			active_form TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// User integrations (generic per-user integration configs)
 		`CREATE TABLE IF NOT EXISTS user_integrations (
 			id TEXT PRIMARY KEY,
@@ -321,6 +345,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_integrations_user_id ON user_integrations(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_user_id ON file_history(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_file_path ON file_history(user_id, file_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
+		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
 	}
 
 	for _, migration := range migrations {

@@ -523,3 +523,131 @@ func (t *FileHistoryGetTool) Execute(ctx context.Context, params map[string]inte
 func (t *FileHistoryGetTool) RequiresConfirmation() bool {
 	return false
 }
+
+// FileRenameTool renames or moves a file in the user's sandbox
+type FileRenameTool struct {
+	sandbox     *sandbox.Service
+	historyRepo *repository.FileHistoryRepository
+}
+
+// NewFileRenameTool creates a new file rename tool
+func NewFileRenameTool(sandbox *sandbox.Service, historyRepo *repository.FileHistoryRepository) *FileRenameTool {
+	return &FileRenameTool{sandbox: sandbox, historyRepo: historyRepo}
+}
+
+func (t *FileRenameTool) Name() string {
+	return "file_rename"
+}
+
+func (t *FileRenameTool) Description() string {
+	return "Rename or move a file or directory within the user's sandbox workspace. Can be used to rename files in place or move them to different locations within the workspace."
+}
+
+func (t *FileRenameTool) Parameters() llm.JSONSchema {
+	return llm.JSONSchema{
+		Type: "object",
+		Properties: map[string]llm.JSONProperty{
+			"source_path": {
+				Type:        "string",
+				Description: "The current path of the file or directory to rename/move",
+			},
+			"dest_path": {
+				Type:        "string",
+				Description: "The new path for the file or directory",
+			},
+		},
+		Required: []string{"source_path", "dest_path"},
+	}
+}
+
+func (t *FileRenameTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	userID, ok := ctx.Value(UserIDKey).(string)
+	if !ok || userID == "" {
+		return nil, fmt.Errorf("user ID not found in context")
+	}
+
+	sourcePath, ok := params["source_path"].(string)
+	if !ok || sourcePath == "" {
+		return nil, fmt.Errorf("source_path parameter is required")
+	}
+
+	destPath, ok := params["dest_path"].(string)
+	if !ok || destPath == "" {
+		return nil, fmt.Errorf("dest_path parameter is required")
+	}
+
+	// Record in history before rename
+	if t.historyRepo != nil {
+		_, _ = t.historyRepo.Create(userID, sourcePath, "", "rename")
+	}
+
+	if err := t.sandbox.RenameFile(userID, sourcePath, destPath); err != nil {
+		return nil, fmt.Errorf("failed to rename file: %w", err)
+	}
+
+	return map[string]interface{}{
+		"success":     true,
+		"source_path": sourcePath,
+		"dest_path":   destPath,
+	}, nil
+}
+
+func (t *FileRenameTool) RequiresConfirmation() bool {
+	return true // Renaming/moving files should require confirmation
+}
+
+// FileCreateDirectoryTool creates a directory in the user's sandbox
+type FileCreateDirectoryTool struct {
+	sandbox *sandbox.Service
+}
+
+// NewFileCreateDirectoryTool creates a new file create directory tool
+func NewFileCreateDirectoryTool(sandbox *sandbox.Service) *FileCreateDirectoryTool {
+	return &FileCreateDirectoryTool{sandbox: sandbox}
+}
+
+func (t *FileCreateDirectoryTool) Name() string {
+	return "file_mkdir"
+}
+
+func (t *FileCreateDirectoryTool) Description() string {
+	return "Create a new directory in the user's sandbox workspace. Creates parent directories automatically if they don't exist."
+}
+
+func (t *FileCreateDirectoryTool) Parameters() llm.JSONSchema {
+	return llm.JSONSchema{
+		Type: "object",
+		Properties: map[string]llm.JSONProperty{
+			"path": {
+				Type:        "string",
+				Description: "The path of the directory to create (relative to workspace root)",
+			},
+		},
+		Required: []string{"path"},
+	}
+}
+
+func (t *FileCreateDirectoryTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
+	userID, ok := ctx.Value(UserIDKey).(string)
+	if !ok || userID == "" {
+		return nil, fmt.Errorf("user ID not found in context")
+	}
+
+	path, ok := params["path"].(string)
+	if !ok || path == "" {
+		return nil, fmt.Errorf("path parameter is required")
+	}
+
+	if err := t.sandbox.CreateDirectory(userID, path); err != nil {
+		return nil, fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	return map[string]interface{}{
+		"success": true,
+		"path":    path,
+	}, nil
+}
+
+func (t *FileCreateDirectoryTool) RequiresConfirmation() bool {
+	return false // Creating directories is relatively safe
+}

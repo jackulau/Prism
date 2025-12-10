@@ -266,6 +266,49 @@ func (h *ChatHandler) DeleteConversation(c *fiber.Ctx) error {
 	})
 }
 
+// SearchConversations searches conversations by title or message content
+func (h *ChatHandler) SearchConversations(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	query := c.Query("q")
+	if query == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "search query is required",
+		})
+	}
+
+	limit := c.QueryInt("limit", 20)
+
+	conversations, err := h.conversationRepo.Search(userID, query, limit)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to search conversations",
+		})
+	}
+
+	dtos := make([]ConversationDTO, len(conversations))
+	for i, conv := range conversations {
+		dtos[i] = ConversationDTO{
+			ID:           conv.ID,
+			Title:        conv.Title,
+			Provider:     conv.Provider,
+			Model:        conv.Model,
+			SystemPrompt: conv.SystemPrompt,
+			CreatedAt:    conv.CreatedAt,
+			UpdatedAt:    conv.UpdatedAt,
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"conversations": dtos,
+	})
+}
+
 // GetMessages gets all messages for a conversation
 func (h *ChatHandler) GetMessages(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)

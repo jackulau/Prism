@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { User, Bot, Wrench, AlertCircle, Clock, Zap, Hash } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { User, Bot, Wrench, AlertCircle, Clock, Zap, Hash, ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
 import { CodeBlock } from './CodeBlock';
 import type { Message } from '../types';
 
@@ -185,6 +185,124 @@ const getRoleName = (role: Message['role']) => {
   }
 };
 
+// Tool call interface
+interface ToolCall {
+  id: string;
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: unknown;
+}
+
+// Collapsible tool call component
+const ToolCallCard: React.FC<{ tool: ToolCall }> = ({ tool }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const hasResult = tool.result !== undefined && tool.result !== null;
+  const resultString = hasResult
+    ? typeof tool.result === 'string'
+      ? tool.result
+      : JSON.stringify(tool.result, null, 2)
+    : '';
+  const resultLines = resultString.split('\n').length;
+  const isLongResult = resultLines > 5 || resultString.length > 300;
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(resultString);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback
+      const textArea = document.createElement('textarea');
+      textArea.value = resultString;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-editor-border bg-editor-surface/50 overflow-hidden">
+      {/* Tool Header - Always visible */}
+      <div
+        className={`flex items-center gap-2 p-3 ${hasResult && isLongResult ? 'cursor-pointer hover:bg-editor-surface/70' : ''}`}
+        onClick={() => hasResult && isLongResult && setIsExpanded(!isExpanded)}
+      >
+        {hasResult && isLongResult && (
+          <span className="text-editor-muted">
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </span>
+        )}
+        <Wrench className="w-4 h-4 text-orange-400" />
+        <span className="font-medium text-sm text-editor-text flex-1">
+          {tool.name}
+        </span>
+        <span
+          className={`text-xs px-2 py-0.5 rounded-full ${
+            tool.status === 'completed'
+              ? 'bg-editor-success/20 text-editor-success'
+              : tool.status === 'failed'
+              ? 'bg-editor-error/20 text-editor-error'
+              : tool.status === 'running'
+              ? 'bg-editor-warning/20 text-editor-warning'
+              : 'bg-editor-muted/20 text-editor-muted'
+          }`}
+        >
+          {tool.status}
+        </span>
+        {hasResult && (
+          <button
+            onClick={handleCopy}
+            className="p-1 rounded hover:bg-editor-surface text-editor-muted hover:text-editor-text transition-smooth"
+            title="Copy result"
+          >
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-green-400" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Tool Result - Collapsible for long results */}
+      {hasResult && (
+        <div
+          className={`border-t border-editor-border ${
+            isLongResult && !isExpanded ? 'max-h-24 overflow-hidden relative' : ''
+          }`}
+        >
+          <pre className="text-xs text-editor-muted bg-editor-bg p-3 overflow-x-auto">
+            {resultString}
+          </pre>
+          {isLongResult && !isExpanded && (
+            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-editor-bg to-transparent pointer-events-none" />
+          )}
+        </div>
+      )}
+
+      {/* Expand/Collapse indicator for long results */}
+      {hasResult && isLongResult && !isExpanded && (
+        <div
+          className="text-center py-1.5 text-xs text-editor-muted hover:text-editor-text cursor-pointer hover:bg-editor-surface/70 border-t border-editor-border"
+          onClick={() => setIsExpanded(true)}
+        >
+          Show more ({resultLines} lines)
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const content = useMemo(
     () => parseContent(message.content, message.isStreaming || false),
@@ -252,41 +370,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
           </div>
         )}
 
-        {/* Tool calls */}
+        {/* Tool calls - Collapsible */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="pl-11 mt-3 space-y-2">
             {message.toolCalls.map((tool) => (
-              <div
-                key={tool.id}
-                className="rounded-lg border border-editor-border bg-editor-surface/50 p-3"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Wrench className="w-4 h-4 text-orange-400" />
-                  <span className="font-medium text-sm text-editor-text">
-                    {tool.name}
-                  </span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
-                      tool.status === 'completed'
-                        ? 'bg-editor-success/20 text-editor-success'
-                        : tool.status === 'failed'
-                        ? 'bg-editor-error/20 text-editor-error'
-                        : tool.status === 'running'
-                        ? 'bg-editor-warning/20 text-editor-warning'
-                        : 'bg-editor-muted/20 text-editor-muted'
-                    }`}
-                  >
-                    {tool.status}
-                  </span>
-                </div>
-                {tool.result !== undefined && tool.result !== null && (
-                  <pre className="text-xs text-editor-muted bg-editor-bg rounded p-2 overflow-x-auto">
-                    {typeof tool.result === 'string'
-                      ? tool.result
-                      : JSON.stringify(tool.result, null, 2)}
-                  </pre>
-                )}
-              </div>
+              <ToolCallCard key={tool.id} tool={tool} />
             ))}
           </div>
         )}

@@ -19,7 +19,7 @@ import { useSandboxStore, FileNode } from './store/sandboxStore'
 import { apiService } from './services/api'
 import { wsService } from './services/websocket'
 import { applyTheme } from './config/themes'
-import { initAuth, useAuthStore } from './store/authStore'
+import { initAuth } from './store/authStore'
 
 // Helper to convert API sandbox files to FileNode format
 function convertToFileNodes(files: Array<{

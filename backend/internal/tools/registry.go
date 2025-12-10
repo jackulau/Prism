@@ -36,6 +36,7 @@ type ToolResult struct {
 // PendingExecution represents a tool execution awaiting user confirmation
 type PendingExecution struct {
 	ID             string                 `json:"id"`
+	ToolCallID     string                 `json:"tool_call_id"`     // Original tool call ID from the LLM
 	ToolName       string                 `json:"tool_name"`
 	Parameters     map[string]interface{} `json:"parameters"`
 	ConversationID string                 `json:"conversation_id"`

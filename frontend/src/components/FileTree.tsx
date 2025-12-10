@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -19,6 +19,13 @@ import {
   FolderInput,
   Github,
   Loader2,
+  Clock,
+  Trash2,
+  Edit3,
+  Copy,
+  X,
+  Check,
+  FolderClosed,
 } from 'lucide-react';
 import { useAppStore } from '../store';
 import { useSandboxStore, type FileNode as SandboxFileNode } from '../store/sandboxStore';
@@ -78,17 +85,117 @@ const getFileIcon = (name: string, type: 'file' | 'directory', isExpanded?: bool
   }
 };
 
+// Context menu types
+interface ContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+  node: FileNode | null;
+}
+
+interface ContextMenuProps {
+  state: ContextMenuState;
+  onClose: () => void;
+  onRename: (node: FileNode) => void;
+  onDelete: (node: FileNode) => void;
+  onCopyPath: (node: FileNode) => void;
+}
+
+const ContextMenu: React.FC<ContextMenuProps> = ({ state, onClose, onRename, onDelete, onCopyPath }) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+
+    if (state.visible) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [state.visible, onClose]);
+
+  if (!state.visible || !state.node) return null;
+
+  return (
+    <div
+      ref={menuRef}
+      className="fixed bg-editor-surface border border-editor-border rounded-md shadow-lg py-1 z-50 min-w-[160px]"
+      style={{ left: state.x, top: state.y }}
+    >
+      <button
+        onClick={() => { onRename(state.node!); onClose(); }}
+        className="w-full px-3 py-1.5 text-sm text-editor-text hover:bg-sidebar-hover flex items-center gap-2"
+      >
+        <Edit3 className="w-3.5 h-3.5" />
+        Rename
+      </button>
+      <button
+        onClick={() => { onCopyPath(state.node!); onClose(); }}
+        className="w-full px-3 py-1.5 text-sm text-editor-text hover:bg-sidebar-hover flex items-center gap-2"
+      >
+        <Copy className="w-3.5 h-3.5" />
+        Copy Path
+      </button>
+      <div className="border-t border-editor-border my-1" />
+      <button
+        onClick={() => { onDelete(state.node!); onClose(); }}
+        className="w-full px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+        Delete
+      </button>
+    </div>
+  );
+};
+
+// Workspace type
+interface RecentWorkspace {
+  id: string;
+  path: string;
+  name: string;
+  is_current: boolean;
+  last_accessed_at?: string;
+}
+
 interface FileTreeNodeProps {
   node: FileNode;
   depth: number;
+  onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
+  renamingPath: string | null;
+  renameValue: string;
+  onRenameChange: (value: string) => void;
+  onRenameSubmit: () => void;
+  onRenameCancel: () => void;
 }
 
-const FileTreeNode: React.FC<FileTreeNodeProps> = ({ node, depth }) => {
+const FileTreeNode: React.FC<FileTreeNodeProps> = ({
+  node,
+  depth,
+  onContextMenu,
+  renamingPath,
+  renameValue,
+  onRenameChange,
+  onRenameSubmit,
+  onRenameCancel,
+}) => {
   const { toggleNodeExpanded, selectedFile, setSelectedFile } = useAppStore();
   const { setSelectedFile: setSandboxSelectedFile } = useSandboxStore();
   const isSelected = selectedFile?.id === node.id;
+  const isRenaming = renamingPath === node.path;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isRenaming]);
 
   const handleClick = () => {
+    if (isRenaming) return;
     if (node.type === 'directory') {
       toggleNodeExpanded(node.id);
     } else {
@@ -101,6 +208,12 @@ const FileTreeNode: React.FC<FileTreeNodeProps> = ({ node, depth }) => {
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onContextMenu(e, node);
+  };
+
   return (
     <div>
       <div
@@ -109,6 +222,7 @@ const FileTreeNode: React.FC<FileTreeNodeProps> = ({ node, depth }) => {
         }`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
+        onContextMenu={handleContextMenu}
       >
         {node.type === 'directory' && (
           <span className="w-4 h-4 flex items-center justify-center">
@@ -121,17 +235,58 @@ const FileTreeNode: React.FC<FileTreeNodeProps> = ({ node, depth }) => {
         )}
         {node.type === 'file' && <span className="w-4" />}
         {getFileIcon(node.name, node.type, node.isExpanded)}
-        <span className="text-sm truncate flex-1">{node.name}</span>
-        {node.type === 'file' && node.size !== undefined && (
-          <span className="text-xs text-editor-muted opacity-0 group-hover:opacity-100">
-            {formatFileSize(node.size)}
-          </span>
+        {isRenaming ? (
+          <div className="flex-1 flex items-center gap-1">
+            <input
+              ref={inputRef}
+              type="text"
+              value={renameValue}
+              onChange={(e) => onRenameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onRenameSubmit();
+                if (e.key === 'Escape') onRenameCancel();
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 bg-editor-surface text-editor-text text-sm px-1 py-0.5 rounded border border-editor-accent focus:outline-none"
+            />
+            <button
+              onClick={(e) => { e.stopPropagation(); onRenameSubmit(); }}
+              className="p-0.5 hover:bg-green-500/20 rounded"
+            >
+              <Check className="w-3 h-3 text-green-400" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onRenameCancel(); }}
+              className="p-0.5 hover:bg-red-500/20 rounded"
+            >
+              <X className="w-3 h-3 text-red-400" />
+            </button>
+          </div>
+        ) : (
+          <>
+            <span className="text-sm truncate flex-1">{node.name}</span>
+            {node.type === 'file' && node.size !== undefined && (
+              <span className="text-xs text-editor-muted opacity-0 group-hover:opacity-100">
+                {formatFileSize(node.size)}
+              </span>
+            )}
+          </>
         )}
       </div>
       {node.type === 'directory' && node.isExpanded && node.children && (
         <div>
           {node.children.map((child) => (
-            <FileTreeNode key={child.id} node={child} depth={depth + 1} />
+            <FileTreeNode
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              onContextMenu={onContextMenu}
+              renamingPath={renamingPath}
+              renameValue={renameValue}
+              onRenameChange={onRenameChange}
+              onRenameSubmit={onRenameSubmit}
+              onRenameCancel={onRenameCancel}
+            />
           ))}
         </div>
       )}
@@ -155,9 +310,10 @@ interface ApiFileNode {
   modified?: number;
 }
 
-const convertApiFilesToFileNodes = (files: ApiFileNode[], parentPath = ''): FileNode[] => {
-  return files.map((file, index) => {
-    const id = `${parentPath}-${index}-${file.name}`;
+const convertApiFilesToFileNodes = (files: ApiFileNode[]): FileNode[] => {
+  return files.map((file) => {
+    // Use file path as stable ID (unique and doesn't change with file order)
+    const id = file.path;
     const node: FileNode = {
       id,
       name: file.name,
@@ -167,7 +323,7 @@ const convertApiFilesToFileNodes = (files: ApiFileNode[], parentPath = ''): File
       isExpanded: false,
     };
     if (file.is_directory && file.children) {
-      node.children = convertApiFilesToFileNodes(file.children, id);
+      node.children = convertApiFilesToFileNodes(file.children);
     }
     return node;
   });
@@ -197,6 +353,22 @@ export const FileTree: React.FC = () => {
   const [gitHubRepos, setGitHubRepos] = useState<Array<{ id: number; name: string; full_name: string; clone_url: string }>>([]);
   const [isCloning, setIsCloning] = useState(false);
   const [visibleReposCount, setVisibleReposCount] = useState(10);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    visible: false,
+    x: 0,
+    y: 0,
+    node: null,
+  });
+
+  // Renaming state
+  const [renamingPath, setRenamingPath] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  // Recent workspaces state
+  const [recentWorkspaces, setRecentWorkspaces] = useState<RecentWorkspace[]>([]);
+  const [showRecentWorkspaces, setShowRecentWorkspaces] = useState(false);
 
   // Load files from backend API
   const loadFiles = useCallback(async () => {
@@ -242,11 +414,24 @@ export const FileTree: React.FC = () => {
     }
   }, []);
 
+  // Load recent workspaces
+  const loadRecentWorkspaces = useCallback(async () => {
+    try {
+      const response = await apiService.listRecentWorkspaces();
+      if (response.data?.workspaces) {
+        setRecentWorkspaces(response.data.workspaces);
+      }
+    } catch {
+      // Ignore errors for recent workspaces
+    }
+  }, []);
+
   // Initialize - load files on mount
   useEffect(() => {
     loadFiles();
     loadGitHubStatus();
-  }, [loadFiles, loadGitHubStatus]);
+    loadRecentWorkspaces();
+  }, [loadFiles, loadGitHubStatus, loadRecentWorkspaces]);
 
   const handleRefresh = () => {
     loadFiles();
@@ -350,6 +535,127 @@ export const FileTree: React.FC = () => {
     setIsCreatingFile(false);
   };
 
+  // Context menu handlers
+  const handleContextMenu = (e: React.MouseEvent, node: FileNode) => {
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      node,
+    });
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu({ visible: false, x: 0, y: 0, node: null });
+  };
+
+  const handleRename = (node: FileNode) => {
+    setRenamingPath(node.path);
+    setRenameValue(node.name);
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renamingPath || !renameValue.trim()) {
+      setRenamingPath(null);
+      return;
+    }
+
+    const oldPath = renamingPath;
+    const parentPath = oldPath.substring(0, oldPath.lastIndexOf('/'));
+    const newPath = parentPath ? `${parentPath}/${renameValue}` : `/${renameValue}`;
+
+    if (oldPath === newPath) {
+      setRenamingPath(null);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiService.renameSandboxFile(oldPath, newPath);
+      if (response.data?.success) {
+        await loadFiles();
+      } else if (response.error) {
+        setError(response.error);
+      }
+    } catch {
+      setError('Failed to rename file');
+    } finally {
+      setIsLoading(false);
+      setRenamingPath(null);
+      setRenameValue('');
+    }
+  };
+
+  const handleRenameCancel = () => {
+    setRenamingPath(null);
+    setRenameValue('');
+  };
+
+  const handleDelete = async (node: FileNode) => {
+    if (!confirm(`Are you sure you want to delete "${node.name}"?`)) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await apiService.deleteSandboxFile(node.path);
+      if (!response.error) {
+        await loadFiles();
+      } else {
+        setError(response.error);
+      }
+    } catch {
+      setError('Failed to delete file');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCopyPath = async (node: FileNode) => {
+    try {
+      await navigator.clipboard.writeText(node.path);
+    } catch {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = node.path;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+  };
+
+  // Workspace switch handlers
+  const handleSwitchWorkspace = async (workspace: RecentWorkspace) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await apiService.setCurrentWorkspace(workspace.id);
+      if (response.data?.success) {
+        setCurrentWorkspacePath(response.data.path);
+        setShowRecentWorkspaces(false);
+        await loadFiles();
+        await loadRecentWorkspaces();
+      } else if (response.error) {
+        setError(response.error);
+      }
+    } catch {
+      setError('Failed to switch workspace');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRemoveWorkspace = async (workspaceId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await apiService.removeWorkspace(workspaceId);
+      await loadRecentWorkspaces();
+    } catch {
+      setError('Failed to remove workspace');
+    }
+  };
+
   const filterTree = (nodes: FileNode[], query: string): FileNode[] => {
     if (!query) return nodes;
     return nodes
@@ -428,12 +734,61 @@ export const FileTree: React.FC = () => {
         </div>
       )}
 
-      {/* Current Workspace Path Display */}
+      {/* Current Workspace Path Display with Recent Workspaces */}
       {currentWorkspacePath && (
-        <div className="px-2 py-1.5 border-b border-editor-border bg-editor-surface/30">
-          <div className="text-xs text-editor-muted truncate font-mono" title={currentWorkspacePath}>
-            {currentWorkspacePath}
+        <div className="border-b border-editor-border bg-editor-surface/30">
+          <div
+            className="px-2 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-sidebar-hover transition-smooth"
+            onClick={() => {
+              setShowRecentWorkspaces(!showRecentWorkspaces);
+              if (!showRecentWorkspaces) loadRecentWorkspaces();
+            }}
+          >
+            <FolderClosed className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
+            <div className="text-xs text-editor-muted truncate font-mono flex-1" title={currentWorkspacePath}>
+              {currentWorkspacePath.split('/').pop() || currentWorkspacePath}
+            </div>
+            {recentWorkspaces.length > 1 && (
+              <Clock className="w-3 h-3 text-editor-muted flex-shrink-0" />
+            )}
           </div>
+
+          {/* Recent Workspaces Dropdown */}
+          {showRecentWorkspaces && recentWorkspaces.length > 0 && (
+            <div className="border-t border-editor-border bg-editor-surface/50 max-h-48 overflow-y-auto">
+              <div className="px-2 py-1 text-xs text-editor-muted">Recent Workspaces</div>
+              {recentWorkspaces.map((workspace) => (
+                <div
+                  key={workspace.id}
+                  onClick={() => handleSwitchWorkspace(workspace)}
+                  className={`px-2 py-1.5 flex items-center gap-2 cursor-pointer hover:bg-sidebar-hover transition-smooth group ${
+                    workspace.is_current ? 'bg-editor-accent/10' : ''
+                  }`}
+                >
+                  <FolderClosed className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-editor-text truncate">
+                      {workspace.name || workspace.path.split('/').pop()}
+                    </div>
+                    <div className="text-[10px] text-editor-muted truncate">
+                      {workspace.path}
+                    </div>
+                  </div>
+                  {workspace.is_current ? (
+                    <Check className="w-3 h-3 text-green-400 flex-shrink-0" />
+                  ) : (
+                    <button
+                      onClick={(e) => handleRemoveWorkspace(workspace.id, e)}
+                      className="p-0.5 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 rounded transition-smooth"
+                      title="Remove from recent"
+                    >
+                      <X className="w-3 h-3 text-red-400" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -538,7 +893,17 @@ export const FileTree: React.FC = () => {
       <div className="flex-1 overflow-y-auto py-1">
         {displayTree.length > 0 ? (
           displayTree.map((node) => (
-            <FileTreeNode key={node.id} node={node} depth={0} />
+            <FileTreeNode
+              key={node.id}
+              node={node}
+              depth={0}
+              onContextMenu={handleContextMenu}
+              renamingPath={renamingPath}
+              renameValue={renameValue}
+              onRenameChange={setRenameValue}
+              onRenameSubmit={handleRenameSubmit}
+              onRenameCancel={handleRenameCancel}
+            />
           ))
         ) : (
           <div className="px-4 py-8 text-center text-editor-muted text-sm">
@@ -551,6 +916,15 @@ export const FileTree: React.FC = () => {
       <div className="px-3 py-2 border-t border-editor-border text-xs text-editor-muted">
         {fileTree.length} items
       </div>
+
+      {/* Context Menu */}
+      <ContextMenu
+        state={contextMenu}
+        onClose={closeContextMenu}
+        onRename={handleRename}
+        onDelete={handleDelete}
+        onCopyPath={handleCopyPath}
+      />
     </div>
   );
 };

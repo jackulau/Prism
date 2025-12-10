@@ -65,6 +65,8 @@ func main() {
 	providerKeyRepo := repository.NewProviderKeyRepository(db.DB)
 	integrationRepo := repository.NewIntegrationRepository(db.DB, encryptionService)
 	fileHistoryRepo := repository.NewFileHistoryRepository(db.DB)
+	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
+	todoRepo := repository.NewTodoRepository(db.DB)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -84,6 +86,8 @@ func main() {
 		log.Printf("Warning: Failed to initialize sandbox service: %v", err)
 	} else {
 		log.Println("Sandbox service initialized")
+		// Attach workspace repository for workspace persistence
+		sandboxService.SetWorkspaceRepository(workspaceRepo)
 	}
 
 	// Initialize tool registry with built-in tools
@@ -91,6 +95,7 @@ func main() {
 	if sandboxService != nil {
 		toolConfig := builtin.Config{
 			FileHistoryRepo: fileHistoryRepo,
+			TodoRepo:        todoRepo,
 		}
 		if err := builtin.RegisterAll(toolRegistry, sandboxService, codeRunner, db.DB, toolConfig); err != nil {
 			log.Printf("Warning: Failed to register built-in tools: %v", err)

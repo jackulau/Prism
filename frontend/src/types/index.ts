@@ -25,11 +25,17 @@ export type MessageType =
   | 'file.history_list'
   | 'file.history_content';
 
+export interface Attachment {
+  name: string;
+  type: string;
+  data: string;
+}
+
 export interface IncomingWSMessage {
   type: MessageType;
   conversation_id: string;
   content?: string;
-  attachments?: string[];
+  attachments?: Attachment[];
   execution_id?: string;
   params?: Record<string, unknown>;
   approved?: boolean;

@@ -210,8 +210,8 @@ func continueConversationWithToolResult(ctx context.Context, deps *Dependencies,
 	}
 
 	// Save the tool result message to database
-	// The tool_call_id should reference the original tool call
-	_, err = deps.MessageRepo.Create(pending.ConversationID, "tool", string(resultJSON), nil, pending.ID)
+	// The tool_call_id should reference the original tool call from the LLM
+	_, err = deps.MessageRepo.Create(pending.ConversationID, "tool", string(resultJSON), nil, pending.ToolCallID)
 	if err != nil {
 		log.Printf("Failed to save tool result message: %v", err)
 	}
@@ -320,6 +320,7 @@ func streamLLMResponseWithMCP(ctx context.Context, deps *Dependencies, client *w
 
 	var fullResponse strings.Builder
 	var finishReason string
+	var collectedToolCalls []llm.ToolCall
 
 	// Build MCP tool lookup map for faster access
 	mcpToolMap := make(map[string]*mcp.MCPToolWrapper)
@@ -351,6 +352,8 @@ func streamLLMResponseWithMCP(ctx context.Context, deps *Dependencies, client *w
 		// Handle tool calls
 		if len(chunk.ToolCalls) > 0 {
 			for _, tc := range chunk.ToolCalls {
+				// Collect tool calls for saving with the assistant message
+				collectedToolCalls = append(collectedToolCalls, tc)
 				handleToolCallWithMCP(ctx, deps, client, conversationID, messageID, tc, mcpToolMap)
 			}
 		}
@@ -362,9 +365,10 @@ func streamLLMResponseWithMCP(ctx context.Context, deps *Dependencies, client *w
 	}
 
 saveAndComplete:
-	// Save assistant message to database
-	if fullResponse.Len() > 0 {
-		_, err := deps.MessageRepo.Create(conversationID, "assistant", fullResponse.String(), nil, "")
+	// Save assistant message to database (with tool calls if any)
+	if fullResponse.Len() > 0 || len(collectedToolCalls) > 0 {
+		toolCalls := convertToRepoToolCalls(collectedToolCalls)
+		_, err := deps.MessageRepo.Create(conversationID, "assistant", fullResponse.String(), toolCalls, "")
 		if err != nil {
 			log.Printf("Failed to save assistant message: %v", err)
 		}
@@ -399,9 +403,10 @@ func handleToolCall(ctx context.Context, deps *Dependencies, client *websocket.C
 
 	// Check if tool requires confirmation
 	if tool.RequiresConfirmation() {
-		// Store pending execution
+		// Store pending execution with original tool call ID
 		pending := &tools.PendingExecution{
 			ID:             executionID,
+			ToolCallID:     tc.ID, // Store original LLM tool call ID
 			ToolName:       tc.Name,
 			Parameters:     tc.Parameters,
 			ConversationID: conversationID,
@@ -446,7 +451,7 @@ func handleToolCallWithMCP(ctx context.Context, deps *Dependencies, client *webs
 
 	// Check if this is an MCP tool
 	if mcpTool, isMCP := mcpToolMap[tc.Name]; isMCP {
-		handleMCPToolCall(ctx, deps, client, conversationID, messageID, executionID, mcpTool, tc.Parameters)
+		handleMCPToolCall(ctx, deps, client, conversationID, messageID, executionID, tc.ID, mcpTool, tc.Parameters)
 		return
 	}
 
@@ -464,9 +469,10 @@ func handleToolCallWithMCP(ctx context.Context, deps *Dependencies, client *webs
 
 	// Check if tool requires confirmation
 	if tool.RequiresConfirmation() {
-		// Store pending execution
+		// Store pending execution with original tool call ID
 		pending := &tools.PendingExecution{
 			ID:             executionID,
+			ToolCallID:     tc.ID, // Store original LLM tool call ID
 			ToolName:       tc.Name,
 			Parameters:     tc.Parameters,
 			ConversationID: conversationID,
@@ -506,10 +512,11 @@ func handleToolCallWithMCP(ctx context.Context, deps *Dependencies, client *webs
 }
 
 // handleMCPToolCall handles execution of an MCP tool
-func handleMCPToolCall(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID, executionID string, mcpTool *mcp.MCPToolWrapper, params map[string]interface{}) {
+func handleMCPToolCall(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID, executionID, toolCallID string, mcpTool *mcp.MCPToolWrapper, params map[string]interface{}) {
 	// MCP tools always require confirmation for security
 	pending := &tools.PendingExecution{
 		ID:             executionID,
+		ToolCallID:     toolCallID, // Store original LLM tool call ID
 		ToolName:       mcpTool.Name(),
 		Parameters:     params,
 		ConversationID: conversationID,
@@ -557,4 +564,20 @@ func executeMCPTool(ctx context.Context, deps *Dependencies, pending *tools.Pend
 		Success: true,
 		Data:    result,
 	}, nil
+}
+
+// convertToRepoToolCalls converts LLM tool calls to repository format
+func convertToRepoToolCalls(llmCalls []llm.ToolCall) []repository.ToolCall {
+	if len(llmCalls) == 0 {
+		return nil
+	}
+	result := make([]repository.ToolCall, len(llmCalls))
+	for i, tc := range llmCalls {
+		result[i] = repository.ToolCall{
+			ID:         tc.ID,
+			Name:       tc.Name,
+			Parameters: tc.Parameters,
+		}
+	}
+	return result
 }

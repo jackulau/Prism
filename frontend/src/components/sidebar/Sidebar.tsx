@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MessageSquare, Settings, FolderTree, ChevronLeft, ChevronRight, Plus, Github, Trash2, Cpu, type LucideIcon } from 'lucide-react'
+import { MessageSquare, Settings, FolderTree, ChevronLeft, ChevronRight, Plus, Github, Trash2, Cpu, Loader2, type LucideIcon } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { toast } from '../../store/toastStore'
@@ -21,6 +21,9 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     loadMessages,
     createNewConversation,
     deleteConversation,
+    isLoadingConversations,
+    conversationsError,
+    clearConversationsError,
   } = useAppStore()
   const [activeView, setActiveView] = useState<'chat' | 'files' | 'settings'>('chat')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
@@ -134,29 +137,54 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 <Plus size={14} />
               </button>
             </div>
-            <div className="space-y-1">
-              {conversations.length === 0 ? (
+
+            {/* Error state */}
+            {conversationsError && (
+              <div className="px-2 py-2 mx-2 mb-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-xs">
+                {conversationsError}
                 <button
-                  onClick={handleNewChat}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-editor-muted hover:text-editor-text hover:bg-sidebar-hover transition-colors"
+                  onClick={() => {
+                    clearConversationsError()
+                    loadConversations()
+                  }}
+                  className="ml-2 underline hover:no-underline"
                 >
-                  <Plus size={14} />
-                  <span>Start a new chat</span>
+                  Retry
                 </button>
-              ) : (
-                conversations.map((conv) => (
-                  <ConversationItem
-                    key={conv.id}
-                    title={conv.title}
-                    provider={conv.provider}
-                    model={conv.model}
-                    active={conv.id === currentConversationId}
-                    onClick={() => handleConversationClick(conv.id)}
-                    onDelete={(e) => handleDeleteConversation(e, conv.id)}
-                  />
-                ))
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {isLoadingConversations ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 size={16} className="animate-spin text-editor-muted" />
+                <span className="ml-2 text-xs text-editor-muted">Loading...</span>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {conversations.length === 0 ? (
+                  <button
+                    onClick={handleNewChat}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-editor-muted hover:text-editor-text hover:bg-sidebar-hover transition-colors"
+                  >
+                    <Plus size={14} />
+                    <span>Start a new chat</span>
+                  </button>
+                ) : (
+                  conversations.map((conv) => (
+                    <ConversationItem
+                      key={conv.id}
+                      title={conv.title}
+                      provider={conv.provider}
+                      model={conv.model}
+                      active={conv.id === currentConversationId}
+                      onClick={() => handleConversationClick(conv.id)}
+                      onDelete={(e) => handleDeleteConversation(e, conv.id)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
           </div>
         )}
       </nav>
