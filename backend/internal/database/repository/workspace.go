@@ -184,7 +184,7 @@ func (r *WorkspaceRepository) ListRecent(userID string, limit int) ([]*Workspace
 		`SELECT id, user_id, path, name, is_current, last_accessed_at, created_at
 		 FROM user_workspaces
 		 WHERE user_id = ?
-		 ORDER BY last_accessed_at DESC NULLS LAST, created_at DESC
+		 ORDER BY COALESCE(last_accessed_at, '1970-01-01') DESC, created_at DESC
 		 LIMIT ?`,
 		userID, limit,
 	)

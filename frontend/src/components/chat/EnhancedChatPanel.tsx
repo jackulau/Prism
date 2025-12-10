@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Terminal, Plus, HelpCircle, Cpu, Download } from 'lucide-react'
+import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download } from 'lucide-react'
 import { Highlight, themes, type RenderProps } from 'prism-react-renderer'
 import { useAppStore } from '../../store'
 import { wsService } from '../../services/websocket'
@@ -511,8 +511,29 @@ export function EnhancedChatPanel() {
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB per file
+    const MAX_TOTAL_SIZE = 25 * 1024 * 1024 // 25MB total
+
     const files = Array.from(e.target.files || [])
-    setAttachments((prev) => [...prev, ...files])
+    const validFiles: File[] = []
+    let totalSize = attachments.reduce((sum, f) => sum + f.size, 0)
+
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        console.error(`File "${file.name}" exceeds 10MB limit`)
+        continue
+      }
+      if (totalSize + file.size > MAX_TOTAL_SIZE) {
+        console.error('Total attachment size would exceed 25MB limit')
+        break
+      }
+      totalSize += file.size
+      validFiles.push(file)
+    }
+
+    if (validFiles.length > 0) {
+      setAttachments((prev) => [...prev, ...validFiles])
+    }
     e.target.value = '' // Reset for same file selection
   }
 

@@ -385,6 +385,7 @@ func NewError(code, message string) *OutgoingMessage {
 		Type:    TypeError,
 		Code:    code,
 		Message: message,
+		Error:   message, // Include Error field for consistency with other error constructors
 	}
 }
 

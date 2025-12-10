@@ -310,9 +310,10 @@ interface ApiFileNode {
   modified?: number;
 }
 
-const convertApiFilesToFileNodes = (files: ApiFileNode[], parentPath = ''): FileNode[] => {
-  return files.map((file, index) => {
-    const id = `${parentPath}-${index}-${file.name}`;
+const convertApiFilesToFileNodes = (files: ApiFileNode[]): FileNode[] => {
+  return files.map((file) => {
+    // Use file path as stable ID (unique and doesn't change with file order)
+    const id = file.path;
     const node: FileNode = {
       id,
       name: file.name,
@@ -322,7 +323,7 @@ const convertApiFilesToFileNodes = (files: ApiFileNode[], parentPath = ''): File
       isExpanded: false,
     };
     if (file.is_directory && file.children) {
-      node.children = convertApiFilesToFileNodes(file.children, id);
+      node.children = convertApiFilesToFileNodes(file.children);
     }
     return node;
   });

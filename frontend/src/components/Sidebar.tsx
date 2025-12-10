@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   MessageSquare,
   Plus,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store';
 import { apiService } from '../services/api';
+import { logoutUser } from '../store/authStore';
 
 // Conversation type for sidebar
 interface SidebarConversation {
@@ -302,15 +303,27 @@ export const Sidebar: React.FC = () => {
 
       {/* Footer */}
       <div className="p-3 border-t border-editor-border space-y-1">
-        <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-editor-muted hover:text-editor-text transition-smooth">
+        <button
+          onClick={() => window.location.href = '/settings'}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-editor-muted hover:text-editor-text transition-smooth"
+        >
           <Settings className="w-4 h-4" />
           <span className="text-sm">Settings</span>
         </button>
-        <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-editor-muted hover:text-editor-text transition-smooth">
+        <button
+          onClick={() => window.location.href = '/profile'}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-editor-muted hover:text-editor-text transition-smooth"
+        >
           <User className="w-4 h-4" />
           <span className="text-sm">Profile</span>
         </button>
-        <button className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-editor-muted hover:text-editor-error transition-smooth">
+        <button
+          onClick={async () => {
+            await logoutUser();
+            window.location.href = '/login';
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-sidebar-hover text-editor-muted hover:text-editor-error transition-smooth"
+        >
           <LogOut className="w-4 h-4" />
           <span className="text-sm">Sign Out</span>
         </button>
