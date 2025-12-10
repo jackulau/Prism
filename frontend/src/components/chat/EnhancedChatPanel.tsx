@@ -251,6 +251,9 @@ export function EnhancedChatPanel() {
   const [showCommands, setShowCommands] = useState(false)
   const [filteredCommands, setFilteredCommands] = useState<Command[]>([])
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
+  const [inputHistory, setInputHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [tempInput, setTempInput] = useState('') // Store current input when navigating history
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -328,7 +331,7 @@ export function EnhancedChatPanel() {
         addMessage({
           id: `help-${Date.now()}`,
           role: 'assistant',
-          content: `## Available Commands\n\n${helpText}\n\n*Type a command and press Tab to autocomplete*`,
+          content: `## Available Commands\n\n${helpText}\n\n*Type a command and press Enter to execute*`,
           timestamp: new Date(),
         })
         break
@@ -406,6 +409,14 @@ export function EnhancedChatPanel() {
     if (!input.trim() && attachments.length === 0) return
 
     const userMessage = input.trim()
+
+    // Add to input history (avoid duplicates of last entry)
+    if (userMessage && (inputHistory.length === 0 || inputHistory[inputHistory.length - 1] !== userMessage)) {
+      setInputHistory(prev => [...prev, userMessage])
+    }
+    setHistoryIndex(-1)
+    setTempInput('')
+
     setInput('')
     setShowCommands(false)
 
@@ -499,6 +510,38 @@ export function EnhancedChatPanel() {
         }
         return
       }
+    }
+
+    // Handle input history navigation (when command dropdown is not visible)
+    if (e.key === 'ArrowUp' && inputHistory.length > 0) {
+      // Only navigate history if cursor is at start or input is empty
+      const textarea = textareaRef.current
+      if (textarea && (textarea.selectionStart === 0 || input === '')) {
+        e.preventDefault()
+        if (historyIndex === -1) {
+          // Save current input before navigating
+          setTempInput(input)
+          setHistoryIndex(inputHistory.length - 1)
+          setInput(inputHistory[inputHistory.length - 1])
+        } else if (historyIndex > 0) {
+          setHistoryIndex(historyIndex - 1)
+          setInput(inputHistory[historyIndex - 1])
+        }
+        return
+      }
+    }
+
+    if (e.key === 'ArrowDown' && historyIndex !== -1) {
+      e.preventDefault()
+      if (historyIndex < inputHistory.length - 1) {
+        setHistoryIndex(historyIndex + 1)
+        setInput(inputHistory[historyIndex + 1])
+      } else {
+        // Return to current input
+        setHistoryIndex(-1)
+        setInput(tempInput)
+      }
+      return
     }
 
     if (e.key === 'Enter' && !e.shiftKey) {
