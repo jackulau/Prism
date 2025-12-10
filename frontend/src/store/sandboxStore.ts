@@ -40,6 +40,7 @@ interface SandboxState {
   files: FileNode[]
   selectedFile: string | null
   fileContents: Record<string, string>
+  fileLoadError: string | null
 
   // Terminal state
   terminalOutput: TerminalLine[]
@@ -66,6 +67,8 @@ interface SandboxState {
   setSelectedFile: (path: string | null) => void
   setFileContent: (path: string, content: string) => void
   getFileContent: (path: string) => string | null
+  setFileLoadError: (error: string | null) => void
+  clearFileLoadError: () => void
   addTerminalLine: (content: string, type: TerminalLine['type']) => void
   clearTerminal: () => void
   reset: () => void
@@ -92,6 +95,7 @@ const initialState = {
   files: [] as FileNode[],
   selectedFile: null as string | null,
   fileContents: {} as Record<string, string>,
+  fileLoadError: null as string | null,
   terminalOutput: [] as TerminalLine[],
   // File history state
   fileHistory: [] as FileHistoryEntry[],
@@ -147,6 +151,10 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
 
   getFileContent: (path) => get().fileContents[path] || null,
 
+  setFileLoadError: (error) => set({ fileLoadError: error }),
+
+  clearFileLoadError: () => set({ fileLoadError: null }),
+
   addTerminalLine: (content, type) => set((state) => ({
     terminalOutput: [
       ...state.terminalOutput,
@@ -170,13 +178,25 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
   setShowHistoryPanel: (show) => set({ showHistoryPanel: show }),
 
   requestFileHistory: (path?: string) => {
-    set({ isLoadingHistory: true })
+    set({ isLoadingHistory: true, error: null })
     wsService.requestFileHistory(path)
+    // Timeout fallback in case response never arrives
+    setTimeout(() => {
+      if (get().isLoadingHistory) {
+        set({ isLoadingHistory: false, error: 'History request timed out' })
+      }
+    }, 10000)
   },
 
   requestHistoryContent: (historyId: string) => {
-    set({ isLoadingHistory: true })
+    set({ isLoadingHistory: true, error: null })
     wsService.requestHistoryContent(historyId)
+    // Timeout fallback in case response never arrives
+    setTimeout(() => {
+      if (get().isLoadingHistory) {
+        set({ isLoadingHistory: false, error: 'Content request timed out' })
+      }
+    }, 10000)
   },
 }))
 

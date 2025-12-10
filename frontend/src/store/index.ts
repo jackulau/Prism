@@ -39,6 +39,14 @@ interface AppState {
   setCurrentConversationId: (id: string | null) => void;
   setConversations: (conversations: Conversation[]) => void;
 
+  // Conversation loading states
+  isLoadingConversations: boolean;
+  isLoadingMessages: boolean;
+  conversationsError: string | null;
+  messagesError: string | null;
+  clearConversationsError: () => void;
+  clearMessagesError: () => void;
+
   // File tree
   fileTree: FileNode[];
   setFileTree: (tree: FileNode[]) => void;
@@ -171,6 +179,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentConversationId: null,
   setCurrentConversationId: (id) => set({ currentConversationId: id }),
   setConversations: (conversations) => set({ conversations }),
+
+  // Conversation loading states
+  isLoadingConversations: false,
+  isLoadingMessages: false,
+  conversationsError: null,
+  messagesError: null,
+  clearConversationsError: () => set({ conversationsError: null }),
+  clearMessagesError: () => set({ messagesError: null }),
 
   // File tree
   fileTree: [],
@@ -354,33 +370,59 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // Conversation Actions
   loadConversations: async () => {
-    const response = await apiService.listConversations();
-    if (response.data?.conversations) {
+    set({ isLoadingConversations: true, conversationsError: null });
+    try {
+      const response = await apiService.listConversations();
+      if (response.data?.conversations) {
+        set({
+          conversations: response.data.conversations.map((c) => ({
+            id: c.id,
+            title: c.title,
+            createdAt: new Date(c.created_at),
+            updatedAt: new Date(c.updated_at),
+            messageCount: 0,
+            provider: c.provider,
+            model: c.model,
+          })),
+          isLoadingConversations: false,
+        });
+      } else if (response.error) {
+        set({ conversationsError: response.error, isLoadingConversations: false });
+      } else {
+        set({ isLoadingConversations: false });
+      }
+    } catch (err) {
       set({
-        conversations: response.data.conversations.map((c) => ({
-          id: c.id,
-          title: c.title,
-          createdAt: new Date(c.created_at),
-          updatedAt: new Date(c.updated_at),
-          messageCount: 0,
-          provider: c.provider,
-          model: c.model,
-        })),
+        conversationsError: err instanceof Error ? err.message : 'Failed to load conversations',
+        isLoadingConversations: false,
       });
     }
   },
   loadMessages: async (conversationId) => {
-    const response = await apiService.getMessages(conversationId);
-    if (response.data?.messages) {
+    set({ isLoadingMessages: true, messagesError: null });
+    try {
+      const response = await apiService.getMessages(conversationId);
+      if (response.data?.messages) {
+        set({
+          messages: response.data.messages.map((m) => ({
+            id: m.id,
+            role: m.role as 'user' | 'assistant' | 'system' | 'tool',
+            content: m.content,
+            timestamp: new Date(m.created_at),
+            toolCalls: m.tool_calls as Message['toolCalls'],
+          })),
+          currentConversationId: conversationId,
+          isLoadingMessages: false,
+        });
+      } else if (response.error) {
+        set({ messagesError: response.error, isLoadingMessages: false });
+      } else {
+        set({ isLoadingMessages: false });
+      }
+    } catch (err) {
       set({
-        messages: response.data.messages.map((m) => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant' | 'system' | 'tool',
-          content: m.content,
-          timestamp: new Date(m.created_at),
-          toolCalls: m.tool_calls as Message['toolCalls'],
-        })),
-        currentConversationId: conversationId,
+        messagesError: err instanceof Error ? err.message : 'Failed to load messages',
+        isLoadingMessages: false,
       });
     }
   },

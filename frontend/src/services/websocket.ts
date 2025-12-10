@@ -3,6 +3,12 @@ import { useSandboxStore } from '../store/sandboxStore';
 import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall } from '../types';
 import type { FileNode } from '../store/sandboxStore';
 
+interface PendingFileRequest {
+  resolve: (content: string) => void;
+  reject: (error: Error) => void;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -12,6 +18,10 @@ class WebSocketService {
   private messageQueue: IncomingWSMessage[] = [];
   private isConnecting = false;
   private intentionalDisconnect = false;
+
+  // Track pending file requests with timeouts
+  private pendingFileRequests: Map<string, PendingFileRequest> = new Map();
+  private readonly FILE_REQUEST_TIMEOUT = 5000; // 5 seconds
 
   connect(token?: string) {
     // Prevent multiple simultaneous connections
@@ -262,8 +272,30 @@ class WebSocketService {
 
   private handleFileContent(message: OutgoingWSMessage) {
     const sandboxStore = useSandboxStore.getState();
-    if (message.file_path) {
-      sandboxStore.setFileContent(message.file_path, message.content || '');
+    const filePath = message.file_path;
+
+    if (!filePath) return;
+
+    // Check for pending request
+    const pending = this.pendingFileRequests.get(filePath);
+
+    // Handle error response from backend
+    if (message.error) {
+      if (pending) {
+        clearTimeout(pending.timeout);
+        pending.reject(new Error(message.error));
+        this.pendingFileRequests.delete(filePath);
+      }
+      return;
+    }
+
+    // Success case - update store and resolve pending request
+    sandboxStore.setFileContent(filePath, message.content || '');
+
+    if (pending) {
+      clearTimeout(pending.timeout);
+      pending.resolve(message.content || '');
+      this.pendingFileRequests.delete(filePath);
     }
   }
 
@@ -442,14 +474,34 @@ class WebSocketService {
     sandboxStore.addTerminalLine('Build stopped by user', 'warning');
   }
 
-  requestFile(path: string) {
-    this.send({
-      type: 'file.request',
-      conversation_id: '',
-      params: {
-        path,
-      },
-    } as IncomingWSMessage);
+  requestFile(path: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      // Cancel any existing request for this path
+      const existing = this.pendingFileRequests.get(path);
+      if (existing) {
+        clearTimeout(existing.timeout);
+        existing.reject(new Error('Request superseded'));
+        this.pendingFileRequests.delete(path);
+      }
+
+      // Set up timeout
+      const timeout = setTimeout(() => {
+        this.pendingFileRequests.delete(path);
+        reject(new Error(`File request timed out after ${this.FILE_REQUEST_TIMEOUT}ms`));
+      }, this.FILE_REQUEST_TIMEOUT);
+
+      // Store the pending request
+      this.pendingFileRequests.set(path, { resolve, reject, timeout });
+
+      // Send the request
+      this.send({
+        type: 'file.request',
+        conversation_id: '',
+        params: {
+          path,
+        },
+      } as IncomingWSMessage);
+    });
   }
 
   requestFileHistory(path?: string) {

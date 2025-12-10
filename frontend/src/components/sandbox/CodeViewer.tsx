@@ -23,6 +23,9 @@ export function CodeViewer() {
     requestFileHistory,
     requestHistoryContent,
     setHistoryContent,
+    fileLoadError,
+    setFileLoadError,
+    clearFileLoadError,
   } = useSandboxStore()
   const [copied, setCopied] = useState(false)
   const [isLoadingFile, setIsLoadingFile] = useState(false)
@@ -45,21 +48,48 @@ export function CodeViewer() {
 
   // Request file content when a file is selected and not cached
   useEffect(() => {
-    if (selectedFile && !getFileContent(selectedFile)) {
+    let cancelled = false
+
+    async function loadFile() {
+      if (!selectedFile) {
+        setIsLoadingFile(false)
+        return
+      }
+
+      // Check if content is already cached
+      const cachedContent = getFileContent(selectedFile)
+      if (cachedContent !== null) {
+        setIsLoadingFile(false)
+        clearFileLoadError()
+        return
+      }
+
+      // Start loading
       setIsLoadingFile(true)
       setLocalContent(null)
-      wsService.requestFile(selectedFile)
-    } else {
-      setIsLoadingFile(false)
-    }
-  }, [selectedFile, getFileContent])
+      clearFileLoadError()
 
-  // Clear loading state when content arrives
-  useEffect(() => {
-    if (content) {
-      setIsLoadingFile(false)
+      try {
+        const fileContent = await wsService.requestFile(selectedFile)
+        if (!cancelled) {
+          setIsLoadingFile(false)
+          setLocalContent(fileContent)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setIsLoadingFile(false)
+          const errorMessage = error instanceof Error ? error.message : 'Failed to load file'
+          setFileLoadError(errorMessage)
+        }
+      }
     }
-  }, [content])
+
+    loadFile()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedFile, getFileContent, clearFileLoadError, setFileLoadError])
 
   const handleEditorDidMount: OnMount = (editor) => {
     editorRef.current = editor
@@ -244,6 +274,37 @@ export function CodeViewer() {
                   <div className="flex items-center justify-center h-full">
                     <Loader2 size={24} className="animate-spin text-editor-accent" />
                     <span className="ml-2 text-editor-muted">Loading file...</span>
+                  </div>
+                ) : fileLoadError ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-3">
+                    <div className="text-red-400 text-sm">{fileLoadError}</div>
+                    <button
+                      onClick={() => {
+                        clearFileLoadError()
+                        // Clear cached content and trigger reload
+                        if (selectedFile) {
+                          setFileContent(selectedFile, '')
+                          // Force re-fetch by removing from cache and re-triggering effect
+                          const store = useSandboxStore.getState()
+                          const { fileContents } = store
+                          delete fileContents[selectedFile]
+                          // Manually trigger reload
+                          setIsLoadingFile(true)
+                          wsService.requestFile(selectedFile)
+                            .then((content) => {
+                              setIsLoadingFile(false)
+                              setLocalContent(content)
+                            })
+                            .catch((err) => {
+                              setIsLoadingFile(false)
+                              setFileLoadError(err instanceof Error ? err.message : 'Failed to load file')
+                            })
+                        }
+                      }}
+                      className="px-3 py-1.5 text-sm bg-editor-accent text-white rounded hover:bg-editor-accent/80"
+                    >
+                      Retry
+                    </button>
                   </div>
                 ) : showDiff && historyContent !== null && localContent !== null ? (
                   <DiffEditor
