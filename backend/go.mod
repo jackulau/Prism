@@ -3,6 +3,9 @@ module github.com/jacklau/prism
 go 1.20
 
 require (
+	github.com/JohannesKaufmann/html-to-markdown v1.5.0
+	github.com/PuerkitoBio/goquery v1.8.1
+	github.com/bmatcuk/doublestar/v4 v4.6.1
 	github.com/gofiber/contrib/websocket v1.2.2
 	github.com/gofiber/fiber/v2 v2.50.0
 	github.com/golang-jwt/jwt/v4 v4.5.0
@@ -14,12 +17,9 @@ require (
 )
 
 require (
-	github.com/JohannesKaufmann/html-to-markdown v1.5.0 // indirect
-	github.com/PuerkitoBio/goquery v1.8.1 // indirect
 	github.com/TheTitanrain/w32 v0.0.0-20180517000239-4f5cfb03fabf // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
-	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/fasthttp/websocket v1.5.4 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
