@@ -8,7 +8,8 @@ import type {
   QueuedMessage,
   Theme,
   Provider,
-  ToolCall
+  ToolCall,
+  ChatMode
 } from '../types';
 import { apiService } from '../services/api';
 import { applyTheme, getStoredTheme } from '../config/themes';
@@ -112,6 +113,18 @@ interface AppState {
   loadMessages: (conversationId: string) => Promise<void>;
   createNewConversation: () => Promise<string | null>;
   deleteConversation: (id: string) => Promise<void>;
+
+  // Chat Mode
+  chatMode: ChatMode;
+  setChatMode: (mode: ChatMode) => void;
+
+  // Extended Thinking
+  extendedThinkingEnabled: boolean;
+  setExtendedThinkingEnabled: (enabled: boolean) => void;
+
+  // File Context Toggle
+  fileContextEnabled: boolean;
+  setFileContextEnabled: (enabled: boolean) => void;
 }
 
 const initialMetrics: GenerationMetrics = {
@@ -477,6 +490,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
     }
   },
+
+  // Chat Mode
+  chatMode: 'ask-before-edits' as ChatMode,
+  setChatMode: (mode) => set({ chatMode: mode }),
+
+  // Extended Thinking (persisted to localStorage)
+  extendedThinkingEnabled: typeof window !== 'undefined' && localStorage.getItem('extendedThinking') === 'true',
+  setExtendedThinkingEnabled: (enabled) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('extendedThinking', String(enabled));
+    }
+    set({ extendedThinkingEnabled: enabled });
+  },
+
+  // File Context Toggle
+  fileContextEnabled: true,
+  setFileContextEnabled: (enabled) => set({ fileContextEnabled: enabled }),
 }));
 
 // Alias for convenience

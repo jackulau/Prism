@@ -39,6 +39,10 @@ export interface IncomingWSMessage {
   execution_id?: string;
   params?: Record<string, unknown>;
   approved?: boolean;
+  // Chat options
+  mode?: ChatMode;
+  extended_thinking?: boolean;
+  file_context?: FileContext | null;
 }
 
 export interface OutgoingWSMessage {
@@ -137,6 +141,16 @@ export interface GenerationMetrics {
 
 // Connection status
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
+// Chat Mode
+export type ChatMode = 'plan' | 'ask-before-edits' | 'edit-automatically';
+
+// File Context for chat
+export interface FileContext {
+  path: string;
+  content: string;
+  language?: string;
+}
 
 // Message Queue
 export interface QueuedMessage {

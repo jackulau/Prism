@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download } from 'lucide-react'
+import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download, Plug, MessageSquare } from 'lucide-react'
 import { Highlight, themes, type RenderProps } from 'prism-react-renderer'
 import { useAppStore } from '../../store'
 import { wsService } from '../../services/websocket'
 import { MessageQueue } from './MessageQueue'
 import { ModelSelector } from '../ModelSelector'
+import { ModeSwitcher } from './ModeSwitcher'
+import { ThinkingToggle } from './ThinkingToggle'
 import { toast } from '../../store/toastStore'
 import type { Message } from '../../types'
 
@@ -23,6 +25,8 @@ const COMMANDS: Command[] = [
   { name: '/help', description: 'Show available commands', icon: <HelpCircle size={14} /> },
   { name: '/model', description: 'Switch model', icon: <Cpu size={14} />, hasArgs: true },
   { name: '/export', description: 'Export conversation', icon: <Download size={14} /> },
+  { name: '/mcp', description: 'MCP tools and connections', icon: <Plug size={14} />, hasArgs: true },
+  { name: '/conversations', description: 'List and manage conversations', icon: <MessageSquare size={14} />, hasArgs: true },
 ]
 
 // Code block component with syntax highlighting
@@ -273,6 +277,11 @@ export function EnhancedChatPanel() {
     setSelectedProvider,
     setSelectedModel,
     addMessage,
+    // Chat options
+    chatMode,
+    extendedThinkingEnabled,
+    selectedFile,
+    fileContextEnabled,
   } = useAppStore()
 
   const isGenerating = metrics.isGenerating
@@ -466,8 +475,32 @@ export function EnhancedChatPanel() {
       return
     }
 
-    // Send message via WebSocket with attachments
-    wsService.sendChatMessage(currentConversationId, userMessage, attachmentData.length > 0 ? attachmentData : undefined)
+    // Build file context if enabled and file is selected
+    let fileContext = null
+    if (fileContextEnabled && selectedFile) {
+      // Get file content from sandbox store if available
+      const sandboxStore = (await import('../../store/sandboxStore')).useSandboxStore.getState()
+      const content = sandboxStore.fileContents[selectedFile.path] || ''
+      if (content) {
+        fileContext = {
+          path: selectedFile.path,
+          content,
+          language: selectedFile.language,
+        }
+      }
+    }
+
+    // Send message via WebSocket with attachments and options
+    wsService.sendChatMessage(
+      currentConversationId,
+      userMessage,
+      attachmentData.length > 0 ? attachmentData : undefined,
+      {
+        mode: chatMode,
+        extendedThinking: extendedThinkingEnabled,
+        fileContext,
+      }
+    )
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -756,7 +789,7 @@ export function EnhancedChatPanel() {
             </div>
           )}
 
-          <div className="relative flex items-end gap-2 bg-editor-surface rounded-xl border border-editor-border focus-within:border-editor-accent transition-colors">
+          <div className="relative bg-editor-surface rounded-xl border border-editor-border focus-within:border-editor-accent transition-colors">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -767,48 +800,81 @@ export function EnhancedChatPanel() {
               accept="image/*,.pdf,.txt,.md,.js,.ts,.jsx,.tsx,.json,.html,.css,.py,.go,.rs"
             />
 
-            <button
-              type="button"
-              onClick={handleAttachClick}
-              className={`p-3 transition-colors relative ${
-                attachments.length > 0
-                  ? 'text-editor-accent'
-                  : 'text-editor-muted hover:text-editor-text'
-              }`}
-              title="Attach file"
-            >
-              <Paperclip size={20} />
-              {attachments.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-editor-accent text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
-                  {attachments.length}
-                </span>
+            {/* Textarea row */}
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={handleAttachClick}
+                className={`p-3 transition-colors relative ${
+                  attachments.length > 0
+                    ? 'text-editor-accent'
+                    : 'text-editor-muted hover:text-editor-text'
+                }`}
+                title="Attach file"
+              >
+                <Paperclip size={20} />
+                {attachments.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-editor-accent text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                    {attachments.length}
+                  </span>
+                )}
+              </button>
+
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  !isConnected
+                    ? "Type message (will queue until connected)..."
+                    : isGenerating
+                      ? "Type to queue message..."
+                      : "Send a message... (type / for commands)"
+                }
+                rows={1}
+                className="flex-1 bg-transparent text-editor-text placeholder-editor-muted py-3 pr-3 resize-none focus:outline-none max-h-48"
+              />
+            </div>
+
+            {/* Context bar with controls and send button */}
+            <div className="flex items-center gap-2 px-3 py-2 border-t border-editor-border/50">
+              {/* File context badge */}
+              {fileContextEnabled && selectedFile && (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-editor-bg border border-editor-border text-xs">
+                  <span className="text-editor-accent">📄</span>
+                  <span className="text-editor-text max-w-[100px] truncate" title={selectedFile.path}>
+                    {selectedFile.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => useAppStore.getState().setFileContextEnabled(false)}
+                    className="text-editor-muted hover:text-editor-text transition-colors"
+                    title="Remove file context"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               )}
-            </button>
 
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                !isConnected
-                  ? "Type message (will queue until connected)..."
-                  : isGenerating
-                    ? "Type to queue message..."
-                    : "Send a message... (type / for commands)"
-              }
-              rows={1}
-              className="flex-1 bg-transparent text-editor-text placeholder-editor-muted py-3 pr-2 resize-none focus:outline-none max-h-48"
-            />
+              <div className="flex-1" />
 
-            <button
-              type="submit"
-              disabled={!input.trim()}
-              className="m-2 p-2.5 rounded-lg bg-editor-accent text-white hover:bg-editor-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title={!isConnected ? "Queue message (not connected)" : isGenerating ? "Queue message" : "Send message"}
-            >
-              <Send size={20} />
-            </button>
+              {/* Mode switcher - inline */}
+              <ModeSwitcher />
+
+              {/* Thinking toggle - inline */}
+              <ThinkingToggle />
+
+              {/* Send button */}
+              <button
+                type="submit"
+                disabled={!input.trim()}
+                className="p-2 rounded-lg bg-editor-accent text-white hover:bg-editor-accent/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title={!isConnected ? "Queue message (not connected)" : isGenerating ? "Queue message" : "Send message"}
+              >
+                <Send size={18} />
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between mt-2 px-1">

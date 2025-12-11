@@ -1,6 +1,6 @@
 import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
-import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall } from '../types';
+import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext } from '../types';
 import type { FileNode } from '../store/sandboxStore';
 
 interface PendingFileRequest {
@@ -388,7 +388,16 @@ class WebSocketService {
     }
   }
 
-  sendChatMessage(conversationId: string, content: string, attachments?: Array<{ name: string; type: string; data: string }>) {
+  sendChatMessage(
+    conversationId: string,
+    content: string,
+    attachments?: Array<{ name: string; type: string; data: string }>,
+    options?: {
+      mode?: ChatMode;
+      extendedThinking?: boolean;
+      fileContext?: FileContext | null;
+    }
+  ) {
     const store = useAppStore.getState();
 
     // Create user message with attachment info if present
@@ -396,10 +405,15 @@ class WebSocketService {
       ? `\n\n📎 *Attached: ${attachments.map(a => a.name).join(', ')}*`
       : '';
 
+    // Add file context info to display in message
+    const fileContextInfo = options?.fileContext
+      ? `\n\n📄 *Context: ${options.fileContext.path}*`
+      : '';
+
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: content + attachmentInfo,
+      content: content + attachmentInfo + fileContextInfo,
       timestamp: new Date(),
     };
     store.addMessage(userMessage);
@@ -418,12 +432,16 @@ class WebSocketService {
     // Start tracking metrics
     store.startGeneration();
 
-    // Send message with attachments
+    // Send message with attachments and options
     this.send({
       type: 'chat.message',
       conversation_id: conversationId,
       content,
       attachments,
+      // Include chat options
+      mode: options?.mode,
+      extended_thinking: options?.extendedThinking,
+      file_context: options?.fileContext,
     });
   }
 
