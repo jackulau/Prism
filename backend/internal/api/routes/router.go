@@ -220,6 +220,9 @@ func Setup(deps *Dependencies) *fiber.App {
 		workspace.Post("/directory", workspaceHandler.SetDirectory)
 		workspace.Get("/browse", workspaceHandler.BrowseDirectories)
 		workspace.Post("/pick-folder", workspaceHandler.OpenFolderPicker)
+		workspace.Get("/recent", workspaceHandler.ListRecentWorkspaces)
+		workspace.Post("/:id/current", workspaceHandler.SetCurrentWorkspace)
+		workspace.Delete("/:id", workspaceHandler.RemoveWorkspace)
 	}
 
 	// GitHub webhook routes
