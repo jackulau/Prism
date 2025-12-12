@@ -77,14 +77,25 @@ func handleChatMessage(deps *Dependencies, client *websocket.Client, msg *websoc
 		toolDefs = deps.ToolRegistry.ToLLMTools()
 	}
 
-	// Get MCP tools for the user and merge them
+	// Get HTTP MCP tools for the user and merge them
 	var mcpTools []*mcp.MCPToolWrapper
 	if deps.MCPClient != nil {
 		mcpTools = mcp.GetMCPToolsForUser(deps.MCPClient, client.UserID)
 		if len(mcpTools) > 0 {
 			mcpToolDefs := mcp.ToLLMToolDefinitions(mcpTools)
 			toolDefs = append(toolDefs, mcpToolDefs...)
-			log.Printf("Added %d MCP tools for user %s", len(mcpTools), client.UserID)
+			log.Printf("Added %d HTTP MCP tools for user %s", len(mcpTools), client.UserID)
+		}
+	}
+
+	// Get stdio MCP tools for the user and merge them
+	var stdioMCPTools []*mcp.StdioMCPToolWrapper
+	if deps.StdioMCPClient != nil {
+		stdioMCPTools = mcp.GetStdioMCPToolsForUser(deps.StdioMCPClient, client.UserID)
+		if len(stdioMCPTools) > 0 {
+			stdioToolDefs := mcp.StdioToLLMToolDefinitions(stdioMCPTools)
+			toolDefs = append(toolDefs, stdioToolDefs...)
+			log.Printf("Added %d stdio MCP tools for user %s", len(stdioMCPTools), client.UserID)
 		}
 	}
 
@@ -98,7 +109,7 @@ func handleChatMessage(deps *Dependencies, client *websocket.Client, msg *websoc
 
 	// Stream response from LLM
 	messageID := uuid.New().String()
-	streamLLMResponseWithMCP(ctx, deps, client, msg.ConversationID, conversation.Provider, messageID, req, mcpTools)
+	streamLLMResponseWithMCPAndStdio(ctx, deps, client, msg.ConversationID, conversation.Provider, messageID, req, mcpTools, stdioMCPTools)
 }
 
 // handleChatStop stops an ongoing chat generation
@@ -232,13 +243,23 @@ func continueConversationWithToolResult(ctx context.Context, deps *Dependencies,
 		toolDefs = deps.ToolRegistry.ToLLMTools()
 	}
 
-	// Get MCP tools for the user
+	// Get HTTP MCP tools for the user
 	var mcpTools []*mcp.MCPToolWrapper
 	if deps.MCPClient != nil {
 		mcpTools = mcp.GetMCPToolsForUser(deps.MCPClient, client.UserID)
 		if len(mcpTools) > 0 {
 			mcpToolDefs := mcp.ToLLMToolDefinitions(mcpTools)
 			toolDefs = append(toolDefs, mcpToolDefs...)
+		}
+	}
+
+	// Get stdio MCP tools for the user
+	var stdioMCPTools []*mcp.StdioMCPToolWrapper
+	if deps.StdioMCPClient != nil {
+		stdioMCPTools = mcp.GetStdioMCPToolsForUser(deps.StdioMCPClient, client.UserID)
+		if len(stdioMCPTools) > 0 {
+			stdioToolDefs := mcp.StdioToLLMToolDefinitions(stdioMCPTools)
+			toolDefs = append(toolDefs, stdioToolDefs...)
 		}
 	}
 
@@ -252,7 +273,7 @@ func continueConversationWithToolResult(ctx context.Context, deps *Dependencies,
 
 	// Stream response from LLM
 	messageID := uuid.New().String()
-	streamLLMResponseWithMCP(ctx, deps, client, pending.ConversationID, conversation.Provider, messageID, req, mcpTools)
+	streamLLMResponseWithMCPAndStdio(ctx, deps, client, pending.ConversationID, conversation.Provider, messageID, req, mcpTools, stdioMCPTools)
 }
 
 // buildLLMMessages converts database messages to LLM messages
@@ -296,12 +317,23 @@ func buildLLMMessages(systemPrompt string, history []*repository.Message, userMs
 	return messages
 }
 
-// streamLLMResponseWithMCP streams the LLM response to the client with MCP tool support
-func streamLLMResponseWithMCP(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, provider, messageID string, req *llm.ChatRequest, mcpTools []*mcp.MCPToolWrapper) {
+// streamLLMResponseWithMCPAndStdio streams the LLM response to the client with both HTTP and stdio MCP tool support
+func streamLLMResponseWithMCPAndStdio(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, provider, messageID string, req *llm.ChatRequest, mcpTools []*mcp.MCPToolWrapper, stdioMCPTools []*mcp.StdioMCPToolWrapper) {
 	// Check if provider is set
 	if provider == "" {
 		client.SendMessage(websocket.NewError("provider_error", "no LLM provider configured for this conversation"))
 		return
+	}
+
+	// Load user's API key from database for providers that require it (handles server restarts)
+	if provider != "ollama" && deps.ProviderKeyRepo != nil && deps.EncryptionService != nil {
+		providerKey, err := deps.ProviderKeyRepo.GetKey(client.UserID, provider)
+		if err == nil && providerKey != nil {
+			decryptedKey, err := deps.EncryptionService.Decrypt(providerKey.EncryptedKey, providerKey.KeyNonce)
+			if err == nil {
+				deps.LLMManager.SetAPIKey(provider, string(decryptedKey))
+			}
+		}
 	}
 
 	// Check if provider has a valid API key configured
@@ -322,10 +354,16 @@ func streamLLMResponseWithMCP(ctx context.Context, deps *Dependencies, client *w
 	var finishReason string
 	var collectedToolCalls []llm.ToolCall
 
-	// Build MCP tool lookup map for faster access
+	// Build HTTP MCP tool lookup map for faster access
 	mcpToolMap := make(map[string]*mcp.MCPToolWrapper)
 	for _, t := range mcpTools {
 		mcpToolMap[t.Name()] = t
+	}
+
+	// Build stdio MCP tool lookup map for faster access
+	stdioMCPToolMap := make(map[string]*mcp.StdioMCPToolWrapper)
+	for _, t := range stdioMCPTools {
+		stdioMCPToolMap[t.Name()] = t
 	}
 
 	for chunk := range stream {
@@ -354,7 +392,7 @@ func streamLLMResponseWithMCP(ctx context.Context, deps *Dependencies, client *w
 			for _, tc := range chunk.ToolCalls {
 				// Collect tool calls for saving with the assistant message
 				collectedToolCalls = append(collectedToolCalls, tc)
-				handleToolCallWithMCP(ctx, deps, client, conversationID, messageID, tc, mcpToolMap)
+				handleToolCallWithAllMCP(ctx, deps, client, conversationID, messageID, tc, mcpToolMap, stdioMCPToolMap)
 			}
 		}
 
@@ -443,15 +481,33 @@ func handleToolCall(ctx context.Context, deps *Dependencies, client *websocket.C
 	}
 
 	client.SendMessage(websocket.NewToolCompleted(conversationID, executionID, result, status))
+
+	// Continue conversation with tool result (agentic loop)
+	pending := &tools.PendingExecution{
+		ID:             executionID,
+		ToolCallID:     tc.ID,
+		ToolName:       tc.Name,
+		Parameters:     tc.Parameters,
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		UserID:         client.UserID,
+	}
+	continueConversationWithToolResult(ctx, deps, client, pending, result, status)
 }
 
-// handleToolCallWithMCP handles a tool call, routing to either local tools or MCP tools
-func handleToolCallWithMCP(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID string, tc llm.ToolCall, mcpToolMap map[string]*mcp.MCPToolWrapper) {
+// handleToolCallWithAllMCP handles a tool call, routing to local tools, HTTP MCP tools, or stdio MCP tools
+func handleToolCallWithAllMCP(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID string, tc llm.ToolCall, mcpToolMap map[string]*mcp.MCPToolWrapper, stdioMCPToolMap map[string]*mcp.StdioMCPToolWrapper) {
 	executionID := uuid.New().String()
 
-	// Check if this is an MCP tool
+	// Check if this is an HTTP MCP tool
 	if mcpTool, isMCP := mcpToolMap[tc.Name]; isMCP {
-		handleMCPToolCall(ctx, deps, client, conversationID, messageID, executionID, tc.ID, mcpTool, tc.Parameters)
+		handleHTTPMCPToolCall(ctx, deps, client, conversationID, messageID, executionID, tc.ID, mcpTool, tc.Parameters)
+		return
+	}
+
+	// Check if this is a stdio MCP tool
+	if stdioMCPTool, isStdioMCP := stdioMCPToolMap[tc.Name]; isStdioMCP {
+		handleStdioMCPToolCall(ctx, deps, client, conversationID, messageID, executionID, tc.ID, stdioMCPTool, tc.Parameters)
 		return
 	}
 
@@ -509,10 +565,22 @@ func handleToolCallWithMCP(ctx context.Context, deps *Dependencies, client *webs
 	}
 
 	client.SendMessage(websocket.NewToolCompleted(conversationID, executionID, result, status))
+
+	// Continue conversation with tool result (agentic loop)
+	pending := &tools.PendingExecution{
+		ID:             executionID,
+		ToolCallID:     tc.ID,
+		ToolName:       tc.Name,
+		Parameters:     tc.Parameters,
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		UserID:         client.UserID,
+	}
+	continueConversationWithToolResult(ctx, deps, client, pending, result, status)
 }
 
-// handleMCPToolCall handles execution of an MCP tool
-func handleMCPToolCall(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID, executionID, toolCallID string, mcpTool *mcp.MCPToolWrapper, params map[string]interface{}) {
+// handleHTTPMCPToolCall handles execution of an HTTP MCP tool
+func handleHTTPMCPToolCall(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID, executionID, toolCallID string, mcpTool *mcp.MCPToolWrapper, params map[string]interface{}) {
 	// MCP tools always require confirmation for security
 	pending := &tools.PendingExecution{
 		ID:             executionID,
@@ -523,6 +591,7 @@ func handleMCPToolCall(ctx context.Context, deps *Dependencies, client *websocke
 		MessageID:      messageID,
 		UserID:         client.UserID,
 		IsMCPTool:      true,
+		IsStdioMCP:     false, // HTTP MCP
 		MCPServerID:    mcpTool.ServerID(),
 		MCPToolName:    mcpTool.OriginalName(),
 	}
@@ -543,16 +612,64 @@ func handleMCPToolCall(ctx context.Context, deps *Dependencies, client *websocke
 	})
 }
 
-// executeMCPTool executes an MCP tool after user confirmation
-func executeMCPTool(ctx context.Context, deps *Dependencies, pending *tools.PendingExecution) (*tools.ExecutionResult, error) {
-	if deps.MCPClient == nil {
-		return &tools.ExecutionResult{
-			Success: false,
-			Error:   "MCP client not available",
-		}, nil
+// handleStdioMCPToolCall handles execution of a stdio MCP tool
+func handleStdioMCPToolCall(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID, executionID, toolCallID string, mcpTool *mcp.StdioMCPToolWrapper, params map[string]interface{}) {
+	// MCP tools always require confirmation for security
+	pending := &tools.PendingExecution{
+		ID:             executionID,
+		ToolCallID:     toolCallID, // Store original LLM tool call ID
+		ToolName:       mcpTool.Name(),
+		Parameters:     params,
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		UserID:         client.UserID,
+		IsMCPTool:      true,
+		IsStdioMCP:     true, // Stdio MCP
+		MCPServerID:    mcpTool.ServerID(),
+		MCPToolName:    mcpTool.OriginalName(),
 	}
 
-	result, err := deps.MCPClient.ExecuteTool(ctx, pending.MCPServerID, pending.MCPToolName, pending.Parameters)
+	if deps.ToolRegistry != nil {
+		deps.ToolRegistry.AddPendingExecution(pending)
+	}
+
+	// Send confirmation request to client with MCP indicator
+	client.SendMessage(&websocket.OutgoingMessage{
+		Type:           websocket.TypeToolConfirm,
+		ConversationID: conversationID,
+		ExecutionID:    executionID,
+		ToolName:       mcpTool.Name(),
+		Parameters:     params,
+		IsMCPTool:      true,
+		MCPServerName:  mcpTool.Description(), // Contains server name in description
+	})
+}
+
+// executeMCPTool executes an MCP tool (HTTP or stdio) after user confirmation
+func executeMCPTool(ctx context.Context, deps *Dependencies, pending *tools.PendingExecution) (*tools.ExecutionResult, error) {
+	var result interface{}
+	var err error
+
+	if pending.IsStdioMCP {
+		// Execute via stdio MCP client
+		if deps.StdioMCPClient == nil {
+			return &tools.ExecutionResult{
+				Success: false,
+				Error:   "Stdio MCP client not available",
+			}, nil
+		}
+		result, err = deps.StdioMCPClient.ExecuteTool(ctx, pending.MCPServerID, pending.MCPToolName, pending.Parameters)
+	} else {
+		// Execute via HTTP MCP client
+		if deps.MCPClient == nil {
+			return &tools.ExecutionResult{
+				Success: false,
+				Error:   "HTTP MCP client not available",
+			}, nil
+		}
+		result, err = deps.MCPClient.ExecuteTool(ctx, pending.MCPServerID, pending.MCPToolName, pending.Parameters)
+	}
+
 	if err != nil {
 		return &tools.ExecutionResult{
 			Success: false,

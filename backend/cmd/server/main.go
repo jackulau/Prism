@@ -24,6 +24,7 @@ import (
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
+	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/tools"
 	"github.com/jacklau/prism/internal/tools/builtin"
 )
@@ -165,6 +166,26 @@ func main() {
 	agentManager.Start()
 	log.Println("Agent manager started")
 
+	// Initialize MCP components
+	mcpServer := mcp.NewServer(toolRegistry)
+	mcpClient := mcp.NewClient()
+	mcpRepo := mcp.NewRepository(db.DB)
+
+	// Load all enabled HTTP MCP connections from database
+	if err := mcpRepo.LoadAllEnabled(mcpClient); err != nil {
+		log.Printf("Warning: Failed to load HTTP MCP connections: %v", err)
+	}
+
+	// Initialize stdio MCP client for local MCP servers
+	stdioMCPClient := mcp.NewStdioClient()
+	stdioMCPRepo := mcp.NewStdioRepository(db.DB)
+
+	// Load all enabled stdio MCP servers from database
+	if err := stdioMCPRepo.LoadAllEnabled(stdioMCPClient); err != nil {
+		log.Printf("Warning: Failed to load stdio MCP servers: %v", err)
+	}
+	log.Println("MCP server and clients initialized")
+
 	// Setup routes
 	deps := &routes.Dependencies{
 		Config:             cfg,
@@ -185,6 +206,11 @@ func main() {
 		CodeRunner:         codeRunner,
 		SandboxService:     sandboxService,
 		ToolRegistry:       toolRegistry,
+		MCPServer:          mcpServer,
+		MCPClient:          mcpClient,
+		MCPRepository:      mcpRepo,
+		StdioMCPClient:     stdioMCPClient,
+		StdioMCPRepository: stdioMCPRepo,
 	}
 
 	app := routes.Setup(deps)
@@ -200,6 +226,10 @@ func main() {
 		// Stop agent manager
 		agentManager.Stop()
 		log.Println("Agent manager stopped")
+
+		// Stop all stdio MCP servers
+		stdioMCPClient.StopAll()
+		log.Println("Stdio MCP servers stopped")
 
 		// Close integrations manager
 		if err := integrationManager.Close(); err != nil {

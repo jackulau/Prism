@@ -275,6 +275,20 @@ func (db *DB) Migrate() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// Stdio MCP servers (local MCP servers connected via stdin/stdout)
+		`CREATE TABLE IF NOT EXISTS mcp_stdio_servers (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			command TEXT NOT NULL,
+			args TEXT,
+			env TEXT,
+			enabled INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_error TEXT
+		)`,
+
 		// File history for tracking changes made by agent
 		`CREATE TABLE IF NOT EXISTS file_history (
 			id TEXT PRIMARY KEY,
@@ -342,6 +356,7 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_mcp_connections_user_id ON mcp_connections(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_user_id ON mcp_api_keys(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_key_hash ON mcp_api_keys(key_hash)`,
+		`CREATE INDEX IF NOT EXISTS idx_mcp_stdio_servers_user_id ON mcp_stdio_servers(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_integrations_user_id ON user_integrations(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_user_id ON file_history(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_file_path ON file_history(user_id, file_path)`,

@@ -90,6 +90,9 @@ func (h *ProviderHandler) SetKey(c *fiber.Ctx) error {
 		})
 	}
 
+	// Also set the key on the provider instance for immediate use
+	h.llmManager.SetAPIKey(provider, req.APIKey)
+
 	return c.JSON(fiber.Map{
 		"success": true,
 		"message": "API key saved successfully",

@@ -44,6 +44,7 @@ type PendingExecution struct {
 	UserID         string                 `json:"user_id"`
 	// MCP-specific fields
 	IsMCPTool   bool   `json:"is_mcp_tool,omitempty"`
+	IsStdioMCP  bool   `json:"is_stdio_mcp,omitempty"` // True for stdio MCP, false for HTTP MCP
 	MCPServerID string `json:"mcp_server_id,omitempty"`
 	MCPToolName string `json:"mcp_tool_name,omitempty"`
 }

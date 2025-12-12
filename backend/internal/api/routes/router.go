@@ -49,6 +49,8 @@ type Dependencies struct {
 	MCPServer          *mcp.Server
 	MCPClient          *mcp.Client
 	MCPRepository      *mcp.Repository
+	StdioMCPClient     *mcp.StdioClient
+	StdioMCPRepository *mcp.StdioRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -282,10 +284,17 @@ func Setup(deps *Dependencies) *fiber.App {
 	}
 
 	if deps.MCPClient != nil && deps.MCPRepository != nil {
-		// Register MCP client routes (connect to external MCP servers)
+		// Register MCP client routes (connect to external HTTP MCP servers)
 		mcpHandler := mcp.NewHandler(deps.MCPClient, deps.MCPRepository)
 		mcpProtected := v1.Group("", middleware.AuthMiddleware(deps.JWTService))
 		mcpHandler.RegisterRoutes(mcpProtected)
+	}
+
+	if deps.StdioMCPClient != nil && deps.StdioMCPRepository != nil {
+		// Register stdio MCP routes (connect to local MCP servers via stdin/stdout)
+		stdioHandler := mcp.NewStdioHandler(deps.StdioMCPClient, deps.StdioMCPRepository)
+		stdioProtected := v1.Group("", middleware.AuthMiddleware(deps.JWTService))
+		stdioHandler.RegisterRoutes(stdioProtected)
 	}
 
 	// Integrations routes (for Settings page)
