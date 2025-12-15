@@ -189,7 +189,7 @@ const getRoleName = (role: Message['role']) => {
 interface ToolCall {
   id: string;
   name: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'rejected';
   result?: unknown;
 }
 

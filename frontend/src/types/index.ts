@@ -8,6 +8,8 @@ export type MessageType =
   | 'tool.confirm'
   | 'chat.stop'
   | 'error'
+  | 'agent.check_in'
+  | 'agent.continue'
   // Preview/Sandbox message types
   | 'preview.ready'
   | 'preview.content'
@@ -69,6 +71,12 @@ export interface OutgoingWSMessage {
   status?: string;
   // File history fields
   metadata?: Record<string, unknown>;
+  // MCP-related fields (sent by backend for tool.confirm/tool.started)
+  is_mcp_tool?: boolean;
+  mcp_server_name?: string;
+  mcp_server_id?: string;
+  is_stdio_mcp?: boolean;
+  iteration_count?: number;
 }
 
 // Chat types
@@ -87,7 +95,10 @@ export interface ToolCall {
   name: string;
   parameters: Record<string, unknown>;
   result?: unknown;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'rejected';
+  isMCP?: boolean;
+  serverName?: string;
+  isStdioMCP?: boolean;
 }
 
 export interface MessageMetrics {

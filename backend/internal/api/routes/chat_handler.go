@@ -19,6 +19,47 @@ import (
 // activeGenerations tracks active chat generations for cancellation
 var activeGenerations = sync.Map{} // map[conversationID]context.CancelFunc
 
+// iterationCounts tracks the number of tool executions per conversation for agentic loops
+var iterationCounts = sync.Map{} // map[conversationID]int
+
+// getIterationCount returns the current iteration count for a conversation
+func getIterationCount(conversationID string) int {
+	if val, ok := iterationCounts.Load(conversationID); ok {
+		return val.(int)
+	}
+	return 0
+}
+
+// incrementIterationCount increments and returns the new iteration count
+func incrementIterationCount(conversationID string) int {
+	for {
+		current := getIterationCount(conversationID)
+		newCount := current + 1
+		if iterationCounts.CompareAndSwap(conversationID, current, newCount) {
+			return newCount
+		}
+		// If current was 0, we need to store it first
+		if current == 0 {
+			if iterationCounts.CompareAndSwap(conversationID, nil, newCount) {
+				return newCount
+			}
+			iterationCounts.Store(conversationID, newCount)
+			return newCount
+		}
+	}
+}
+
+// resetIterationCount resets the iteration count for a conversation
+func resetIterationCount(conversationID string) {
+	iterationCounts.Delete(conversationID)
+}
+
+// getDefaultAutoApprovalConfig returns a default auto-approval config
+// In a full implementation, this would be loaded from user settings
+func getDefaultAutoApprovalConfig() *tools.AutoApprovalConfig {
+	return tools.DefaultAutoApprovalConfig()
+}
+
 // handleChatMessage handles incoming chat messages and streams LLM responses
 func handleChatMessage(deps *Dependencies, client *websocket.Client, msg *websocket.IncomingMessage) {
 	// Validate conversation ID
@@ -51,6 +92,9 @@ func handleChatMessage(deps *Dependencies, client *websocket.Client, msg *websoc
 		activeGenerations.Delete(msg.ConversationID)
 		cancel()
 	}()
+
+	// Reset iteration count for new user message
+	resetIterationCount(msg.ConversationID)
 
 	// Save user message to database
 	userMsg, err := deps.MessageRepo.Create(msg.ConversationID, "user", msg.Content, nil, "")
@@ -581,7 +625,59 @@ func handleToolCallWithAllMCP(ctx context.Context, deps *Dependencies, client *w
 
 // handleHTTPMCPToolCall handles execution of an HTTP MCP tool
 func handleHTTPMCPToolCall(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID, executionID, toolCallID string, mcpTool *mcp.MCPToolWrapper, params map[string]interface{}) {
-	// MCP tools always require confirmation for security
+	// Get auto-approval config (would be loaded from user settings in production)
+	approvalConfig := getDefaultAutoApprovalConfig()
+
+	// Track iteration count
+	iterationCount := incrementIterationCount(conversationID)
+
+	// Check if we've hit the max iterations and need to check in
+	if approvalConfig.ShouldCheckIn(iterationCount) {
+		client.SendMessage(websocket.NewAgentCheckIn(
+			conversationID,
+			iterationCount,
+			"Agent has reached the maximum number of tool executions. Would you like to continue?",
+		))
+		return
+	}
+
+	// Check if this tool should be auto-approved
+	if approvalConfig.ShouldAutoApprove(mcpTool.Name(), true) {
+		// Execute immediately
+		client.SendMessage(websocket.NewToolStarted(conversationID, executionID, mcpTool.Name(), params))
+
+		result, err := deps.MCPClient.ExecuteTool(ctx, mcpTool.ServerID(), mcpTool.OriginalName(), params)
+
+		var execResult *tools.ExecutionResult
+		if err != nil {
+			execResult = &tools.ExecutionResult{Success: false, Error: err.Error()}
+		} else {
+			execResult = &tools.ExecutionResult{Success: true, Data: result}
+		}
+
+		status := "completed"
+		if !execResult.Success {
+			status = "failed"
+		}
+		client.SendMessage(websocket.NewToolCompleted(conversationID, executionID, execResult, status))
+
+		// Continue agentic loop
+		pending := &tools.PendingExecution{
+			ID:             executionID,
+			ToolCallID:     toolCallID,
+			ToolName:       mcpTool.Name(),
+			Parameters:     params,
+			ConversationID: conversationID,
+			MessageID:      messageID,
+			UserID:         client.UserID,
+			IsMCPTool:      true,
+			IterationCount: iterationCount,
+		}
+		continueConversationWithToolResult(ctx, deps, client, pending, execResult, status)
+		return
+	}
+
+	// Require confirmation
 	pending := &tools.PendingExecution{
 		ID:             executionID,
 		ToolCallID:     toolCallID, // Store original LLM tool call ID
@@ -594,6 +690,7 @@ func handleHTTPMCPToolCall(ctx context.Context, deps *Dependencies, client *webs
 		IsStdioMCP:     false, // HTTP MCP
 		MCPServerID:    mcpTool.ServerID(),
 		MCPToolName:    mcpTool.OriginalName(),
+		IterationCount: iterationCount,
 	}
 
 	if deps.ToolRegistry != nil {
@@ -609,12 +706,66 @@ func handleHTTPMCPToolCall(ctx context.Context, deps *Dependencies, client *webs
 		Parameters:     params,
 		IsMCPTool:      true,
 		MCPServerName:  mcpTool.Description(), // Contains server name in description
+		IterationCount: iterationCount,
 	})
 }
 
 // handleStdioMCPToolCall handles execution of a stdio MCP tool
 func handleStdioMCPToolCall(ctx context.Context, deps *Dependencies, client *websocket.Client, conversationID, messageID, executionID, toolCallID string, mcpTool *mcp.StdioMCPToolWrapper, params map[string]interface{}) {
-	// MCP tools always require confirmation for security
+	// Get auto-approval config (would be loaded from user settings in production)
+	approvalConfig := getDefaultAutoApprovalConfig()
+
+	// Track iteration count
+	iterationCount := incrementIterationCount(conversationID)
+
+	// Check if we've hit the max iterations and need to check in
+	if approvalConfig.ShouldCheckIn(iterationCount) {
+		client.SendMessage(websocket.NewAgentCheckIn(
+			conversationID,
+			iterationCount,
+			"Agent has reached the maximum number of tool executions. Would you like to continue?",
+		))
+		return
+	}
+
+	// Check if this tool should be auto-approved
+	if approvalConfig.ShouldAutoApprove(mcpTool.Name(), true) {
+		// Execute immediately
+		client.SendMessage(websocket.NewToolStarted(conversationID, executionID, mcpTool.Name(), params))
+
+		result, err := deps.StdioMCPClient.ExecuteTool(ctx, mcpTool.ServerID(), mcpTool.OriginalName(), params)
+
+		var execResult *tools.ExecutionResult
+		if err != nil {
+			execResult = &tools.ExecutionResult{Success: false, Error: err.Error()}
+		} else {
+			execResult = &tools.ExecutionResult{Success: true, Data: result}
+		}
+
+		status := "completed"
+		if !execResult.Success {
+			status = "failed"
+		}
+		client.SendMessage(websocket.NewToolCompleted(conversationID, executionID, execResult, status))
+
+		// Continue agentic loop
+		pending := &tools.PendingExecution{
+			ID:             executionID,
+			ToolCallID:     toolCallID,
+			ToolName:       mcpTool.Name(),
+			Parameters:     params,
+			ConversationID: conversationID,
+			MessageID:      messageID,
+			UserID:         client.UserID,
+			IsMCPTool:      true,
+			IsStdioMCP:     true,
+			IterationCount: iterationCount,
+		}
+		continueConversationWithToolResult(ctx, deps, client, pending, execResult, status)
+		return
+	}
+
+	// Require confirmation
 	pending := &tools.PendingExecution{
 		ID:             executionID,
 		ToolCallID:     toolCallID, // Store original LLM tool call ID
@@ -627,6 +778,7 @@ func handleStdioMCPToolCall(ctx context.Context, deps *Dependencies, client *web
 		IsStdioMCP:     true, // Stdio MCP
 		MCPServerID:    mcpTool.ServerID(),
 		MCPToolName:    mcpTool.OriginalName(),
+		IterationCount: iterationCount,
 	}
 
 	if deps.ToolRegistry != nil {
@@ -642,6 +794,7 @@ func handleStdioMCPToolCall(ctx context.Context, deps *Dependencies, client *web
 		Parameters:     params,
 		IsMCPTool:      true,
 		MCPServerName:  mcpTool.Description(), // Contains server name in description
+		IterationCount: iterationCount,
 	})
 }
 

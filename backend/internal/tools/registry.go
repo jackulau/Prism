@@ -47,6 +47,8 @@ type PendingExecution struct {
 	IsStdioMCP  bool   `json:"is_stdio_mcp,omitempty"` // True for stdio MCP, false for HTTP MCP
 	MCPServerID string `json:"mcp_server_id,omitempty"`
 	MCPToolName string `json:"mcp_tool_name,omitempty"`
+	// Iteration tracking for agentic loops
+	IterationCount int `json:"iteration_count,omitempty"`
 }
 
 // ExecutionResult represents the result of a tool execution

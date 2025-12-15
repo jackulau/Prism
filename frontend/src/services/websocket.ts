@@ -147,6 +147,9 @@ class WebSocketService {
             name: message.tool_name || 'unknown',
             parameters: (message.parameters as Record<string, unknown>) || {},
             status: 'running',
+            isMCP: message.is_mcp_tool,
+            serverName: message.mcp_server_name,
+            isStdioMCP: message.is_stdio_mcp,
           };
           store.addToolCallToMessage(store.streamingMessageId, newToolCall);
 
@@ -160,17 +163,29 @@ class WebSocketService {
         if (store.streamingMessageId) {
           // Update the tool call status
           const toolCallId = message.execution_id || '';
-          const status: ToolCall['status'] = message.status === 'completed' ? 'completed' : 'failed';
+          const status: ToolCall['status'] = message.status === 'completed' ? 'completed' :
+                                             message.status === 'rejected' ? 'rejected' : 'failed';
           store.updateToolCallStatus(store.streamingMessageId, toolCallId, status, message.result);
+          // Note: Tool results are displayed via ToolCallCard, not inline text
+        }
+        break;
 
-          // Also append result as text for inline display
-          if (message.result) {
-            const resultStr = typeof message.result === 'string'
-              ? message.result
-              : JSON.stringify(message.result, null, 2);
-            const toolResult = `\n\`\`\`\n${resultStr}\n\`\`\`\n`;
-            store.appendToMessage(store.streamingMessageId, toolResult);
-          }
+      case 'tool.confirm':
+        // Backend requests user approval for a tool call
+        if (store.streamingMessageId) {
+          const pendingToolCall: ToolCall = {
+            id: message.execution_id || `tool-${Date.now()}`,
+            name: message.tool_name || 'unknown',
+            parameters: (message.parameters as Record<string, unknown>) || {},
+            status: 'pending',
+            isMCP: message.is_mcp_tool,
+            serverName: message.mcp_server_name,
+            isStdioMCP: message.is_stdio_mcp,
+          };
+          store.addToolCallToMessage(store.streamingMessageId, pendingToolCall);
+
+          // Pause streaming to wait for user decision
+          store.updateMessage(store.streamingMessageId, { isStreaming: false });
         }
         break;
 
@@ -181,6 +196,18 @@ class WebSocketService {
             isStreaming: false,
             content: currentContent + `\n\n**Error:** ${message.error}`,
           });
+          store.setStreamingMessageId(null);
+          store.endGeneration();
+        }
+        break;
+
+      case 'agent.check_in':
+        // Agent has reached max iterations and needs user confirmation
+        if (store.streamingMessageId) {
+          const iterationCount = (message.metadata as { iteration_count?: number })?.iteration_count;
+          const checkInMsg = message.error || `Agent has executed ${iterationCount || 'many'} tool calls. Would you like to continue?`;
+          store.appendToMessage(store.streamingMessageId, `\n\n---\n**Agent Check-in:** ${checkInMsg}\n`);
+          store.updateMessage(store.streamingMessageId, { isStreaming: false });
           store.setStreamingMessageId(null);
           store.endGeneration();
         }

@@ -1,14 +1,15 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
-import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download, Plug, MessageSquare } from 'lucide-react'
-import { Highlight, themes, type RenderProps } from 'prism-react-renderer'
+import { useState, useRef, useEffect } from 'react'
+import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download, Plug, MessageSquare, Copy, Check, Pencil, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { wsService } from '../../services/websocket'
 import { MessageQueue } from './MessageQueue'
 import { ModelSelector } from '../ModelSelector'
 import { ModeSwitcher } from './ModeSwitcher'
 import { ThinkingToggle } from './ThinkingToggle'
+import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
+import { ToolCallCard } from './ToolCallCard'
 import { toast } from '../../store/toastStore'
-import type { Message } from '../../types'
+import type { Message, ToolCall } from '../../types'
 
 // Command definition
 interface Command {
@@ -29,168 +30,71 @@ const COMMANDS: Command[] = [
   { name: '/conversations', description: 'List and manage conversations', icon: <MessageSquare size={14} />, hasArgs: true },
 ]
 
-// Code block component with syntax highlighting
-function CodeBlock({ code, language, isStreaming }: { code: string; language: string; isStreaming?: boolean }) {
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <div className="rounded-lg overflow-hidden border border-editor-border bg-editor-surface my-3">
-      <div className="flex items-center justify-between px-4 py-2 bg-editor-bg/50 border-b border-editor-border">
-        <span className="text-xs text-editor-muted">{language}</span>
-        <button
-          onClick={handleCopy}
-          className="text-xs text-editor-muted hover:text-editor-text transition-colors"
-        >
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
-      </div>
-      <Highlight theme={themes.nightOwl} code={code.trim()} language={language}>
-        {({ className, style, tokens, getLineProps, getTokenProps }: RenderProps) => (
-          <pre className={`${className} p-4 text-sm font-mono overflow-x-auto`} style={{ ...style, background: 'transparent', margin: 0 }}>
-            {tokens.map((line, i) => {
-              const lineProps = getLineProps({ line, key: i })
-              const isLastLine = i === tokens.length - 1
-              return (
-                <div key={i} {...lineProps} className="table-row">
-                  <span className="table-cell pr-4 text-editor-muted/50 select-none text-right w-8">{i + 1}</span>
-                  <span className="table-cell">
-                    {line.map((token, key) => (
-                      <span key={key} {...getTokenProps({ token, key })} />
-                    ))}
-                    {isStreaming && isLastLine && (
-                      <span className="inline-block w-2 h-4 bg-editor-accent animate-pulse ml-0.5 align-middle" />
-                    )}
-                  </span>
-                </div>
-              )
-            })}
-          </pre>
-        )}
-      </Highlight>
-    </div>
-  )
-}
-
-// Parse content for code blocks and formatting
-function parseContent(content: string, isStreaming: boolean) {
-  const elements: React.ReactNode[] = []
-  let currentIndex = 0
-  const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g
-  let match
-
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-    if (match.index > currentIndex) {
-      const textBefore = content.slice(currentIndex, match.index)
-      elements.push(
-        <span key={`text-${currentIndex}`} className="whitespace-pre-wrap">
-          {parseInlineFormatting(textBefore)}
-        </span>
-      )
-    }
-
-    const language = match[1] || 'text'
-    const code = match[2]
-    const isLastBlock = codeBlockRegex.lastIndex >= content.length - 3
-
-    elements.push(
-      <CodeBlock
-        key={`code-${match.index}`}
-        code={code}
-        language={language}
-        isStreaming={isStreaming && isLastBlock}
-      />
-    )
-    currentIndex = codeBlockRegex.lastIndex
-  }
-
-  if (currentIndex < content.length) {
-    const remainingText = content.slice(currentIndex)
-    const unclosedCodeBlock = remainingText.match(/```(\w*)\n?([\s\S]*)$/)
-
-    if (unclosedCodeBlock && isStreaming) {
-      elements.push(
-        <CodeBlock
-          key="code-partial"
-          code={unclosedCodeBlock[2]}
-          language={unclosedCodeBlock[1] || 'text'}
-          isStreaming={true}
-        />
-      )
-    } else {
-      elements.push(
-        <span key={`text-${currentIndex}`} className="whitespace-pre-wrap">
-          {parseInlineFormatting(remainingText)}
-          {isStreaming && !unclosedCodeBlock && (
-            <span className="inline-block w-2 h-4 bg-editor-accent animate-pulse ml-0.5 align-middle" />
-          )}
-        </span>
-      )
-    }
-  }
-
-  return elements
-}
-
-// Parse inline formatting
-function parseInlineFormatting(text: string) {
-  const elements: React.ReactNode[] = []
-  let remaining = text
-  let keyIndex = 0
-
-  while (remaining.length > 0) {
-    const boldMatch = remaining.match(/^\*\*(.+?)\*\*/)
-    if (boldMatch) {
-      elements.push(<strong key={`bold-${keyIndex++}`} className="font-semibold">{boldMatch[1]}</strong>)
-      remaining = remaining.slice(boldMatch[0].length)
-      continue
-    }
-
-    const codeMatch = remaining.match(/^`([^`]+)`/)
-    if (codeMatch) {
-      elements.push(
-        <code key={`code-${keyIndex++}`} className="px-1.5 py-0.5 rounded bg-editor-surface text-editor-accent text-sm font-mono border border-editor-border">
-          {codeMatch[1]}
-        </code>
-      )
-      remaining = remaining.slice(codeMatch[0].length)
-      continue
-    }
-
-    elements.push(remaining[0])
-    remaining = remaining.slice(1)
-  }
-
-  return elements
-}
 
 // Message bubble component
-function MessageBubble({ message, onRollback, isGenerating, onStopAndRollback }: {
+function MessageBubble({
+  message,
+  onRollback,
+  isGenerating,
+  onStopAndRollback,
+  onCopy,
+  onEdit,
+  onRegenerate,
+  onToolApprove,
+  onToolReject,
+}: {
   message: Message;
   onRollback?: (id: string) => void;
   isGenerating?: boolean;
   onStopAndRollback?: (id: string) => void;
+  onCopy?: (content: string) => void;
+  onEdit?: (id: string, content: string) => void;
+  onRegenerate?: (id: string) => void;
+  onToolApprove?: (executionId: string) => void;
+  onToolReject?: (executionId: string) => void;
 }) {
+  const [copied, setCopied] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(message.content)
   const isUser = message.role === 'user'
-  const content = useMemo(() => parseContent(message.content, message.isStreaming || false), [message.content, message.isStreaming])
 
   const handleRollback = () => {
     if (isGenerating && onStopAndRollback) {
-      // Stop generation first, then rollback
       onStopAndRollback(message.id)
     } else if (onRollback) {
       onRollback(message.id)
     }
   }
 
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(message.content)
+    setCopied(true)
+    onCopy?.(message.content)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleSaveEdit = () => {
+    if (editContent.trim() !== message.content) {
+      onEdit?.(message.id, editContent.trim())
+    }
+    setIsEditing(false)
+  }
+
+  const handleCancelEdit = () => {
+    setEditContent(message.content)
+    setIsEditing(false)
+  }
+
+  // Filter out tool call text markers from content for cleaner display
+  // The tool calls are shown separately via ToolCallCard
+  const cleanContent = message.toolCalls && message.toolCalls.length > 0
+    ? message.content.replace(/\n\n\*\*Using tool:\*\* `[^`]+`\n/g, '')
+    : message.content
+
   return (
-    <div className={`py-4 px-4 ${isUser ? 'bg-editor-surface/30' : ''} group`}>
+    <div className={`py-4 px-4 ${isUser ? 'bg-editor-surface/30' : ''} group relative`}>
       <div className="max-w-3xl mx-auto">
+        {/* Header row */}
         <div className="flex items-center gap-3 mb-2">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${
             isUser
@@ -209,19 +113,103 @@ function MessageBubble({ message, onRollback, isGenerating, onStopAndRollback }:
               </span>
             )}
           </div>
-          {/* Rollback button for user messages - now works during generation too */}
-          {isUser && (onRollback || onStopAndRollback) && (
-            <button
-              onClick={handleRollback}
-              className="p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-editor-warning/20 text-editor-muted hover:text-editor-warning transition-all"
-              title={isGenerating ? "Stop and rollback" : "Rollback to this message"}
-            >
-              <RotateCcw size={14} />
-            </button>
+
+          {/* Action buttons - shown on hover */}
+          {!message.isStreaming && (
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Copy button */}
+              <button
+                onClick={handleCopy}
+                className="p-1.5 rounded-lg hover:bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                title="Copy message"
+              >
+                {copied ? <Check size={14} className="text-editor-success" /> : <Copy size={14} />}
+              </button>
+
+              {/* Edit button for user messages */}
+              {isUser && onEdit && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="p-1.5 rounded-lg hover:bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                  title="Edit message"
+                >
+                  <Pencil size={14} />
+                </button>
+              )}
+
+              {/* Regenerate button for assistant messages */}
+              {!isUser && onRegenerate && (
+                <button
+                  onClick={() => onRegenerate(message.id)}
+                  className="p-1.5 rounded-lg hover:bg-editor-surface text-editor-muted hover:text-editor-text transition-colors"
+                  title="Regenerate response"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              )}
+
+              {/* Rollback button for user messages */}
+              {isUser && (onRollback || onStopAndRollback) && (
+                <button
+                  onClick={handleRollback}
+                  className="p-1.5 rounded-lg hover:bg-editor-warning/20 text-editor-muted hover:text-editor-warning transition-colors"
+                  title={isGenerating ? "Stop and rollback" : "Rollback to this message"}
+                >
+                  <RotateCcw size={14} />
+                </button>
+              )}
+            </div>
           )}
         </div>
 
-        <div className="pl-11 text-editor-text leading-relaxed">{content}</div>
+        {/* Message content */}
+        <div className="pl-11">
+          {isEditing ? (
+            <div className="space-y-2">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="w-full p-3 bg-editor-surface border border-editor-border rounded-lg text-editor-text resize-none focus:outline-none focus:border-editor-accent"
+                rows={Math.min(10, editContent.split('\n').length + 1)}
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-3 py-1.5 bg-editor-accent text-white rounded-lg text-sm hover:bg-editor-accent/80 transition-colors"
+                >
+                  Save & Regenerate
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="px-3 py-1.5 bg-editor-surface text-editor-text rounded-lg text-sm hover:bg-editor-border transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-editor-text leading-relaxed">
+              <MarkdownRenderer content={cleanContent} isStreaming={message.isStreaming} />
+            </div>
+          )}
+
+          {/* Tool calls display */}
+          {message.toolCalls && message.toolCalls.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {message.toolCalls.map((toolCall: ToolCall) => (
+                <ToolCallCard
+                  key={toolCall.id}
+                  toolCall={toolCall}
+                  isMCP={toolCall.isMCP}
+                  serverName={toolCall.serverName}
+                  onApprove={toolCall.status === 'pending' ? onToolApprove : undefined}
+                  onReject={toolCall.status === 'pending' ? onToolReject : undefined}
+                />
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Metrics for completed assistant messages */}
         {!isUser && message.metrics && !message.isStreaming && (
@@ -597,6 +585,76 @@ export function EnhancedChatPanel() {
     rollbackToMessage(messageId)
   }
 
+  const handleCopy = (_content: string) => {
+    toast.success('Copied to clipboard')
+  }
+
+  const handleEdit = (messageId: string, newContent: string) => {
+    // Find the message and rollback to it with edited content
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    if (messageIndex === -1) return
+
+    // Rollback to before this message
+    rollbackToMessage(messageId)
+
+    // Send the edited message as a new message
+    if (currentConversationId && isConnected) {
+      wsService.sendChatMessage(currentConversationId, newContent, undefined, {
+        mode: chatMode,
+        extendedThinking: extendedThinkingEnabled,
+      })
+    }
+  }
+
+  const handleRegenerate = (messageId: string) => {
+    // Find the user message before this assistant message
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    if (messageIndex <= 0) return
+
+    // Find the last user message before this
+    let userMessageIndex = messageIndex - 1
+    while (userMessageIndex >= 0 && messages[userMessageIndex].role !== 'user') {
+      userMessageIndex--
+    }
+
+    if (userMessageIndex < 0) return
+
+    const userMessage = messages[userMessageIndex]
+
+    // Rollback to the user message
+    rollbackToMessage(userMessage.id)
+
+    // Resend the user message
+    if (currentConversationId && isConnected) {
+      wsService.sendChatMessage(currentConversationId, userMessage.content, undefined, {
+        mode: chatMode,
+        extendedThinking: extendedThinkingEnabled,
+      })
+    }
+  }
+
+  const handleToolApprove = (executionId: string) => {
+    if (!currentConversationId) return
+    wsService.send({
+      type: 'tool.confirm' as never,
+      conversation_id: currentConversationId,
+      execution_id: executionId,
+      approved: true,
+    })
+    toast.success('Tool approved')
+  }
+
+  const handleToolReject = (executionId: string) => {
+    if (!currentConversationId) return
+    wsService.send({
+      type: 'tool.confirm' as never,
+      conversation_id: currentConversationId,
+      execution_id: executionId,
+      approved: false,
+    })
+    toast.info('Tool rejected')
+  }
+
   const handleAttachClick = () => {
     fileInputRef.current?.click()
   }
@@ -692,6 +750,11 @@ export function EnhancedChatPanel() {
                 onRollback={rollbackToMessage}
                 isGenerating={isGenerating}
                 onStopAndRollback={handleStopAndRollback}
+                onCopy={handleCopy}
+                onEdit={handleEdit}
+                onRegenerate={handleRegenerate}
+                onToolApprove={handleToolApprove}
+                onToolReject={handleToolReject}
               />
             ))}
             <div ref={messagesEndRef} />

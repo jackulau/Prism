@@ -211,18 +211,34 @@ export const registerUser = async (credentials: RegisterCredentials) => {
   return response;
 };
 
+// Track ongoing guest login to prevent concurrent attempts
+let guestLoginPromise: Promise<AuthResponse> | null = null;
+
 export const loginAsGuest = async () => {
+  // If guest login is already in progress, wait for it
+  if (guestLoginPromise) {
+    return guestLoginPromise;
+  }
+
   const { setUser, setTokens } = useAuthStore.getState();
 
-  const response = await authApi.guestLogin();
-  setTokens(response.access_token, response.refresh_token);
-  setUser(response.user);
+  guestLoginPromise = (async () => {
+    try {
+      const response = await authApi.guestLogin();
+      setTokens(response.access_token, response.refresh_token);
+      setUser(response.user);
 
-  // Connect services with token
-  apiService.setToken(response.access_token);
-  wsService.connect(response.access_token);
+      // Connect services with token
+      apiService.setToken(response.access_token);
+      wsService.connect(response.access_token);
 
-  return response;
+      return response;
+    } finally {
+      guestLoginPromise = null;
+    }
+  })();
+
+  return guestLoginPromise;
 };
 
 export const logoutUser = async () => {
@@ -287,62 +303,78 @@ export const refreshAuth = async (): Promise<boolean> => {
   return refreshPromise;
 };
 
+// Track ongoing init to prevent concurrent attempts
+let initAuthPromise: Promise<void> | null = null;
+
 // Initialize auth on app load
 export const initAuth = async () => {
-  const { accessToken, user, setUser, setLoading, clearAuth } = useAuthStore.getState();
-
-  // If no token, check if guest mode is enabled and auto-login
-  if (!accessToken) {
-    const guestModeEnabled = await authApi.isGuestModeEnabled();
-    if (guestModeEnabled) {
-      try {
-        await loginAsGuest();
-        return;
-      } catch {
-        // Guest login failed, user will see login screen
-      }
-    }
-    setLoading(false);
-    return;
+  // If init is already in progress, wait for it
+  if (initAuthPromise) {
+    return initAuthPromise;
   }
 
-  // If we already have user data from localStorage, skip loading state
-  // and validate token in background
-  if (user) {
-    // Connect services with existing token
-    apiService.setToken(accessToken);
-    wsService.connect(accessToken);
-
+  initAuthPromise = (async () => {
     try {
-      const freshUser = await authApi.getMe(accessToken);
-      setUser(freshUser);
-    } catch (e) {
-      const refreshed = await refreshAuth();
-      if (!refreshed) {
-        wsService.disconnect();
-        apiService.setToken(null);
-        clearAuth();
+      const { accessToken, user, setUser, setLoading, clearAuth } = useAuthStore.getState();
+
+      // If no token, check if guest mode is enabled and auto-login
+      if (!accessToken) {
+        const guestModeEnabled = await authApi.isGuestModeEnabled();
+        if (guestModeEnabled) {
+          try {
+            await loginAsGuest();
+            return;
+          } catch {
+            // Guest login failed, user will see login screen
+          }
+        }
+        setLoading(false);
+        return;
       }
-    }
-    return;
-  }
 
-  // No cached user but have token - show loading while fetching
-  setLoading(true);
-  try {
-    const fetchedUser = await authApi.getMe(accessToken);
-    setUser(fetchedUser);
+      // If we already have user data from localStorage, skip loading state
+      // and validate token in background
+      if (user) {
+        // Connect services with existing token
+        apiService.setToken(accessToken);
+        wsService.connect(accessToken);
 
-    // Connect services with validated token
-    apiService.setToken(accessToken);
-    wsService.connect(accessToken);
-  } catch (e) {
-    const refreshed = await refreshAuth();
-    if (!refreshed) {
-      wsService.disconnect();
-      apiService.setToken(null);
-      clearAuth();
+        try {
+          const freshUser = await authApi.getMe(accessToken);
+          setUser(freshUser);
+        } catch (e) {
+          const refreshed = await refreshAuth();
+          if (!refreshed) {
+            wsService.disconnect();
+            apiService.setToken(null);
+            clearAuth();
+          }
+        }
+        return;
+      }
+
+      // No cached user but have token - show loading while fetching
+      setLoading(true);
+      try {
+        const fetchedUser = await authApi.getMe(accessToken);
+        setUser(fetchedUser);
+
+        // Connect services with validated token
+        apiService.setToken(accessToken);
+        wsService.connect(accessToken);
+      } catch (e) {
+        const refreshed = await refreshAuth();
+        if (!refreshed) {
+          wsService.disconnect();
+          apiService.setToken(null);
+          clearAuth();
+        }
+      }
+      setLoading(false);
+    } finally {
+      initAuthPromise = null;
     }
-  }
-  setLoading(false);
+  })();
+
+  return initAuthPromise;
 };

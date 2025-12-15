@@ -118,6 +118,8 @@ const (
 	TypeAgentList            = "agent.list"
 	TypeAgentBatchProgress   = "agent.batch_progress"
 	TypeAgentBatchCompleted  = "agent.batch_completed"
+	TypeAgentCheckIn         = "agent.check_in"      // Pause point for user confirmation after max iterations
+	TypeAgentContinue        = "agent.continue"      // User confirms to continue the agentic loop
 
 	// Preview/Sandbox message types
 	TypePreviewReady    = "preview.ready"
@@ -271,6 +273,9 @@ type OutgoingMessage struct {
 	IsMCPTool     bool   `json:"is_mcp_tool,omitempty"`
 	MCPServerName string `json:"mcp_server_name,omitempty"`
 	MCPServerID   string `json:"mcp_server_id,omitempty"`
+
+	// Iteration tracking for agentic loops
+	IterationCount int `json:"iteration_count,omitempty"`
 }
 
 // SwarmAgentInfo represents information about an agent in a swarm
@@ -450,6 +455,17 @@ func NewAgentCancelled(agentID, taskID string) *OutgoingMessage {
 		AgentID: agentID,
 		TaskID:  taskID,
 		Status:  "cancelled",
+	}
+}
+
+// NewAgentCheckIn creates a new agent check-in message
+// This is sent when the agent has reached the max iterations and needs user confirmation to continue
+func NewAgentCheckIn(conversationID string, iterationCount int, message string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:           TypeAgentCheckIn,
+		ConversationID: conversationID,
+		IterationCount: iterationCount,
+		Message:        message,
 	}
 }
 
