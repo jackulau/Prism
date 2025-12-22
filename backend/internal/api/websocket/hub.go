@@ -163,15 +163,34 @@ const (
 	TypeSwarmList            = "swarm.list"
 )
 
+// FileContext represents file context for chat messages
+type FileContext struct {
+	Path     string `json:"path"`
+	Content  string `json:"content"`
+	Language string `json:"language,omitempty"`
+}
+
+// Attachment represents a file attachment
+type Attachment struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Data string `json:"data"` // Base64 encoded data
+}
+
 // IncomingMessage represents a message from the client
 type IncomingMessage struct {
 	Type           string                 `json:"type"`
 	ConversationID string                 `json:"conversation_id,omitempty"`
 	Content        string                 `json:"content,omitempty"`
-	Attachments    []string               `json:"attachments,omitempty"`
+	Attachments    []Attachment           `json:"attachments,omitempty"`
 	ExecutionID    string                 `json:"execution_id,omitempty"`
 	Approved       bool                   `json:"approved,omitempty"`
 	Params         map[string]interface{} `json:"params,omitempty"`
+
+	// Chat options
+	Mode             string       `json:"mode,omitempty"`              // plan, ask-before-edits, edit-automatically
+	ExtendedThinking bool         `json:"extended_thinking,omitempty"`
+	FileContext      *FileContext `json:"file_context,omitempty"`
 
 	// Agent-related fields
 	AgentID     string        `json:"agent_id,omitempty"`
@@ -273,6 +292,7 @@ type OutgoingMessage struct {
 	IsMCPTool     bool   `json:"is_mcp_tool,omitempty"`
 	MCPServerName string `json:"mcp_server_name,omitempty"`
 	MCPServerID   string `json:"mcp_server_id,omitempty"`
+	IsStdioMCP    bool   `json:"is_stdio_mcp,omitempty"`
 
 	// Iteration tracking for agentic loops
 	IterationCount int `json:"iteration_count,omitempty"`

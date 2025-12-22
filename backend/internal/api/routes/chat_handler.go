@@ -643,8 +643,17 @@ func handleHTTPMCPToolCall(ctx context.Context, deps *Dependencies, client *webs
 
 	// Check if this tool should be auto-approved
 	if approvalConfig.ShouldAutoApprove(mcpTool.Name(), true) {
-		// Execute immediately
-		client.SendMessage(websocket.NewToolStarted(conversationID, executionID, mcpTool.Name(), params))
+		// Execute immediately - send tool started with HTTP MCP indicator
+		client.SendMessage(&websocket.OutgoingMessage{
+			Type:           websocket.TypeToolStarted,
+			ConversationID: conversationID,
+			ExecutionID:    executionID,
+			ToolName:       mcpTool.Name(),
+			Parameters:     params,
+			IsMCPTool:      true,
+			IsStdioMCP:     false, // HTTP MCP, not stdio
+			MCPServerName:  mcpTool.Description(),
+		})
 
 		result, err := deps.MCPClient.ExecuteTool(ctx, mcpTool.ServerID(), mcpTool.OriginalName(), params)
 
@@ -730,8 +739,17 @@ func handleStdioMCPToolCall(ctx context.Context, deps *Dependencies, client *web
 
 	// Check if this tool should be auto-approved
 	if approvalConfig.ShouldAutoApprove(mcpTool.Name(), true) {
-		// Execute immediately
-		client.SendMessage(websocket.NewToolStarted(conversationID, executionID, mcpTool.Name(), params))
+		// Execute immediately - send tool started with stdio MCP indicator
+		client.SendMessage(&websocket.OutgoingMessage{
+			Type:           websocket.TypeToolStarted,
+			ConversationID: conversationID,
+			ExecutionID:    executionID,
+			ToolName:       mcpTool.Name(),
+			Parameters:     params,
+			IsMCPTool:      true,
+			IsStdioMCP:     true,
+			MCPServerName:  mcpTool.Description(),
+		})
 
 		result, err := deps.StdioMCPClient.ExecuteTool(ctx, mcpTool.ServerID(), mcpTool.OriginalName(), params)
 
@@ -793,6 +811,7 @@ func handleStdioMCPToolCall(ctx context.Context, deps *Dependencies, client *web
 		ToolName:       mcpTool.Name(),
 		Parameters:     params,
 		IsMCPTool:      true,
+		IsStdioMCP:     true, // This is a stdio MCP tool
 		MCPServerName:  mcpTool.Description(), // Contains server name in description
 		IterationCount: iterationCount,
 	})
