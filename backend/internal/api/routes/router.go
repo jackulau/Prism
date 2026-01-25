@@ -39,6 +39,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
+	AgentRepo          *repository.AgentRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -326,6 +327,19 @@ func Setup(deps *Dependencies) *fiber.App {
 				},
 			})
 		})
+	}
+
+	// Agent history routes (auth required)
+	if deps.AgentRepo != nil {
+		agentHandler := handlers.NewAgentHandler(deps.AgentRepo)
+		agents := v1.Group("/agents", middleware.AuthMiddleware(deps.JWTService))
+		agents.Get("/", agentHandler.ListAgents)
+		agents.Get("/:id", agentHandler.GetAgent)
+		agents.Get("/:id/results", agentHandler.GetAgentResults)
+		agents.Delete("/:id", agentHandler.DeleteAgent)
+
+		// Agents by conversation route
+		conversations.Get("/:id/agents", agentHandler.GetAgentsByConversation)
 	}
 
 	return app

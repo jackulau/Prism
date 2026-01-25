@@ -68,6 +68,7 @@ func main() {
 	fileHistoryRepo := repository.NewFileHistoryRepository(db.DB)
 	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
 	todoRepo := repository.NewTodoRepository(db.DB)
+	agentRepo := repository.NewAgentRepository(db.DB)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -163,6 +164,7 @@ func main() {
 
 	// Initialize agent manager for parallel agent execution
 	agentManager := agent.NewManager(llmManager, agent.DefaultManagerConfig())
+	agentManager.SetAgentRepository(agentRepo)
 	agentManager.Start()
 	log.Println("Agent manager started")
 
@@ -199,6 +201,7 @@ func main() {
 		ProviderKeyRepo:    providerKeyRepo,
 		IntegrationRepo:    integrationRepo,
 		FileHistoryRepo:    fileHistoryRepo,
+		AgentRepo:          agentRepo,
 		LLMManager:         llmManager,
 		WSHub:              wsHub,
 		IntegrationManager: integrationManager,

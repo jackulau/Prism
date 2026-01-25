@@ -13,6 +13,7 @@ import (
 type AgentStatus string
 
 const (
+	AgentStatusPending   AgentStatus = "pending"
 	AgentStatusIdle      AgentStatus = "idle"
 	AgentStatusRunning   AgentStatus = "running"
 	AgentStatusCompleted AgentStatus = "completed"
@@ -22,36 +23,40 @@ const (
 
 // AgentConfig holds configuration for an agent
 type AgentConfig struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Description   string            `json:"description,omitempty"`
-	Provider      string            `json:"provider"`
-	Model         string            `json:"model"`
-	SystemPrompt  string            `json:"system_prompt,omitempty"`
-	Temperature   float64           `json:"temperature,omitempty"`
-	MaxTokens     int               `json:"max_tokens,omitempty"`
-	Tools         []llm.ToolDefinition `json:"tools,omitempty"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
+	ID             string               `json:"id"`
+	UserID         string               `json:"user_id,omitempty"`
+	ConversationID string               `json:"conversation_id,omitempty"`
+	Name           string               `json:"name"`
+	Description    string               `json:"description,omitempty"`
+	Provider       string               `json:"provider"`
+	Model          string               `json:"model"`
+	SystemPrompt   string               `json:"system_prompt,omitempty"`
+	Temperature    float64              `json:"temperature,omitempty"`
+	MaxTokens      int                  `json:"max_tokens,omitempty"`
+	Tools          []llm.ToolDefinition `json:"tools,omitempty"`
+	Metadata       map[string]string    `json:"metadata,omitempty"`
 }
 
 // Agent represents an autonomous agent that can execute tasks
 type Agent struct {
-	ID          string            `json:"id"`
-	Config      AgentConfig       `json:"config"`
-	Status      AgentStatus       `json:"status"`
-	CreatedAt   time.Time         `json:"created_at"`
-	StartedAt   *time.Time        `json:"started_at,omitempty"`
-	CompletedAt *time.Time        `json:"completed_at,omitempty"`
-	Error       string            `json:"error,omitempty"`
+	ID             string      `json:"id"`
+	UserID         string      `json:"user_id,omitempty"`
+	ConversationID string      `json:"conversation_id,omitempty"`
+	Config         AgentConfig `json:"config"`
+	Status         AgentStatus `json:"status"`
+	CreatedAt      time.Time   `json:"created_at"`
+	StartedAt      *time.Time  `json:"started_at,omitempty"`
+	CompletedAt    *time.Time  `json:"completed_at,omitempty"`
+	Error          string      `json:"error,omitempty"`
 
 	// Internal state
-	mu          sync.RWMutex
-	ctx         context.Context
-	cancel      context.CancelFunc
-	llmManager  *llm.Manager
-	messages    []llm.Message
-	results     chan *AgentResult
-	events      chan *AgentEvent
+	mu         sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	llmManager *llm.Manager
+	messages   []llm.Message
+	results    chan *AgentResult
+	events     chan *AgentEvent
 }
 
 // AgentResult represents the result of an agent's execution
@@ -106,14 +111,16 @@ func NewAgent(config AgentConfig, llmManager *llm.Manager) *Agent {
 	}
 
 	return &Agent{
-		ID:         config.ID,
-		Config:     config,
-		Status:     AgentStatusIdle,
-		CreatedAt:  time.Now(),
-		llmManager: llmManager,
-		messages:   make([]llm.Message, 0),
-		results:    make(chan *AgentResult, 1),
-		events:     make(chan *AgentEvent, 100),
+		ID:             config.ID,
+		UserID:         config.UserID,
+		ConversationID: config.ConversationID,
+		Config:         config,
+		Status:         AgentStatusIdle,
+		CreatedAt:      time.Now(),
+		llmManager:     llmManager,
+		messages:       make([]llm.Message, 0),
+		results:        make(chan *AgentResult, 1),
+		events:         make(chan *AgentEvent, 100),
 	}
 }
 

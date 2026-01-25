@@ -2,9 +2,12 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
+	"log"
 	"sync"
 	"time"
 
+	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/llm"
 )
 
@@ -37,6 +40,9 @@ type Manager struct {
 	executions   map[string]*Execution
 	executionsMu sync.RWMutex
 
+	// Database persistence (optional)
+	agentRepo *repository.AgentRepository
+
 	// State
 	running bool
 	mu      sync.RWMutex
@@ -55,6 +61,11 @@ func NewManager(llmManager *llm.Manager, config ManagerConfig) *Manager {
 		configs:      make(map[string]AgentConfig),
 		executions:   make(map[string]*Execution),
 	}
+}
+
+// SetAgentRepository sets the agent repository for persistence
+func (m *Manager) SetAgentRepository(repo *repository.AgentRepository) {
+	m.agentRepo = repo
 }
 
 // Start initializes and starts the manager
@@ -130,6 +141,9 @@ func (m *Manager) RunTask(ctx context.Context, task *Task, config AgentConfig) (
 		return nil, err
 	}
 
+	// Persist agent to database if repository is available
+	m.persistAgent(agent)
+
 	execution := &Execution{
 		ID:        task.ID,
 		Type:      ExecutionTypeSingle,
@@ -181,6 +195,11 @@ func (m *Manager) RunParallel(ctx context.Context, tasks []*Task, config AgentCo
 		return nil, err
 	}
 
+	// Persist all agents to database
+	for _, agent := range batchExec.Agents {
+		m.persistAgent(agent)
+	}
+
 	execution := &Execution{
 		ID:             batch.ID,
 		Type:           ExecutionTypeParallel,
@@ -222,6 +241,11 @@ func (m *Manager) RunSequential(ctx context.Context, tasks []*Task, config Agent
 	batchExec, err := m.pool.SubmitBatch(batch, config)
 	if err != nil {
 		return nil, err
+	}
+
+	// Persist all agents to database
+	for _, agent := range batchExec.Agents {
+		m.persistAgent(agent)
 	}
 
 	execution := &Execution{
@@ -266,15 +290,29 @@ func (m *Manager) monitorExecution(execution *Execution) {
 		now := time.Now()
 		execution.CompletedAt = &now
 		execution.mu.Unlock()
+
+		// Persist result to database
+		m.persistResult(agent, result)
 	}
 }
 
 // monitorBatchExecution monitors a batch execution
 func (m *Manager) monitorBatchExecution(execution *Execution, batchExec *BatchExecution) {
+	// Build a map of agent IDs to agents for looking up agents by result
+	agentMap := make(map[string]*Agent)
+	for _, agent := range execution.Agents {
+		agentMap[agent.ID] = agent
+	}
+
 	// Collect results as they come in
 	results := make([]*AgentResult, 0, len(execution.Tasks))
 	for result := range batchExec.ResultsChan() {
 		results = append(results, result)
+
+		// Persist result to database
+		if agent, ok := agentMap[result.AgentID]; ok {
+			m.persistResult(agent, result)
+		}
 	}
 
 	// Update execution status
@@ -556,4 +594,92 @@ func (m *Manager) QuickSwarm(ctx context.Context, task string, roles []AgentRole
 	}
 
 	return m.RunMultiAgent(ctx, task, StrategyParallel, agentConfigs, baseConfig)
+}
+
+// ==================== Persistence Helpers ====================
+
+// persistAgent saves an agent to the database
+func (m *Manager) persistAgent(agent *Agent) {
+	if m.agentRepo == nil {
+		return
+	}
+
+	// Serialize config to JSON
+	configJSON, _ := json.Marshal(agent.Config)
+
+	// Get conversation ID as pointer
+	var conversationID *string
+	if agent.ConversationID != "" {
+		conversationID = &agent.ConversationID
+	}
+
+	record := &repository.AgentRecord{
+		ID:             agent.ID,
+		UserID:         agent.UserID,
+		ConversationID: conversationID,
+		Name:           agent.Config.Name,
+		Description:    agent.Config.Description,
+		Provider:       agent.Config.Provider,
+		Model:          agent.Config.Model,
+		SystemPrompt:   agent.Config.SystemPrompt,
+		Status:         string(agent.Status),
+		ConfigJSON:     string(configJSON),
+		CreatedAt:      agent.CreatedAt,
+		StartedAt:      agent.StartedAt,
+		CompletedAt:    agent.CompletedAt,
+	}
+
+	if err := m.agentRepo.Create(record); err != nil {
+		log.Printf("Failed to persist agent %s: %v", agent.ID, err)
+	}
+}
+
+// persistResult saves an agent result to the database and updates the agent status
+func (m *Manager) persistResult(agent *Agent, result *AgentResult) {
+	if m.agentRepo == nil {
+		return
+	}
+
+	// Update agent status in database
+	if result.Success {
+		if err := m.agentRepo.Complete(agent.ID, result.CompletedAt); err != nil {
+			log.Printf("Failed to update agent %s status to completed: %v", agent.ID, err)
+		}
+	} else if result.Error == "cancelled" {
+		if err := m.agentRepo.Cancel(agent.ID); err != nil {
+			log.Printf("Failed to update agent %s status to cancelled: %v", agent.ID, err)
+		}
+	} else {
+		if err := m.agentRepo.UpdateError(agent.ID, result.Error); err != nil {
+			log.Printf("Failed to update agent %s error: %v", agent.ID, err)
+		}
+	}
+
+	// Serialize usage and metadata
+	var usageJSON, metadataJSON string
+	if result.Usage != nil {
+		data, _ := json.Marshal(result.Usage)
+		usageJSON = string(data)
+	}
+	if result.Metadata != nil {
+		data, _ := json.Marshal(result.Metadata)
+		metadataJSON = string(data)
+	}
+
+	// Save result record
+	resultRecord := &repository.AgentResultRecord{
+		AgentID:      agent.ID,
+		TaskID:       result.TaskID,
+		Success:      result.Success,
+		Output:       result.Output,
+		Error:        result.Error,
+		UsageJSON:    usageJSON,
+		MetadataJSON: metadataJSON,
+		DurationMS:   result.Duration.Milliseconds(),
+		CreatedAt:    result.CompletedAt,
+	}
+
+	if err := m.agentRepo.SaveResult(resultRecord); err != nil {
+		log.Printf("Failed to persist result for agent %s: %v", agent.ID, err)
+	}
 }
