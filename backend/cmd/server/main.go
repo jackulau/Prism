@@ -19,6 +19,7 @@ import (
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/llm/anthropic"
 	"github.com/jacklau/prism/internal/llm/google"
+	"github.com/jacklau/prism/internal/llm/groq"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
 	"github.com/jacklau/prism/internal/sandbox"
@@ -124,6 +125,10 @@ func main() {
 	// Google AI (API key set via UI)
 	googleClient := google.NewClient("")
 	llmManager.RegisterProvider(googleClient)
+
+	// Groq (API key set via UI)
+	groqClient := groq.NewClient("")
+	llmManager.RegisterProvider(groqClient)
 
 	log.Printf("Registered %d LLM providers", len(llmManager.ListProviders()))
 
