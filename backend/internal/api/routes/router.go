@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/jacklau/prism/internal/agent"
+	"github.com/jacklau/prism/internal/agent/workflow"
 	"github.com/jacklau/prism/internal/api/handlers"
 	"github.com/jacklau/prism/internal/api/middleware"
 	ws "github.com/jacklau/prism/internal/api/websocket"
@@ -51,6 +52,7 @@ type Dependencies struct {
 	MCPRepository      *mcp.Repository
 	StdioMCPClient     *mcp.StdioClient
 	StdioMCPRepository *mcp.StdioRepository
+	WorkflowEngine     *workflow.Engine
 }
 
 // Setup sets up the Fiber app with all routes
@@ -328,6 +330,23 @@ func Setup(deps *Dependencies) *fiber.App {
 		})
 	}
 
+	// Workflow routes (auth required)
+	if deps.WorkflowEngine != nil {
+		workflowHandler := handlers.NewWorkflowHandler(deps.WorkflowEngine)
+		workflows := v1.Group("/workflows", middleware.AuthMiddleware(deps.JWTService))
+		workflows.Post("/", workflowHandler.CreateWorkflow)
+		workflows.Get("/", workflowHandler.ListWorkflows)
+		workflows.Get("/templates", workflowHandler.ListTemplates)
+		workflows.Get("/templates/:id", workflowHandler.GetTemplate)
+		workflows.Get("/:id", workflowHandler.GetWorkflow)
+		workflows.Get("/:id/state", workflowHandler.GetWorkflowState)
+		workflows.Post("/:id/start", workflowHandler.StartWorkflow)
+		workflows.Post("/:id/pause", workflowHandler.PauseWorkflow)
+		workflows.Post("/:id/resume", workflowHandler.ResumeWorkflow)
+		workflows.Post("/:id/input", workflowHandler.ProvideInput)
+		workflows.Delete("/:id", workflowHandler.CancelWorkflow)
+	}
+
 	return app
 }
 
@@ -418,6 +437,25 @@ func handleWebSocketMessage(deps *Dependencies, client *ws.Client, msg *ws.Incom
 
 	case ws.TypeFileHistoryRequest:
 		handleFileHistoryRequest(deps, client, msg)
+
+	// Workflow message handlers
+	case ws.TypeWorkflowRun:
+		handleWorkflowRun(deps, client, msg)
+
+	case ws.TypeWorkflowPause:
+		handleWorkflowPause(deps, client, msg)
+
+	case ws.TypeWorkflowResume:
+		handleWorkflowResume(deps, client, msg)
+
+	case ws.TypeWorkflowStop:
+		handleWorkflowStop(deps, client, msg)
+
+	case ws.TypeWorkflowStatus:
+		handleWorkflowStatus(deps, client, msg)
+
+	case ws.TypeWorkflowProvideInput:
+		handleWorkflowProvideInput(deps, client, msg)
 
 	default:
 		client.SendMessage(ws.NewError("unknown_type", "unknown message type: "+msg.Type))
@@ -1342,6 +1380,352 @@ func handleFileHistoryRequest(deps *Dependencies, client *ws.Client, msg *ws.Inc
 		}
 
 		client.SendMessage(ws.NewFileHistoryList(filePath, entries))
+	}
+}
+
+// ==================== Workflow Handlers ====================
+
+// handleWorkflowRun handles a workflow run request
+func handleWorkflowRun(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.WorkflowEngine == nil {
+		client.SendMessage(ws.NewError("workflow_unavailable", "workflow engine not available"))
+		return
+	}
+
+	workflowID := msg.WorkflowID
+	if workflowID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "workflow_id is required"))
+		return
+	}
+
+	// Update initial state if provided
+	if msg.State != nil {
+		wf, err := deps.WorkflowEngine.GetWorkflow(workflowID)
+		if err == nil && wf != nil && wf.UserID == client.UserID {
+			for k, v := range msg.State {
+				wf.SetStateValue(k, v)
+			}
+		}
+	}
+
+	if err := deps.WorkflowEngine.StartWorkflow(context.Background(), workflowID); err != nil {
+		client.SendMessage(ws.NewError("workflow_error", err.Error()))
+		return
+	}
+
+	// Subscribe to workflow events and forward to client
+	go forwardWorkflowEvents(deps, client, workflowID)
+
+	log.Printf("Workflow started: id=%s", workflowID)
+}
+
+// handleWorkflowPause handles a workflow pause request
+func handleWorkflowPause(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.WorkflowEngine == nil {
+		client.SendMessage(ws.NewError("workflow_unavailable", "workflow engine not available"))
+		return
+	}
+
+	if msg.WorkflowID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "workflow_id is required"))
+		return
+	}
+
+	// Verify ownership
+	wf, err := deps.WorkflowEngine.GetWorkflow(msg.WorkflowID)
+	if err != nil || wf == nil {
+		client.SendMessage(ws.NewError("workflow_error", "workflow not found"))
+		return
+	}
+	if wf.UserID != client.UserID {
+		client.SendMessage(ws.NewError("forbidden", "access denied"))
+		return
+	}
+
+	if err := deps.WorkflowEngine.PauseWorkflow(context.Background(), msg.WorkflowID); err != nil {
+		client.SendMessage(ws.NewError("workflow_error", err.Error()))
+		return
+	}
+
+	client.SendMessage(ws.NewWorkflowPaused(msg.WorkflowID, wf.CurrentStep))
+}
+
+// handleWorkflowResume handles a workflow resume request
+func handleWorkflowResume(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.WorkflowEngine == nil {
+		client.SendMessage(ws.NewError("workflow_unavailable", "workflow engine not available"))
+		return
+	}
+
+	if msg.WorkflowID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "workflow_id is required"))
+		return
+	}
+
+	// Verify ownership
+	wf, err := deps.WorkflowEngine.GetWorkflow(msg.WorkflowID)
+	if err != nil || wf == nil {
+		client.SendMessage(ws.NewError("workflow_error", "workflow not found"))
+		return
+	}
+	if wf.UserID != client.UserID {
+		client.SendMessage(ws.NewError("forbidden", "access denied"))
+		return
+	}
+
+	if err := deps.WorkflowEngine.ResumeWorkflow(context.Background(), msg.WorkflowID); err != nil {
+		client.SendMessage(ws.NewError("workflow_error", err.Error()))
+		return
+	}
+
+	client.SendMessage(ws.NewWorkflowResumed(msg.WorkflowID, wf.CurrentStep))
+}
+
+// handleWorkflowStop handles a workflow stop request
+func handleWorkflowStop(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.WorkflowEngine == nil {
+		client.SendMessage(ws.NewError("workflow_unavailable", "workflow engine not available"))
+		return
+	}
+
+	if msg.WorkflowID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "workflow_id is required"))
+		return
+	}
+
+	// Verify ownership
+	wf, err := deps.WorkflowEngine.GetWorkflow(msg.WorkflowID)
+	if err != nil || wf == nil {
+		client.SendMessage(ws.NewError("workflow_error", "workflow not found"))
+		return
+	}
+	if wf.UserID != client.UserID {
+		client.SendMessage(ws.NewError("forbidden", "access denied"))
+		return
+	}
+
+	if err := deps.WorkflowEngine.CancelWorkflow(context.Background(), msg.WorkflowID); err != nil {
+		client.SendMessage(ws.NewError("workflow_error", err.Error()))
+		return
+	}
+
+	client.SendMessage(ws.NewWorkflowCancelled(msg.WorkflowID))
+}
+
+// handleWorkflowStatus handles a workflow status request
+func handleWorkflowStatus(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.WorkflowEngine == nil {
+		client.SendMessage(ws.NewError("workflow_unavailable", "workflow engine not available"))
+		return
+	}
+
+	if msg.WorkflowID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "workflow_id is required"))
+		return
+	}
+
+	wf, err := deps.WorkflowEngine.GetWorkflow(msg.WorkflowID)
+	if err != nil {
+		client.SendMessage(ws.NewError("workflow_error", err.Error()))
+		return
+	}
+	if wf == nil {
+		client.SendMessage(ws.NewError("workflow_error", "workflow not found"))
+		return
+	}
+	if wf.UserID != client.UserID {
+		client.SendMessage(ws.NewError("forbidden", "access denied"))
+		return
+	}
+
+	info := &ws.WorkflowInfo{
+		ID:          wf.ID,
+		Name:        wf.Name,
+		Description: wf.Description,
+		Status:      string(wf.Status),
+		CurrentStep: wf.CurrentStep,
+		TotalSteps:  len(wf.Steps),
+	}
+
+	client.SendMessage(ws.NewWorkflowStatus(info, wf.State))
+}
+
+// handleWorkflowProvideInput handles providing input to a waiting workflow step
+func handleWorkflowProvideInput(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.WorkflowEngine == nil {
+		client.SendMessage(ws.NewError("workflow_unavailable", "workflow engine not available"))
+		return
+	}
+
+	if msg.WorkflowID == "" || msg.StepID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "workflow_id and step_id are required"))
+		return
+	}
+
+	// Verify ownership
+	wf, err := deps.WorkflowEngine.GetWorkflow(msg.WorkflowID)
+	if err != nil || wf == nil {
+		client.SendMessage(ws.NewError("workflow_error", "workflow not found"))
+		return
+	}
+	if wf.UserID != client.UserID {
+		client.SendMessage(ws.NewError("forbidden", "access denied"))
+		return
+	}
+
+	if err := deps.WorkflowEngine.ProvideInput(msg.WorkflowID, msg.StepID, msg.Input); err != nil {
+		client.SendMessage(ws.NewError("workflow_error", err.Error()))
+		return
+	}
+
+	client.SendMessage(&ws.OutgoingMessage{
+		Type:       ws.TypeWorkflowProvideInput,
+		WorkflowID: msg.WorkflowID,
+		StepID:     msg.StepID,
+		Status:     "input_received",
+	})
+}
+
+// forwardWorkflowEvents forwards workflow events to the WebSocket client
+func forwardWorkflowEvents(deps *Dependencies, client *ws.Client, workflowID string) {
+	eventChan := deps.WorkflowEngine.Subscribe()
+	defer deps.WorkflowEngine.Unsubscribe(eventChan)
+
+	for event := range eventChan {
+		// Only forward events for this workflow
+		if event.WorkflowID != workflowID {
+			continue
+		}
+
+		switch event.Type {
+		case workflow.WorkflowEventStarted:
+			wf, _ := deps.WorkflowEngine.GetWorkflow(workflowID)
+			if wf != nil {
+				client.SendMessage(ws.NewWorkflowStarted(wf.ID, wf.Name, len(wf.Steps)))
+			}
+
+		case workflow.WorkflowEventStepStarted:
+			stepType := ""
+			if t, ok := event.Data["step_type"].(string); ok {
+				stepType = t
+			}
+			wf, _ := deps.WorkflowEngine.GetWorkflow(workflowID)
+			stepIndex := 0
+			if wf != nil {
+				stepIndex = wf.CurrentStep
+			}
+			client.SendMessage(ws.NewWorkflowStepStarted(
+				event.WorkflowID,
+				event.StepID,
+				event.StepName,
+				stepType,
+				stepIndex,
+			))
+
+		case workflow.WorkflowEventStepCompleted:
+			var output interface{}
+			var duration int64
+			if o, ok := event.Data["output"]; ok {
+				output = o
+			}
+			if d, ok := event.Data["duration"].(int64); ok {
+				duration = d
+			}
+			client.SendMessage(ws.NewWorkflowStepCompleted(
+				event.WorkflowID,
+				event.StepID,
+				event.StepName,
+				output,
+				duration,
+			))
+
+		case workflow.WorkflowEventStepFailed:
+			errMsg := ""
+			if e, ok := event.Data["error"].(string); ok {
+				errMsg = e
+			}
+			client.SendMessage(ws.NewWorkflowStepFailed(
+				event.WorkflowID,
+				event.StepID,
+				event.StepName,
+				errMsg,
+			))
+
+		case workflow.WorkflowEventStepSkipped:
+			client.SendMessage(ws.NewWorkflowStepSkipped(
+				event.WorkflowID,
+				event.StepID,
+				event.StepName,
+			))
+
+		case workflow.WorkflowEventWaitingInput:
+			promptText := ""
+			if p, ok := event.Data["prompt"].(string); ok {
+				promptText = p
+			}
+			client.SendMessage(ws.NewWorkflowWaitingInput(
+				event.WorkflowID,
+				event.StepID,
+				event.StepName,
+				promptText,
+			))
+
+		case workflow.WorkflowEventPaused:
+			wf, _ := deps.WorkflowEngine.GetWorkflow(workflowID)
+			step := 0
+			if wf != nil {
+				step = wf.CurrentStep
+			}
+			client.SendMessage(ws.NewWorkflowPaused(event.WorkflowID, step))
+
+		case workflow.WorkflowEventResumed:
+			wf, _ := deps.WorkflowEngine.GetWorkflow(workflowID)
+			step := 0
+			if wf != nil {
+				step = wf.CurrentStep
+			}
+			client.SendMessage(ws.NewWorkflowResumed(event.WorkflowID, step))
+
+		case workflow.WorkflowEventCompleted:
+			var state map[string]interface{}
+			if s, ok := event.Data["state"].(map[string]interface{}); ok {
+				state = s
+			}
+			client.SendMessage(ws.NewWorkflowCompleted(
+				event.WorkflowID,
+				state,
+				0, // Duration calculated elsewhere
+			))
+			return
+
+		case workflow.WorkflowEventFailed:
+			errMsg := ""
+			if e, ok := event.Data["error"].(string); ok {
+				errMsg = e
+			}
+			wf, _ := deps.WorkflowEngine.GetWorkflow(workflowID)
+			step := 0
+			if wf != nil {
+				step = wf.CurrentStep
+			}
+			client.SendMessage(ws.NewWorkflowFailed(event.WorkflowID, errMsg, step))
+			return
+
+		case workflow.WorkflowEventCancelled:
+			client.SendMessage(ws.NewWorkflowCancelled(event.WorkflowID))
+			return
+
+		case workflow.WorkflowEventStateUpdated:
+			wf, _ := deps.WorkflowEngine.GetWorkflow(workflowID)
+			if wf != nil {
+				client.SendMessage(ws.NewWorkflowProgress(
+					event.WorkflowID,
+					wf.CurrentStep,
+					len(wf.Steps),
+					wf.State,
+				))
+			}
+		}
 	}
 }
 

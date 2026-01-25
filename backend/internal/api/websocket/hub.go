@@ -161,6 +161,26 @@ const (
 	TypeSwarmStop            = "swarm.stop"
 	TypeSwarmStatus          = "swarm.status"
 	TypeSwarmList            = "swarm.list"
+
+	// Workflow message types
+	TypeWorkflowRun           = "workflow.run"
+	TypeWorkflowStarted       = "workflow.started"
+	TypeWorkflowPaused        = "workflow.paused"
+	TypeWorkflowResumed       = "workflow.resumed"
+	TypeWorkflowCompleted     = "workflow.completed"
+	TypeWorkflowFailed        = "workflow.failed"
+	TypeWorkflowCancelled     = "workflow.cancelled"
+	TypeWorkflowPause         = "workflow.pause"
+	TypeWorkflowResume        = "workflow.resume"
+	TypeWorkflowStop          = "workflow.stop"
+	TypeWorkflowStatus        = "workflow.status"
+	TypeWorkflowProgress      = "workflow.progress"
+	TypeWorkflowStepStarted   = "workflow.step_started"
+	TypeWorkflowStepCompleted = "workflow.step_completed"
+	TypeWorkflowStepFailed    = "workflow.step_failed"
+	TypeWorkflowStepSkipped   = "workflow.step_skipped"
+	TypeWorkflowWaitingInput  = "workflow.waiting_input"
+	TypeWorkflowProvideInput  = "workflow.provide_input"
 )
 
 // FileContext represents file context for chat messages
@@ -204,6 +224,13 @@ type IncomingMessage struct {
 	SwarmConfig  *SwarmConfig      `json:"swarm_config,omitempty"`
 	Strategy     string            `json:"strategy,omitempty"`     // parallel, pipeline, debate, consensus, map_reduce, specialist
 	AgentRoles   []AgentRoleConfig `json:"agent_roles,omitempty"`  // Roles for multi-agent swarm
+
+	// Workflow fields
+	WorkflowID   string                 `json:"workflow_id,omitempty"`
+	TemplateID   string                 `json:"template_id,omitempty"`
+	StepID       string                 `json:"step_id,omitempty"`
+	State        map[string]interface{} `json:"state,omitempty"`
+	Input        interface{}            `json:"input,omitempty"`
 }
 
 // SwarmConfig represents configuration for a multi-agent swarm
@@ -296,6 +323,16 @@ type OutgoingMessage struct {
 
 	// Iteration tracking for agentic loops
 	IterationCount int `json:"iteration_count,omitempty"`
+
+	// Workflow-related fields
+	WorkflowID   string                  `json:"workflow_id,omitempty"`
+	StepID       string                  `json:"step_id,omitempty"`
+	StepName     string                  `json:"step_name,omitempty"`
+	StepType     string                  `json:"step_type,omitempty"`
+	CurrentStep  int                     `json:"current_step,omitempty"`
+	TotalSteps   int                     `json:"total_steps,omitempty"`
+	State        map[string]interface{}  `json:"state,omitempty"`
+	WorkflowInfo *WorkflowInfo           `json:"workflow_info,omitempty"`
 }
 
 // SwarmAgentInfo represents information about an agent in a swarm
@@ -813,5 +850,180 @@ func NewFileHistoryContent(historyID, filePath, content, operation, createdAt st
 			"operation":  operation,
 			"created_at": createdAt,
 		},
+	}
+}
+
+// WorkflowInfo represents information about a workflow
+type WorkflowInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Status      string `json:"status"`
+	CurrentStep int    `json:"current_step"`
+	TotalSteps  int    `json:"total_steps"`
+}
+
+// WorkflowStepInfo represents information about a workflow step
+type WorkflowStepInfo struct {
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Type        string      `json:"type"`
+	Status      string      `json:"status"`
+	Output      interface{} `json:"output,omitempty"`
+	Error       string      `json:"error,omitempty"`
+	Duration    int64       `json:"duration,omitempty"`
+}
+
+// Workflow message constructors
+
+// NewWorkflowStarted creates a workflow started message
+func NewWorkflowStarted(workflowID, name string, totalSteps int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowStarted,
+		WorkflowID: workflowID,
+		Status:     "running",
+		TotalSteps: totalSteps,
+		WorkflowInfo: &WorkflowInfo{
+			ID:         workflowID,
+			Name:       name,
+			Status:     "running",
+			TotalSteps: totalSteps,
+		},
+	}
+}
+
+// NewWorkflowPaused creates a workflow paused message
+func NewWorkflowPaused(workflowID string, currentStep int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowPaused,
+		WorkflowID:  workflowID,
+		Status:      "paused",
+		CurrentStep: currentStep,
+	}
+}
+
+// NewWorkflowResumed creates a workflow resumed message
+func NewWorkflowResumed(workflowID string, currentStep int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowResumed,
+		WorkflowID:  workflowID,
+		Status:      "running",
+		CurrentStep: currentStep,
+	}
+}
+
+// NewWorkflowCompleted creates a workflow completed message
+func NewWorkflowCompleted(workflowID string, state map[string]interface{}, durationMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowCompleted,
+		WorkflowID: workflowID,
+		Status:     "completed",
+		State:      state,
+		Duration:   durationMs,
+	}
+}
+
+// NewWorkflowFailed creates a workflow failed message
+func NewWorkflowFailed(workflowID, errorMsg string, currentStep int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowFailed,
+		WorkflowID:  workflowID,
+		Status:      "failed",
+		Error:       errorMsg,
+		CurrentStep: currentStep,
+	}
+}
+
+// NewWorkflowCancelled creates a workflow cancelled message
+func NewWorkflowCancelled(workflowID string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowCancelled,
+		WorkflowID: workflowID,
+		Status:     "cancelled",
+	}
+}
+
+// NewWorkflowProgress creates a workflow progress message
+func NewWorkflowProgress(workflowID string, currentStep, totalSteps int, state map[string]interface{}) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowProgress,
+		WorkflowID:  workflowID,
+		CurrentStep: currentStep,
+		TotalSteps:  totalSteps,
+		State:       state,
+	}
+}
+
+// NewWorkflowStepStarted creates a step started message
+func NewWorkflowStepStarted(workflowID, stepID, stepName, stepType string, stepIndex int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowStepStarted,
+		WorkflowID:  workflowID,
+		StepID:      stepID,
+		StepName:    stepName,
+		StepType:    stepType,
+		CurrentStep: stepIndex,
+		Status:      "running",
+	}
+}
+
+// NewWorkflowStepCompleted creates a step completed message
+func NewWorkflowStepCompleted(workflowID, stepID, stepName string, output interface{}, durationMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowStepCompleted,
+		WorkflowID: workflowID,
+		StepID:     stepID,
+		StepName:   stepName,
+		Status:     "completed",
+		Result:     output,
+		Duration:   durationMs,
+	}
+}
+
+// NewWorkflowStepFailed creates a step failed message
+func NewWorkflowStepFailed(workflowID, stepID, stepName, errorMsg string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowStepFailed,
+		WorkflowID: workflowID,
+		StepID:     stepID,
+		StepName:   stepName,
+		Status:     "failed",
+		Error:      errorMsg,
+	}
+}
+
+// NewWorkflowStepSkipped creates a step skipped message
+func NewWorkflowStepSkipped(workflowID, stepID, stepName string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowStepSkipped,
+		WorkflowID: workflowID,
+		StepID:     stepID,
+		StepName:   stepName,
+		Status:     "skipped",
+	}
+}
+
+// NewWorkflowWaitingInput creates a waiting for input message
+func NewWorkflowWaitingInput(workflowID, stepID, stepName, promptText string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowWaitingInput,
+		WorkflowID: workflowID,
+		StepID:     stepID,
+		StepName:   stepName,
+		Status:     "waiting",
+		Message:    promptText,
+	}
+}
+
+// NewWorkflowStatus creates a workflow status message
+func NewWorkflowStatus(info *WorkflowInfo, state map[string]interface{}) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:         TypeWorkflowStatus,
+		WorkflowID:   info.ID,
+		Status:       info.Status,
+		CurrentStep:  info.CurrentStep,
+		TotalSteps:   info.TotalSteps,
+		State:        state,
+		WorkflowInfo: info,
 	}
 }
