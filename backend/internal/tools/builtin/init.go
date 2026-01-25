@@ -173,5 +173,10 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		}
 	}
 
+	// GitHub tools
+	if err := registry.Register(NewGitHubViewCommitTool(sandbox)); err != nil {
+		return err
+	}
+
 	return nil
 }
