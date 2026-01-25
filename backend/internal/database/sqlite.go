@@ -335,6 +335,56 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
+		// Agents table for persistent agent configurations
+		`CREATE TABLE IF NOT EXISTS agents (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			description TEXT,
+			repo_url TEXT,
+			branch_name TEXT,
+			conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+			provider TEXT NOT NULL,
+			model TEXT NOT NULL,
+			system_prompt TEXT,
+			tools TEXT,
+			status TEXT NOT NULL DEFAULT 'idle',
+			current_task TEXT,
+			metadata TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Agent executions for tracking workflow runs
+		`CREATE TABLE IF NOT EXISTS agent_executions (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			current_step TEXT,
+			started_at DATETIME,
+			completed_at DATETIME,
+			error TEXT,
+			branch_name TEXT,
+			commit_sha TEXT,
+			iterations INTEGER DEFAULT 0
+		)`,
+
+		// Token usage tracking for cost monitoring
+		`CREATE TABLE IF NOT EXISTS token_usage (
+			id TEXT PRIMARY KEY,
+			execution_id TEXT NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			provider TEXT NOT NULL,
+			model TEXT NOT NULL,
+			prompt_tokens INTEGER DEFAULT 0,
+			completion_tokens INTEGER DEFAULT 0,
+			total_tokens INTEGER DEFAULT 0,
+			cost_usd REAL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
 		`ALTER TABLE users ADD COLUMN github_token TEXT`,
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
@@ -363,6 +413,13 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_user_id ON agents(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_executions_agent_id ON agent_executions(agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_executions_user_id ON agent_executions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_executions_status ON agent_executions(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_token_usage_execution_id ON token_usage(execution_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_token_usage_user_id ON token_usage(user_id)`,
 	}
 
 	for _, migration := range migrations {
