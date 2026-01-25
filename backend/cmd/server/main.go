@@ -19,6 +19,7 @@ import (
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/llm/anthropic"
 	"github.com/jacklau/prism/internal/llm/google"
+	"github.com/jacklau/prism/internal/llm/huggingface"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
 	"github.com/jacklau/prism/internal/sandbox"
@@ -124,6 +125,10 @@ func main() {
 	// Google AI (API key set via UI)
 	googleClient := google.NewClient("")
 	llmManager.RegisterProvider(googleClient)
+
+	// Hugging Face (API key set via UI)
+	huggingfaceClient := huggingface.NewClient("")
+	llmManager.RegisterProvider(huggingfaceClient)
 
 	log.Printf("Registered %d LLM providers", len(llmManager.ListProviders()))
 
