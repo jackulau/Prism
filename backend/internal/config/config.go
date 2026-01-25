@@ -35,6 +35,9 @@ type Config struct {
 	// Ollama
 	OllamaHost string
 
+	// LM Studio
+	LMStudioHost string
+
 	// Sandbox
 	SandboxMemoryLimit string
 	SandboxCPULimit    string
@@ -113,6 +116,9 @@ func Load() (*Config, error) {
 
 		// Ollama
 		OllamaHost: getEnv("OLLAMA_HOST", "http://localhost:11434"),
+
+		// LM Studio
+		LMStudioHost: getEnv("LMSTUDIO_HOST", "http://localhost:1234"),
 
 		// Sandbox
 		SandboxMemoryLimit: getEnv("SANDBOX_MEMORY_LIMIT", "512m"),

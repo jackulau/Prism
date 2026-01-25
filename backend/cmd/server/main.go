@@ -19,6 +19,7 @@ import (
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/llm/anthropic"
 	"github.com/jacklau/prism/internal/llm/google"
+	"github.com/jacklau/prism/internal/llm/lmstudio"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
 	"github.com/jacklau/prism/internal/sandbox"
@@ -112,6 +113,10 @@ func main() {
 	// Ollama (local LLM - no API key needed)
 	ollamaClient := ollama.NewClient(cfg.OllamaHost)
 	llmManager.RegisterProvider(ollamaClient)
+
+	// LM Studio (local LLM - no API key needed)
+	lmstudioClient := lmstudio.NewClient(cfg.LMStudioHost)
+	llmManager.RegisterProvider(lmstudioClient)
 
 	// OpenAI (API key set via UI)
 	openaiClient := openai.NewClient("")
