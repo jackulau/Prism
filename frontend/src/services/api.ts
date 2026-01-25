@@ -346,6 +346,92 @@ class ApiService {
   async disconnectGitHub() {
     return this.request('/github/disconnect', { method: 'DELETE' });
   }
+
+  // CloudProvider API methods
+  async listCloudProviders() {
+    return this.request<{
+      providers: Array<{
+        name: string;
+        has_credentials: boolean;
+      }>;
+    }>('/cloud/providers');
+  }
+
+  async createCloudAgent(params: {
+    provider: string;
+    name?: string;
+    system_prompt?: string;
+    model?: string;
+    tools?: string[];
+    metadata?: Record<string, string>;
+  }) {
+    return this.request<{
+      id: string;
+      provider_id: string;
+      provider_name: string;
+      name: string;
+      status: string;
+      created_at: string;
+      updated_at?: string;
+      model?: string;
+      system_prompt?: string;
+    }>('/cloud/agents', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getCloudAgent(agentId: string) {
+    return this.request<{
+      id: string;
+      provider_id: string;
+      provider_name: string;
+      name: string;
+      status: string;
+      created_at: string;
+      updated_at?: string;
+      model?: string;
+      system_prompt?: string;
+    }>(`/cloud/agents/${agentId}`);
+  }
+
+  async deleteCloudAgent(agentId: string) {
+    return this.request(`/cloud/agents/${agentId}`, { method: 'DELETE' });
+  }
+
+  async getCloudAgentMessages(agentId: string) {
+    return this.request<{
+      messages: Array<{
+        id: string;
+        role: string;
+        content: string;
+        timestamp: string;
+        tool_calls?: Array<{
+          id: string;
+          name: string;
+          parameters: Record<string, unknown>;
+          result?: unknown;
+          status: string;
+        }>;
+        images?: Array<{
+          url?: string;
+          base64?: string;
+          mime_type?: string;
+        }>;
+      }>;
+    }>(`/cloud/agents/${agentId}/messages`);
+  }
+
+  async sendCloudAgentMessage(
+    agentId: string,
+    message: string,
+    images?: Array<{ url?: string; base64?: string; mime_type?: string }>
+  ) {
+    return this.request<{ success: boolean }>(`/cloud/agents/${agentId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ message, images }),
+    });
+  }
 }
 
 export const apiService = new ApiService();

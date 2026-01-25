@@ -25,7 +25,13 @@ export type MessageType =
   // File history message types
   | 'file.history_request'
   | 'file.history_list'
-  | 'file.history_content';
+  | 'file.history_content'
+  // CloudProvider message types
+  | 'cloud_agent.created'
+  | 'cloud_agent.message'
+  | 'cloud_agent.chunk'
+  | 'cloud_agent.complete'
+  | 'cloud_agent.error';
 
 export interface Attachment {
   name: string;
@@ -248,4 +254,55 @@ export interface Provider {
   models: ProviderModel[];
   supports_tools: boolean;
   supports_vision: boolean;
+}
+
+// CloudProvider types
+export interface CloudProvider {
+  name: string;
+  hasCredentials: boolean;
+}
+
+export interface CloudAgent {
+  id: string;
+  providerId: string;
+  providerName: string;
+  name: string;
+  status: CloudAgentStatus;
+  createdAt: Date;
+  updatedAt?: Date;
+  model?: string;
+  systemPrompt?: string;
+}
+
+export type CloudAgentStatus = 'active' | 'idle' | 'terminated' | 'error';
+
+export interface CreateCloudAgentParams {
+  provider: string;
+  name?: string;
+  systemPrompt?: string;
+  model?: string;
+  tools?: string[];
+  metadata?: Record<string, string>;
+}
+
+export interface CloudProviderMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  timestamp: Date;
+  toolCalls?: ToolCall[];
+  images?: CloudImageData[];
+}
+
+export interface CloudImageData {
+  url?: string;
+  base64?: string;
+  mimeType?: string;
+}
+
+export interface CloudMessageChunk {
+  delta?: string;
+  toolCalls?: ToolCall[];
+  finishReason?: string;
+  error?: string;
 }
