@@ -335,6 +335,19 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
+		// Generic encrypted configuration storage
+		`CREATE TABLE IF NOT EXISTS data_configs (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			config_type TEXT NOT NULL,
+			config_key TEXT NOT NULL,
+			encrypted_data BLOB NOT NULL,
+			data_nonce BLOB NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, config_type, config_key)
+		)`,
+
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
 		`ALTER TABLE users ADD COLUMN github_token TEXT`,
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
@@ -363,6 +376,7 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_data_configs_user_type ON data_configs(user_id, config_type)`,
 	}
 
 	for _, migration := range migrations {

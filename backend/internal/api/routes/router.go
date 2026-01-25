@@ -39,6 +39,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
+	DataConfigRepo     *repository.DataConfigRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -295,6 +296,17 @@ func Setup(deps *Dependencies) *fiber.App {
 		stdioHandler := mcp.NewStdioHandler(deps.StdioMCPClient, deps.StdioMCPRepository)
 		stdioProtected := v1.Group("", middleware.AuthMiddleware(deps.JWTService))
 		stdioHandler.RegisterRoutes(stdioProtected)
+	}
+
+	// Data Config routes (encrypted configuration storage)
+	if deps.DataConfigRepo != nil {
+		dataConfigHandler := handlers.NewDataConfigHandler(deps.DataConfigRepo)
+		configRoutes := v1.Group("/config", middleware.AuthMiddleware(deps.JWTService))
+		configRoutes.Get("/:type", dataConfigHandler.ListConfigs)
+		configRoutes.Post("/:type/:key", dataConfigHandler.SetConfig)
+		configRoutes.Get("/:type/:key", dataConfigHandler.GetConfig)
+		configRoutes.Delete("/:type/:key", dataConfigHandler.DeleteConfig)
+		configRoutes.Get("/:type/:key/exists", dataConfigHandler.HasConfig)
 	}
 
 	// Integrations routes (for Settings page)
