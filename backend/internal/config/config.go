@@ -32,6 +32,13 @@ type Config struct {
 	GitHubClientSecret string
 	GitHubRedirectURL  string
 
+	// GitHub App
+	GitHubAppID            int64
+	GitHubAppPrivateKey    string
+	GitHubAppClientID      string
+	GitHubAppClientSecret  string
+	GitHubAppWebhookSecret string
+
 	// Ollama
 	OllamaHost string
 
@@ -110,6 +117,13 @@ func Load() (*Config, error) {
 		GitHubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
 		GitHubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
 		GitHubRedirectURL:  getEnv("GITHUB_REDIRECT_URL", "http://localhost:8080/api/v1/github/callback"),
+
+		// GitHub App
+		GitHubAppID:            getInt64Env("GITHUB_APP_ID", 0),
+		GitHubAppPrivateKey:    getEnv("GITHUB_APP_PRIVATE_KEY", ""),
+		GitHubAppClientID:      getEnv("GITHUB_APP_CLIENT_ID", ""),
+		GitHubAppClientSecret:  getEnv("GITHUB_APP_CLIENT_SECRET", ""),
+		GitHubAppWebhookSecret: getEnv("GITHUB_APP_WEBHOOK_SECRET", ""),
 
 		// Ollama
 		OllamaHost: getEnv("OLLAMA_HOST", "http://localhost:11434"),
