@@ -103,6 +103,9 @@ type StreamChunk struct {
 	// Text delta
 	Delta string `json:"delta,omitempty"`
 
+	// Thinking content delta (for extended thinking)
+	ThinkingDelta string `json:"thinking_delta,omitempty"`
+
 	// Tool calls (if any)
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 
@@ -114,6 +117,10 @@ type StreamChunk struct {
 
 	// Usage statistics (only on final chunk)
 	Usage *Usage `json:"usage,omitempty"`
+
+	// Token counts (may be provided incrementally or at end)
+	InputTokens  int `json:"input_tokens,omitempty"`
+	OutputTokens int `json:"output_tokens,omitempty"`
 }
 
 // Usage represents token usage statistics

@@ -340,6 +340,27 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
 		`ALTER TABLE users ADD COLUMN github_connected_at DATETIME`,
 
+		// Enhanced message fields for streaming and metadata
+		`ALTER TABLE messages ADD COLUMN provider TEXT`,
+		`ALTER TABLE messages ADD COLUMN model TEXT`,
+		`ALTER TABLE messages ADD COLUMN parent_id TEXT REFERENCES messages(id)`,
+		`ALTER TABLE messages ADD COLUMN status TEXT DEFAULT 'complete'`,
+		`ALTER TABLE messages ADD COLUMN thinking_content TEXT`,
+		`ALTER TABLE messages ADD COLUMN metadata_json TEXT`,
+		`ALTER TABLE messages ADD COLUMN input_tokens INTEGER DEFAULT 0`,
+		`ALTER TABLE messages ADD COLUMN output_tokens INTEGER DEFAULT 0`,
+		`ALTER TABLE messages ADD COLUMN finish_reason TEXT`,
+
+		// Message chunks table for streaming reconstruction
+		`CREATE TABLE IF NOT EXISTS message_chunks (
+			id TEXT PRIMARY KEY,
+			message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+			chunk_index INTEGER NOT NULL,
+			content TEXT NOT NULL,
+			chunk_type TEXT DEFAULT 'content',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
@@ -363,6 +384,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_parent_id ON messages(parent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_messages_status ON messages(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_chunks_message_id ON message_chunks(message_id)`,
 	}
 
 	for _, migration := range migrations {

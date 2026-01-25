@@ -24,6 +24,7 @@ interface AppState {
   addMessage: (message: Message) => void;
   updateMessage: (id: string, updates: Partial<Message>) => void;
   appendToMessage: (id: string, delta: string) => void;
+  appendThinkingToMessage: (id: string, delta: string) => void;
   clearMessages: () => void;
 
   // Tool Call Management
@@ -158,6 +159,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   appendToMessage: (id, delta) => set((state) => ({
     messages: state.messages.map((msg) =>
       msg.id === id ? { ...msg, content: msg.content + delta } : msg
+    ),
+  })),
+  appendThinkingToMessage: (id, delta) => set((state) => ({
+    messages: state.messages.map((msg) =>
+      msg.id === id ? { ...msg, thinking_content: (msg.thinking_content || '') + delta } : msg
     ),
   })),
   clearMessages: () => set({ messages: [] }),
@@ -419,10 +425,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           messages: response.data.messages.map((m) => ({
             id: m.id,
+            conversation_id: m.conversation_id,
+            parent_id: m.parent_id,
             role: m.role as 'user' | 'assistant' | 'system' | 'tool',
             content: m.content,
+            thinking_content: m.thinking_content,
             timestamp: new Date(m.created_at),
             toolCalls: m.tool_calls as Message['toolCalls'],
+            provider: m.provider,
+            model: m.model,
+            status: (m.status || 'complete') as Message['status'],
+            input_tokens: m.input_tokens,
+            output_tokens: m.output_tokens,
+            finish_reason: m.finish_reason,
           })),
           currentConversationId: conversationId,
           isLoadingMessages: false,

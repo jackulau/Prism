@@ -156,10 +156,19 @@ class ApiService {
     return this.request<{
       messages: Array<{
         id: string;
+        conversation_id?: string;
+        parent_id?: string;
         role: string;
         content: string;
+        thinking_content?: string;
         tool_calls?: unknown[];
         tool_call_id?: string;
+        provider?: string;
+        model?: string;
+        status?: string;
+        input_tokens?: number;
+        output_tokens?: number;
+        finish_reason?: string;
         created_at: string;
       }>;
     }>(`/conversations/${conversationId}/messages`);

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"strings"
 	"sync"
 
 	"github.com/google/uuid"
@@ -394,9 +393,8 @@ func streamLLMResponseWithMCPAndStdio(ctx context.Context, deps *Dependencies, c
 		return
 	}
 
-	var fullResponse strings.Builder
-	var finishReason string
-	var collectedToolCalls []llm.ToolCall
+	// Create MessageBuilder for accumulating streaming content
+	builder := NewMessageBuilder(conversationID, provider, req.Model, deps.MessageRepo)
 
 	// Build HTTP MCP tool lookup map for faster access
 	mcpToolMap := make(map[string]*mcp.MCPToolWrapper)
@@ -414,52 +412,71 @@ func streamLLMResponseWithMCPAndStdio(ctx context.Context, deps *Dependencies, c
 		// Check if context was cancelled
 		select {
 		case <-ctx.Done():
-			finishReason = "stop"
+			builder.SetFinishReason("stop")
 			goto saveAndComplete
 		default:
 		}
 
 		if chunk.Error != nil {
 			client.SendMessage(websocket.NewError("stream_error", chunk.Error.Error()))
-			finishReason = "error"
+			builder.SetError()
 			goto saveAndComplete
 		}
 
 		// Handle text delta
 		if chunk.Delta != "" {
-			fullResponse.WriteString(chunk.Delta)
+			builder.AppendContent(chunk.Delta)
 			client.SendMessage(websocket.NewChatChunk(conversationID, messageID, chunk.Delta))
+		}
+
+		// Handle thinking content (extended thinking)
+		if chunk.ThinkingDelta != "" {
+			builder.AppendThinkingContent(chunk.ThinkingDelta)
+			// Optionally send thinking chunks to client
+			// client.SendMessage(websocket.NewThinkingChunk(conversationID, messageID, chunk.ThinkingDelta))
 		}
 
 		// Handle tool calls
 		if len(chunk.ToolCalls) > 0 {
 			for _, tc := range chunk.ToolCalls {
-				// Collect tool calls for saving with the assistant message
-				collectedToolCalls = append(collectedToolCalls, tc)
+				// Collect tool calls in builder
+				builder.AddToolCall(tc)
 				handleToolCallWithAllMCP(ctx, deps, client, conversationID, messageID, tc, mcpToolMap, stdioMCPToolMap)
 			}
 		}
 
+		// Handle token usage if provided in chunk
+		if chunk.InputTokens > 0 {
+			builder.SetInputTokens(chunk.InputTokens)
+		}
+		if chunk.OutputTokens > 0 {
+			builder.SetOutputTokens(chunk.OutputTokens)
+		}
+
 		// Handle finish reason
 		if chunk.FinishReason != "" {
-			finishReason = chunk.FinishReason
+			builder.SetFinishReason(chunk.FinishReason)
 		}
 	}
 
 saveAndComplete:
-	// Save assistant message to database (with tool calls if any)
-	if fullResponse.Len() > 0 || len(collectedToolCalls) > 0 {
-		toolCalls := convertToRepoToolCalls(collectedToolCalls)
-		_, err := deps.MessageRepo.Create(conversationID, "assistant", fullResponse.String(), toolCalls, "")
+	// Save assistant message to database using builder
+	if builder.HasContent() {
+		_, err := builder.Save()
 		if err != nil {
 			log.Printf("Failed to save assistant message: %v", err)
 		}
 	}
 
-	// Send completion message
-	if finishReason == "" {
+	// Get final finish reason
+	finishReason := builder.GetStatus()
+	if finishReason == "streaming" || finishReason == "" {
+		finishReason = "stop"
+	} else if finishReason == "complete" {
 		finishReason = "stop"
 	}
+
+	// Send completion message
 	client.SendMessage(websocket.NewChatComplete(conversationID, messageID, finishReason))
 
 	// Track completion

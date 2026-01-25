@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download, Plug, MessageSquare, Copy, Check, Pencil, RefreshCw } from 'lucide-react'
+import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download, Plug, MessageSquare, Copy, Check, Pencil, RefreshCw, ChevronDown, ChevronRight, Brain } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { wsService } from '../../services/websocket'
 import { MessageQueue } from './MessageQueue'
@@ -56,6 +56,7 @@ function MessageBubble({
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content)
+  const [showThinking, setShowThinking] = useState(false)
   const isUser = message.role === 'user'
 
   const handleRollback = () => {
@@ -164,6 +165,30 @@ function MessageBubble({
 
         {/* Message content */}
         <div className="pl-11">
+          {/* Thinking content (collapsible) */}
+          {!isUser && message.thinking_content && (
+            <div className="mb-3">
+              <button
+                onClick={() => setShowThinking(!showThinking)}
+                className="flex items-center gap-2 text-sm text-editor-muted hover:text-editor-text transition-colors"
+              >
+                {showThinking ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <Brain size={14} className="text-purple-400" />
+                <span>Thinking</span>
+                <span className="text-xs text-editor-muted">
+                  ({message.thinking_content.length.toLocaleString()} chars)
+                </span>
+              </button>
+              {showThinking && (
+                <div className="mt-2 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                  <div className="text-sm text-editor-muted leading-relaxed whitespace-pre-wrap">
+                    {message.thinking_content}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {isEditing ? (
             <div className="space-y-2">
               <textarea
@@ -212,22 +237,53 @@ function MessageBubble({
         </div>
 
         {/* Metrics for completed assistant messages */}
-        {!isUser && message.metrics && !message.isStreaming && (
-          <div className="pl-11 mt-3 flex items-center gap-4 text-xs text-editor-muted">
-            <span className="flex items-center gap-1">
-              <Hash size={12} />
-              {message.metrics.totalTokens} tokens
-            </span>
-            {message.metrics.tokensPerSecond != null && (
-              <span className="flex items-center gap-1">
-                <Zap size={12} />
-                {message.metrics.tokensPerSecond.toFixed(1)} t/s
-              </span>
+        {!isUser && !message.isStreaming && (message.metrics || message.input_tokens || message.output_tokens) && (
+          <div className="pl-11 mt-3 flex items-center gap-4 text-xs text-editor-muted flex-wrap">
+            {/* Token counts from message metadata */}
+            {(message.input_tokens != null || message.output_tokens != null) && (
+              <>
+                {message.input_tokens != null && message.input_tokens > 0 && (
+                  <span className="flex items-center gap-1" title="Input tokens">
+                    <Hash size={12} />
+                    {message.input_tokens.toLocaleString()} in
+                  </span>
+                )}
+                {message.output_tokens != null && message.output_tokens > 0 && (
+                  <span className="flex items-center gap-1" title="Output tokens">
+                    <Hash size={12} />
+                    {message.output_tokens.toLocaleString()} out
+                  </span>
+                )}
+              </>
             )}
-            {message.metrics.timeToFirstToken != null && (
-              <span className="flex items-center gap-1">
-                <Clock size={12} />
-                TTFT: {message.metrics.timeToFirstToken.toFixed(0)}ms
+            {/* Legacy metrics from streaming */}
+            {message.metrics && (
+              <>
+                {!message.input_tokens && !message.output_tokens && message.metrics.totalTokens > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Hash size={12} />
+                    {message.metrics.totalTokens.toLocaleString()} tokens
+                  </span>
+                )}
+                {message.metrics.tokensPerSecond != null && message.metrics.tokensPerSecond > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Zap size={12} />
+                    {message.metrics.tokensPerSecond.toFixed(1)} t/s
+                  </span>
+                )}
+                {message.metrics.timeToFirstToken != null && (
+                  <span className="flex items-center gap-1">
+                    <Clock size={12} />
+                    TTFT: {message.metrics.timeToFirstToken.toFixed(0)}ms
+                  </span>
+                )}
+              </>
+            )}
+            {/* Model info if available */}
+            {message.model && (
+              <span className="flex items-center gap-1 text-editor-muted/70" title={`Provider: ${message.provider || 'unknown'}`}>
+                <Cpu size={12} />
+                {message.model}
               </span>
             )}
           </div>
