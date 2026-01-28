@@ -70,6 +70,11 @@ type Config struct {
 	PostHogBatchSize     int
 	PostHogFlushInterval time.Duration
 
+	// PostHog Tools API (for MCP tools)
+	PostHogToolsAPIKey  string
+	PostHogToolsProject string
+	PostHogToolsHost    string
+
 	// GitHub Webhooks
 	GitHubWebhookEnabled bool
 	GitHubWebhookSecret  string
@@ -148,6 +153,11 @@ func Load() (*Config, error) {
 		PostHogEndpoint:      getEnv("POSTHOG_ENDPOINT", "https://app.posthog.com"),
 		PostHogBatchSize:     getIntEnv("POSTHOG_BATCH_SIZE", 10),
 		PostHogFlushInterval: getDurationEnv("POSTHOG_FLUSH_INTERVAL", 30*time.Second),
+
+		// PostHog Tools API (for MCP tools)
+		PostHogToolsAPIKey:  getEnv("POSTHOG_TOOLS_API_KEY", ""),
+		PostHogToolsProject: getEnv("POSTHOG_TOOLS_PROJECT_ID", ""),
+		PostHogToolsHost:    getEnv("POSTHOG_TOOLS_HOST", "https://app.posthog.com"),
 
 		// GitHub Webhooks
 		GitHubWebhookEnabled: getBoolEnv("GITHUB_WEBHOOK_ENABLED", false),

@@ -31,6 +31,9 @@ type Config struct {
 
 	// LLM provider for WebFetch AI analysis (optional)
 	LLMProvider llm.Provider
+
+	// PostHog tools configuration
+	PostHogConfig *PostHogConfig
 }
 
 // RegisterAll registers all built-in tools with the registry
@@ -169,6 +172,28 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 	// Database query tool
 	if db != nil {
 		if err := registry.Register(NewDatabaseQueryTool(db)); err != nil {
+			return err
+		}
+	}
+
+	// PostHog Insights tools (require API key)
+	if config.PostHogConfig != nil && config.PostHogConfig.APIKey != "" {
+		if err := registry.Register(NewPostHogInsightsGetAllTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightGetTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightQueryTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightCreateTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightUpdateTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightDeleteTool(*config.PostHogConfig)); err != nil {
 			return err
 		}
 	}
