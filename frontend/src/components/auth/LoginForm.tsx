@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { loginUser } from '../../store/authStore';
+import { SSOLogin } from './SSOLogin';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -11,6 +12,7 @@ export function LoginForm({ onSuccess, onRegisterClick }: LoginFormProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSSO, setShowSSO] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +28,10 @@ export function LoginForm({ onSuccess, onRegisterClick }: LoginFormProps) {
       setLoading(false);
     }
   };
+
+  if (showSSO) {
+    return <SSOLogin onBack={() => setShowSSO(false)} />;
+  }
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -76,6 +82,24 @@ export function LoginForm({ onSuccess, onRegisterClick }: LoginFormProps) {
           className="w-full py-2 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Signing in...' : 'Sign In'}
+        </button>
+
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-editor-border" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-editor-surface px-2 text-editor-muted">Or</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowSSO(true)}
+          disabled={loading}
+          className="w-full py-2 px-4 border border-editor-border text-editor-text rounded-lg font-medium hover:bg-editor-surface disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          Sign in with SSO
         </button>
       </form>
 

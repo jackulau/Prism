@@ -346,6 +346,25 @@ class ApiService {
   async disconnectGitHub() {
     return this.request('/github/disconnect', { method: 'DELETE' });
   }
+
+  // SSO Authentication
+  async ssoAuthorize(organization: string) {
+    return this.request<{ authorization_url: string }>('/auth/sso/authorize', {
+      method: 'POST',
+      body: JSON.stringify({ organization }),
+    });
+  }
+
+  async ssoCallback(code: string, state: string) {
+    return this.request<{
+      access_token: string;
+      refresh_token: string;
+      user: { id: string; email: string; created_at: string };
+    }>('/auth/sso/callback', {
+      method: 'POST',
+      body: JSON.stringify({ code, state }),
+    });
+  }
 }
 
 export const apiService = new ApiService();
