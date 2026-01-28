@@ -335,6 +335,19 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
+		// Workspaces (organization-scoped container for agent sessions)
+		`CREATE TABLE IF NOT EXISTS workspaces (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			organization_id TEXT NOT NULL,
+			github_repository_name TEXT,
+			worker_id TEXT,
+			current_branch TEXT,
+			slack_channel_id TEXT,
+			slack_message_ts TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
 		`ALTER TABLE users ADD COLUMN github_token TEXT`,
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
@@ -363,6 +376,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_workspaces_organization_id ON workspaces(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_workspaces_current_branch ON workspaces(current_branch)`,
+		`CREATE INDEX IF NOT EXISTS idx_workspaces_github_repo ON workspaces(github_repository_name)`,
 	}
 
 	for _, migration := range migrations {
