@@ -83,6 +83,12 @@ type Config struct {
 
 	// Guest Mode
 	GuestModeEnabled bool
+
+	// WorkOS Integration
+	WorkOSEnabled       bool
+	WorkOSAPIKey        string
+	WorkOSClientID      string
+	WorkOSWebhookSecret string
 }
 
 func Load() (*Config, error) {
@@ -162,6 +168,12 @@ func Load() (*Config, error) {
 
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+
+		// WorkOS Integration - disabled by default
+		WorkOSEnabled:       getBoolEnv("WORKOS_ENABLED", false),
+		WorkOSAPIKey:        getEnv("WORKOS_API_KEY", ""),
+		WorkOSClientID:      getEnv("WORKOS_CLIENT_ID", ""),
+		WorkOSWebhookSecret: getEnv("WORKOS_WEBHOOK_SECRET", ""),
 	}
 
 	// Validate security configuration in production

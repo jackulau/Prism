@@ -16,6 +16,7 @@ import (
 	"github.com/jacklau/prism/internal/integrations/discord"
 	"github.com/jacklau/prism/internal/integrations/posthog"
 	"github.com/jacklau/prism/internal/integrations/slack"
+	"github.com/jacklau/prism/internal/integrations/workos"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/llm/anthropic"
 	"github.com/jacklau/prism/internal/llm/google"
@@ -68,6 +69,7 @@ func main() {
 	fileHistoryRepo := repository.NewFileHistoryRepository(db.DB)
 	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
 	todoRepo := repository.NewTodoRepository(db.DB)
+	organizationRepo := repository.NewOrganizationRepository(db.DB)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -186,6 +188,18 @@ func main() {
 	}
 	log.Println("MCP server and clients initialized")
 
+	// Initialize WorkOS client (optional)
+	var workosClient *workos.Client
+	if cfg.WorkOSEnabled {
+		workosClient = workos.NewClient(&workos.Config{
+			APIKey:        cfg.WorkOSAPIKey,
+			ClientID:      cfg.WorkOSClientID,
+			WebhookSecret: cfg.WorkOSWebhookSecret,
+			Enabled:       cfg.WorkOSEnabled,
+		})
+		log.Println("WorkOS client initialized")
+	}
+
 	// Setup routes
 	deps := &routes.Dependencies{
 		Config:             cfg,
@@ -211,6 +225,8 @@ func main() {
 		MCPRepository:      mcpRepo,
 		StdioMCPClient:     stdioMCPClient,
 		StdioMCPRepository: stdioMCPRepo,
+		OrganizationRepo:   organizationRepo,
+		WorkOSClient:       workosClient,
 	}
 
 	app := routes.Setup(deps)

@@ -18,6 +18,7 @@ import (
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/integrations"
+	"github.com/jacklau/prism/internal/integrations/workos"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/sandbox"
@@ -51,6 +52,8 @@ type Dependencies struct {
 	MCPRepository      *mcp.Repository
 	StdioMCPClient     *mcp.StdioClient
 	StdioMCPRepository *mcp.StdioRepository
+	OrganizationRepo   *repository.OrganizationRepository
+	WorkOSClient       *workos.Client
 }
 
 // Setup sets up the Fiber app with all routes
@@ -295,6 +298,32 @@ func Setup(deps *Dependencies) *fiber.App {
 		stdioHandler := mcp.NewStdioHandler(deps.StdioMCPClient, deps.StdioMCPRepository)
 		stdioProtected := v1.Group("", middleware.AuthMiddleware(deps.JWTService))
 		stdioHandler.RegisterRoutes(stdioProtected)
+	}
+
+	// Organization routes
+	if deps.OrganizationRepo != nil {
+		orgHandler := handlers.NewOrganizationHandler(deps.OrganizationRepo, deps.WorkOSClient)
+
+		// Public WorkOS webhook endpoint (no auth - verified by signature)
+		v1.Post("/webhooks/workos", orgHandler.HandleWorkOSWebhook)
+
+		// Protected organization routes
+		orgs := v1.Group("/organizations", middleware.AuthMiddleware(deps.JWTService))
+		orgs.Get("/", orgHandler.ListOrganizations)
+		orgs.Post("/", orgHandler.CreateOrganization)
+		orgs.Get("/:id", orgHandler.GetOrganization)
+		orgs.Put("/:id", orgHandler.UpdateOrganization)
+		orgs.Delete("/:id", orgHandler.DeleteOrganization)
+
+		// Organization member management
+		orgs.Get("/:id/members", orgHandler.GetMembers)
+		orgs.Post("/:id/members", orgHandler.AddMember)
+		orgs.Delete("/:id/members/:userId", orgHandler.RemoveMember)
+
+		// WorkOS sync (admin-only)
+		orgs.Post("/sync/workos", orgHandler.SyncFromWorkOS)
+
+		log.Println("Organization routes registered")
 	}
 
 	// Integrations routes (for Settings page)
