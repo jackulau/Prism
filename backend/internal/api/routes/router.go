@@ -39,6 +39,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
+	OrgWorkspaceRepo   *repository.OrgWorkspaceRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -326,6 +327,18 @@ func Setup(deps *Dependencies) *fiber.App {
 				},
 			})
 		})
+	}
+
+	// Organization workspace routes
+	if deps.OrgWorkspaceRepo != nil {
+		orgWorkspaceHandler := handlers.NewOrgWorkspaceHandler(deps.OrgWorkspaceRepo)
+		orgWorkspaces := v1.Group("/org/workspaces", middleware.AuthMiddleware(deps.JWTService))
+		orgWorkspaces.Post("/", orgWorkspaceHandler.Create)
+		orgWorkspaces.Get("/", orgWorkspaceHandler.List)
+		orgWorkspaces.Get("/:id", orgWorkspaceHandler.Get)
+		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
+		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
+		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
 	}
 
 	return app
