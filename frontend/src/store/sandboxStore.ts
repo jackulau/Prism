@@ -23,6 +23,38 @@ export interface FileHistoryEntry {
   created_at: string
 }
 
+// Vercel/Provider sandbox types
+export type SandboxProvider = 'docker' | 'vercel'
+export type SandboxStatus = 'creating' | 'ready' | 'deploying' | 'deployed' | 'failed' | 'deleted'
+export type DeploymentStatus = 'queued' | 'building' | 'ready' | 'error' | 'cancelled'
+export type Framework = 'nextjs' | 'react' | 'vue' | 'vite' | 'static'
+
+export interface SandboxInfo {
+  id: string
+  provider: SandboxProvider
+  status: SandboxStatus
+  previewUrl?: string
+  framework?: Framework
+  createdAt?: number
+  updatedAt?: number
+}
+
+export interface DeploymentInfo {
+  id: string
+  status: DeploymentStatus
+  previewUrl?: string
+  error?: string
+  createdAt?: number
+  readyAt?: number
+}
+
+export interface SandboxLogEntry {
+  timestamp: number
+  message: string
+  level: 'info' | 'warn' | 'error'
+  source?: string
+}
+
 interface SandboxState {
   // Preview state
   previewUrl: string | null
@@ -51,6 +83,13 @@ interface SandboxState {
   historyContent: string | null
   isLoadingHistory: boolean
   showHistoryPanel: boolean
+
+  // Vercel/Provider sandbox state
+  provider: SandboxProvider
+  currentSandbox: SandboxInfo | null
+  currentDeployment: DeploymentInfo | null
+  sandboxLogs: SandboxLogEntry[]
+  availableProviders: SandboxProvider[]
 
   // Actions
   setPreviewUrl: (url: string | null) => void
@@ -81,6 +120,16 @@ interface SandboxState {
   setShowHistoryPanel: (show: boolean) => void
   requestFileHistory: (path?: string) => void
   requestHistoryContent: (historyId: string) => void
+
+  // Vercel/Provider sandbox actions
+  setProvider: (provider: SandboxProvider) => void
+  setCurrentSandbox: (sandbox: SandboxInfo | null) => void
+  setCurrentDeployment: (deployment: DeploymentInfo | null) => void
+  addSandboxLog: (log: SandboxLogEntry) => void
+  clearSandboxLogs: () => void
+  setAvailableProviders: (providers: SandboxProvider[]) => void
+  updateSandboxStatus: (status: SandboxStatus) => void
+  updateDeploymentStatus: (status: DeploymentStatus, previewUrl?: string, error?: string) => void
 }
 
 const initialState = {
@@ -103,6 +152,12 @@ const initialState = {
   historyContent: null as string | null,
   isLoadingHistory: false,
   showHistoryPanel: false,
+  // Vercel/Provider sandbox state
+  provider: 'docker' as SandboxProvider,
+  currentSandbox: null as SandboxInfo | null,
+  currentDeployment: null as DeploymentInfo | null,
+  sandboxLogs: [] as SandboxLogEntry[],
+  availableProviders: ['docker'] as SandboxProvider[],
 }
 
 export const useSandboxStore = create<SandboxState>((set, get) => ({
@@ -198,6 +253,51 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       }
     }, 10000)
   },
+
+  // Vercel/Provider sandbox actions
+  setProvider: (provider) => set({ provider }),
+
+  setCurrentSandbox: (sandbox) => set({ currentSandbox: sandbox }),
+
+  setCurrentDeployment: (deployment) => set({ currentDeployment: deployment }),
+
+  addSandboxLog: (log) => set((state) => ({
+    sandboxLogs: [...state.sandboxLogs, log]
+  })),
+
+  clearSandboxLogs: () => set({ sandboxLogs: [] }),
+
+  setAvailableProviders: (providers) => set({ availableProviders: providers }),
+
+  updateSandboxStatus: (status) => set((state) => ({
+    currentSandbox: state.currentSandbox
+      ? { ...state.currentSandbox, status, updatedAt: Date.now() }
+      : null
+  })),
+
+  updateDeploymentStatus: (status, previewUrl, error) => set((state) => {
+    const deployment = state.currentDeployment
+    if (!deployment) return state
+
+    const updated: DeploymentInfo = {
+      ...deployment,
+      status,
+      ...(previewUrl && { previewUrl }),
+      ...(error && { error }),
+    }
+
+    if (status === 'ready') {
+      updated.readyAt = Date.now()
+    }
+
+    // Also update preview URL if provided
+    const newState: Partial<SandboxState> = { currentDeployment: updated }
+    if (previewUrl) {
+      newState.previewUrl = previewUrl
+    }
+
+    return newState
+  }),
 }))
 
 // Note: Sandbox WebSocket messages are now handled by the main WebSocket service

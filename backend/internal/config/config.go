@@ -83,6 +83,12 @@ type Config struct {
 
 	// Guest Mode
 	GuestModeEnabled bool
+
+	// Vercel Integration
+	VercelEnabled       bool
+	VercelAPIToken      string
+	VercelTeamID        string
+	VercelDefaultRegion string
 }
 
 func Load() (*Config, error) {
@@ -162,6 +168,12 @@ func Load() (*Config, error) {
 
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+
+		// Vercel Integration
+		VercelEnabled:       getBoolEnv("VERCEL_ENABLED", false),
+		VercelAPIToken:      getEnv("VERCEL_API_TOKEN", ""),
+		VercelTeamID:        getEnv("VERCEL_TEAM_ID", ""),
+		VercelDefaultRegion: getEnv("VERCEL_DEFAULT_REGION", "iad1"),
 	}
 
 	// Validate security configuration in production

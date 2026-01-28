@@ -131,6 +131,18 @@ const (
 	TypeBuildCompleted  = "build.completed"
 	TypeBuildStop       = "build.stop"
 
+	// Sandbox lifecycle message types
+	TypeSandboxCreate    = "sandbox.create"
+	TypeSandboxCreated   = "sandbox.created"
+	TypeSandboxDeploy    = "sandbox.deploy"
+	TypeSandboxDeploying = "sandbox.deploying"
+	TypeSandboxDeployed  = "sandbox.deployed"
+	TypeSandboxFailed    = "sandbox.failed"
+	TypeSandboxLogs      = "sandbox.logs"
+	TypeSandboxDelete    = "sandbox.delete"
+	TypeSandboxDeleted   = "sandbox.deleted"
+	TypeSandboxStatus    = "sandbox.status"
+
 	// Shell execution message types
 	TypeShellStart     = "shell.start"
 	TypeShellOutput    = "shell.output"
@@ -812,6 +824,112 @@ func NewFileHistoryContent(historyID, filePath, content, operation, createdAt st
 			"history_id": historyID,
 			"operation":  operation,
 			"created_at": createdAt,
+		},
+	}
+}
+
+// Sandbox lifecycle message constructors
+
+// SandboxInfo represents sandbox information in messages
+type SandboxInfo struct {
+	ID         string `json:"id"`
+	Provider   string `json:"provider"`
+	Status     string `json:"status"`
+	PreviewURL string `json:"preview_url,omitempty"`
+	Framework  string `json:"framework,omitempty"`
+	CreatedAt  int64  `json:"created_at,omitempty"`
+	UpdatedAt  int64  `json:"updated_at,omitempty"`
+}
+
+// DeploymentInfo represents deployment information in messages
+type DeploymentInfo struct {
+	ID         string `json:"id"`
+	Status     string `json:"status"`
+	PreviewURL string `json:"preview_url,omitempty"`
+	Error      string `json:"error,omitempty"`
+	CreatedAt  int64  `json:"created_at,omitempty"`
+	ReadyAt    int64  `json:"ready_at,omitempty"`
+}
+
+// NewSandboxCreated creates a new sandbox created message
+func NewSandboxCreated(sandbox SandboxInfo) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeSandboxCreated,
+		Status: "created",
+		Metadata: map[string]interface{}{
+			"sandbox": sandbox,
+		},
+	}
+}
+
+// NewSandboxDeploying creates a new sandbox deploying message
+func NewSandboxDeploying(sandboxID string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeSandboxDeploying,
+		Status: "deploying",
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+		},
+	}
+}
+
+// NewSandboxDeployed creates a new sandbox deployed message
+func NewSandboxDeployed(sandboxID string, deployment DeploymentInfo) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeSandboxDeployed,
+		Status:     "deployed",
+		PreviewURL: deployment.PreviewURL,
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+			"deployment": deployment,
+		},
+	}
+}
+
+// NewSandboxFailed creates a new sandbox failed message
+func NewSandboxFailed(sandboxID, errorMsg string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeSandboxFailed,
+		Status: "failed",
+		Error:  errorMsg,
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+		},
+	}
+}
+
+// NewSandboxLogs creates a new sandbox logs message
+func NewSandboxLogs(sandboxID, message, level, source string, timestamp int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeSandboxLogs,
+		Content: message,
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+			"level":      level,
+			"source":     source,
+			"timestamp":  timestamp,
+		},
+	}
+}
+
+// NewSandboxDeleted creates a new sandbox deleted message
+func NewSandboxDeleted(sandboxID string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeSandboxDeleted,
+		Status: "deleted",
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+		},
+	}
+}
+
+// NewSandboxStatus creates a new sandbox status message
+func NewSandboxStatus(sandbox SandboxInfo) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeSandboxStatus,
+		Status: sandbox.Status,
+		Metadata: map[string]interface{}{
+			"sandbox": sandbox,
 		},
 	}
 }
