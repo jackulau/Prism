@@ -18,6 +18,29 @@ export {
   conflict,
 } from './utils/errors.js';
 
+// Payment router exports
+export { paymentRouter, type PaymentRouter } from './routers/payment/index.js';
+export { paymentService } from './services/payment.js';
+export type {
+  PlanType,
+  BillingInterval,
+  Plan,
+  PlanLimits,
+  SubscriptionStatus,
+  Subscription,
+  Usage,
+  UsageHistoryItem,
+  PaymentMethod,
+  InvoiceStatus,
+  Invoice,
+  CreateSubscriptionInput,
+  UpdateSubscriptionInput,
+  CreateCheckoutInput,
+  PortalInput,
+  UsageHistoryInput,
+  ListInvoicesInput,
+} from './routers/payment/schemas.js';
+
 export interface TRPCMiddlewareOptions {
   onError?: (opts: { error: Error; path: string | undefined }) => void;
 }
