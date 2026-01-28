@@ -31,6 +31,9 @@ type Config struct {
 
 	// LLM provider for WebFetch AI analysis (optional)
 	LLMProvider llm.Provider
+
+	// PostHog tools configuration (for query runner)
+	PostHogConfig *PostHogConfig
 }
 
 // RegisterAll registers all built-in tools with the registry
@@ -171,6 +174,20 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		if err := registry.Register(NewDatabaseQueryTool(db)); err != nil {
 			return err
 		}
+	}
+
+	// PostHog tools (query runner, query generator, docs search)
+	if config.PostHogConfig != nil && config.PostHogConfig.APIKey != "" {
+		if err := registry.Register(NewPostHogQueryRunTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogGenerateQueryTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+	}
+	// Docs search doesn't require API key - always register it
+	if err := registry.Register(NewPostHogDocsSearchTool()); err != nil {
+		return err
 	}
 
 	return nil

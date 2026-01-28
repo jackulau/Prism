@@ -83,6 +83,12 @@ type Config struct {
 
 	// Guest Mode
 	GuestModeEnabled bool
+
+	// PostHog Tools (for AI query runner)
+	PostHogToolsEnabled   bool
+	PostHogToolsAPIKey    string
+	PostHogToolsProjectID string
+	PostHogToolsHost      string
 }
 
 func Load() (*Config, error) {
@@ -162,6 +168,12 @@ func Load() (*Config, error) {
 
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+
+		// PostHog Tools (for AI query runner)
+		PostHogToolsEnabled:   getBoolEnv("POSTHOG_TOOLS_ENABLED", false),
+		PostHogToolsAPIKey:    getEnv("POSTHOG_TOOLS_API_KEY", ""),
+		PostHogToolsProjectID: getEnv("POSTHOG_TOOLS_PROJECT_ID", ""),
+		PostHogToolsHost:      getEnv("POSTHOG_TOOLS_HOST", "https://app.posthog.com"),
 	}
 
 	// Validate security configuration in production

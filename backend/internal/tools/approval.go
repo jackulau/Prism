@@ -33,15 +33,18 @@ func DefaultAutoApprovalConfig() *AutoApprovalConfig {
 // ReadOnlyTools is a list of built-in tools that are considered read-only
 // These don't modify any state and are safe to auto-approve
 var ReadOnlyTools = map[string]bool{
-	"read_file":    true,
-	"list_files":   true,
-	"search_code":  true,
-	"grep":         true,
-	"glob":         true,
-	"get_info":     true,
-	"web_fetch":    true,
-	"web_search":   true,
-	"database_query": true, // SELECT queries only
+	"read_file":              true,
+	"list_files":             true,
+	"search_code":            true,
+	"grep":                   true,
+	"glob":                   true,
+	"get_info":               true,
+	"web_fetch":              true,
+	"web_search":             true,
+	"database_query":         true, // SELECT queries only
+	"posthog_query_run":      true, // Read-only HogQL query
+	"posthog_generate_hogql": true, // Query generation (no side effects)
+	"posthog_docs_search":    true, // Documentation search
 }
 
 // ShouldAutoApprove determines if a tool should be automatically approved
