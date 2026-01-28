@@ -1,6 +1,8 @@
-import type { AnyRouter } from '@trpc/server';
 import { router } from './trpc.js';
+import { workspaceRouter } from './routers/workspace/index.js';
 
-export const appRouter: AnyRouter = router({});
+export const appRouter = router({
+  workspace: workspaceRouter,
+});
 
 export type AppRouter = typeof appRouter;
