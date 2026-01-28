@@ -340,6 +340,12 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
 		`ALTER TABLE users ADD COLUMN github_connected_at DATETIME`,
 
+		// Add WorkOS SSO fields to users table
+		`ALTER TABLE users ADD COLUMN workos_id TEXT`,
+		`ALTER TABLE users ADD COLUMN organization_id TEXT`,
+		`ALTER TABLE users ADD COLUMN sso_connection_id TEXT`,
+		`ALTER TABLE users ADD COLUMN sso_provider TEXT`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
@@ -363,6 +369,8 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_workos_id ON users(workos_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_organization_id ON users(organization_id)`,
 	}
 
 	for _, migration := range migrations {
