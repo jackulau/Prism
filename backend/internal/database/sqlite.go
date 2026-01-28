@@ -335,6 +335,23 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
+		// Custom OpenAI-compatible providers
+		`CREATE TABLE IF NOT EXISTS custom_providers (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			name TEXT NOT NULL,
+			base_url TEXT NOT NULL,
+			encrypted_api_key BLOB,
+			api_key_nonce BLOB,
+			models TEXT,
+			supports_tools INTEGER DEFAULT 0,
+			supports_vision INTEGER DEFAULT 0,
+			is_active INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, name)
+		)`,
+
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
 		`ALTER TABLE users ADD COLUMN github_token TEXT`,
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
@@ -363,6 +380,8 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_providers_user_id ON custom_providers(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_custom_providers_active ON custom_providers(user_id, is_active)`,
 	}
 
 	for _, migration := range migrations {

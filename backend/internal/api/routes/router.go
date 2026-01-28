@@ -28,29 +28,30 @@ import (
 
 // Dependencies holds all the dependencies for the router
 type Dependencies struct {
-	Config             *config.Config
-	JWTService         *security.JWTService
-	EncryptionService  *security.EncryptionService
-	UserRepo           *repository.UserRepository
-	SessionRepo        *repository.SessionRepository
-	ConversationRepo   *repository.ConversationRepository
-	MessageRepo        *repository.MessageRepository
-	WebhookRepo        *repository.WebhookRepository
-	ProviderKeyRepo    *repository.ProviderKeyRepository
-	IntegrationRepo    *repository.IntegrationRepository
-	FileHistoryRepo    *repository.FileHistoryRepository
-	LLMManager         *llm.Manager
-	WSHub              *ws.Hub
-	IntegrationManager *integrations.Manager
-	AgentManager       *agent.Manager
-	CodeRunner         *coderunner.Runner
-	SandboxService     *sandbox.Service
-	ToolRegistry       *tools.Registry
-	MCPServer          *mcp.Server
-	MCPClient          *mcp.Client
-	MCPRepository      *mcp.Repository
-	StdioMCPClient     *mcp.StdioClient
-	StdioMCPRepository *mcp.StdioRepository
+	Config               *config.Config
+	JWTService           *security.JWTService
+	EncryptionService    *security.EncryptionService
+	UserRepo             *repository.UserRepository
+	SessionRepo          *repository.SessionRepository
+	ConversationRepo     *repository.ConversationRepository
+	MessageRepo          *repository.MessageRepository
+	WebhookRepo          *repository.WebhookRepository
+	ProviderKeyRepo      *repository.ProviderKeyRepository
+	CustomProviderRepo   *repository.CustomProviderRepository
+	IntegrationRepo      *repository.IntegrationRepository
+	FileHistoryRepo      *repository.FileHistoryRepository
+	LLMManager           *llm.Manager
+	WSHub                *ws.Hub
+	IntegrationManager   *integrations.Manager
+	AgentManager         *agent.Manager
+	CodeRunner           *coderunner.Runner
+	SandboxService       *sandbox.Service
+	ToolRegistry         *tools.Registry
+	MCPServer            *mcp.Server
+	MCPClient            *mcp.Client
+	MCPRepository        *mcp.Repository
+	StdioMCPClient       *mcp.StdioClient
+	StdioMCPRepository   *mcp.StdioRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -199,6 +200,19 @@ func Setup(deps *Dependencies) *fiber.App {
 		providers.Post("/:provider/validate", providerHandler.ValidateKey)
 		providers.Get("/:provider/key/status", providerHandler.GetKeyStatus)
 		providers.Get("/keys", providerHandler.ListKeys)
+	}
+
+	// Custom OpenAI-compatible provider routes
+	if deps.CustomProviderRepo != nil {
+		customProviderHandler := handlers.NewCustomProviderHandler(deps.CustomProviderRepo, deps.EncryptionService, deps.LLMManager)
+		customProviders := providers.Group("/custom")
+		customProviders.Post("/", customProviderHandler.Create)
+		customProviders.Get("/", customProviderHandler.List)
+		customProviders.Get("/:id", customProviderHandler.Get)
+		customProviders.Put("/:id", customProviderHandler.Update)
+		customProviders.Delete("/:id", customProviderHandler.Delete)
+		customProviders.Post("/test", customProviderHandler.TestEndpoint)
+		customProviders.Post("/:id/fetch-models", customProviderHandler.FetchModels)
 	}
 
 	// Preview/Sandbox routes (auth required)
