@@ -27,3 +27,9 @@ var (
 	ErrManagerNotInitialized = errors.New("agent manager not initialized")
 	ErrInvalidAgentConfig    = errors.New("invalid agent configuration")
 )
+
+// Orchestrator errors
+var (
+	ErrTooManyAgents         = errors.New("maximum number of sub-agents reached")
+	ErrOrchestratorNotRunning = errors.New("orchestrator workflow is not running")
+)
