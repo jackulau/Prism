@@ -17,6 +17,9 @@ export {
   internalError,
   conflict,
 } from './utils/errors.js';
+export { organizationRouter } from './routers/organization/index.js';
+export { organizationService } from './services/organization.js';
+export type { DatabaseConnection } from './services/organization.js';
 
 export interface TRPCMiddlewareOptions {
   onError?: (opts: { error: Error; path: string | undefined }) => void;
