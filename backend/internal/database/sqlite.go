@@ -335,8 +335,8 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
-		// Workspaces (organization-scoped container for agent sessions)
-		`CREATE TABLE IF NOT EXISTS workspaces (
+		// Organization-scoped workspaces for agent sessions
+		`CREATE TABLE IF NOT EXISTS org_workspaces (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
 			organization_id TEXT NOT NULL,
@@ -376,9 +376,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_workspaces_organization_id ON workspaces(organization_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_workspaces_current_branch ON workspaces(current_branch)`,
-		`CREATE INDEX IF NOT EXISTS idx_workspaces_github_repo ON workspaces(github_repository_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_current_branch ON org_workspaces(current_branch)`,
 	}
 
 	for _, migration := range migrations {

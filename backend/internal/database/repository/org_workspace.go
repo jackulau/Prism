@@ -8,7 +8,16 @@ import (
 	"github.com/google/uuid"
 )
 
-// OrgWorkspace represents an organization-scoped workspace for agent sessions
+// OrgWorkspace represents an organization-scoped workspace for agent sessions.
+//
+// Workspace has One-to-Many relation with Agent:
+// When Agent entity is created, add:
+//   - ListAgentsByWorkspaceID(workspaceID string) ([]*Agent, error)
+//   - GetWorkspaceByAgentID(agentID string) (*OrgWorkspace, error)
+//
+// Workspace has One-to-Many relation with WorkspaceTool:
+// When WorkspaceTool entity is created, add:
+//   - ListToolsByWorkspaceID(workspaceID string) ([]*WorkspaceTool, error)
 type OrgWorkspace struct {
 	ID                   string
 	Name                 string
@@ -29,6 +38,14 @@ type OrgWorkspaceRepository struct {
 // NewOrgWorkspaceRepository creates a new organization workspace repository
 func NewOrgWorkspaceRepository(db *sql.DB) *OrgWorkspaceRepository {
 	return &OrgWorkspaceRepository{db: db}
+}
+
+// nullString converts an empty string to sql.NullString
+func nullString(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: s, Valid: true}
 }
 
 // scanWorkspace is a helper to scan workspace rows with nullable fields
@@ -72,31 +89,12 @@ func (r *OrgWorkspaceRepository) Create(workspace *OrgWorkspace) (*OrgWorkspace,
 	id := uuid.New().String()
 	now := time.Now()
 
-	var githubRepo, workerID, currentBranch sql.NullString
-	var slackChannelID, slackMessageTs sql.NullString
-
-	if workspace.GitHubRepositoryName != "" {
-		githubRepo = sql.NullString{String: workspace.GitHubRepositoryName, Valid: true}
-	}
-	if workspace.WorkerID != "" {
-		workerID = sql.NullString{String: workspace.WorkerID, Valid: true}
-	}
-	if workspace.CurrentBranch != "" {
-		currentBranch = sql.NullString{String: workspace.CurrentBranch, Valid: true}
-	}
-	if workspace.SlackChannelID != "" {
-		slackChannelID = sql.NullString{String: workspace.SlackChannelID, Valid: true}
-	}
-	if workspace.SlackMessageTs != "" {
-		slackMessageTs = sql.NullString{String: workspace.SlackMessageTs, Valid: true}
-	}
-
 	_, err := r.db.Exec(
-		`INSERT INTO workspaces (id, name, organization_id, github_repository_name, worker_id, current_branch, slack_channel_id, slack_message_ts, created_at)
+		`INSERT INTO org_workspaces (id, name, organization_id, github_repository_name, worker_id, current_branch, slack_channel_id, slack_message_ts, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, workspace.Name, workspace.OrganizationID,
-		githubRepo, workerID, currentBranch,
-		slackChannelID, slackMessageTs, now,
+		nullString(workspace.GitHubRepositoryName), nullString(workspace.WorkerID), nullString(workspace.CurrentBranch),
+		nullString(workspace.SlackChannelID), nullString(workspace.SlackMessageTs), now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create workspace: %w", err)
@@ -119,7 +117,7 @@ func (r *OrgWorkspaceRepository) Create(workspace *OrgWorkspace) (*OrgWorkspace,
 func (r *OrgWorkspaceRepository) GetByID(id string) (*OrgWorkspace, error) {
 	row := r.db.QueryRow(
 		`SELECT id, name, organization_id, github_repository_name, worker_id, current_branch, slack_channel_id, slack_message_ts, created_at
-		 FROM workspaces WHERE id = ?`,
+		 FROM org_workspaces WHERE id = ?`,
 		id,
 	)
 
@@ -136,29 +134,12 @@ func (r *OrgWorkspaceRepository) GetByID(id string) (*OrgWorkspace, error) {
 
 // Update updates an organization workspace
 func (r *OrgWorkspaceRepository) Update(workspace *OrgWorkspace) error {
-	var githubRepo, workerID, currentBranch sql.NullString
-	var slackChannelID, slackMessageTs sql.NullString
-
-	if workspace.GitHubRepositoryName != "" {
-		githubRepo = sql.NullString{String: workspace.GitHubRepositoryName, Valid: true}
-	}
-	if workspace.WorkerID != "" {
-		workerID = sql.NullString{String: workspace.WorkerID, Valid: true}
-	}
-	if workspace.CurrentBranch != "" {
-		currentBranch = sql.NullString{String: workspace.CurrentBranch, Valid: true}
-	}
-	if workspace.SlackChannelID != "" {
-		slackChannelID = sql.NullString{String: workspace.SlackChannelID, Valid: true}
-	}
-	if workspace.SlackMessageTs != "" {
-		slackMessageTs = sql.NullString{String: workspace.SlackMessageTs, Valid: true}
-	}
-
 	_, err := r.db.Exec(
-		`UPDATE workspaces SET name = ?, github_repository_name = ?, worker_id = ?, current_branch = ?, slack_channel_id = ?, slack_message_ts = ?
+		`UPDATE org_workspaces SET name = ?, github_repository_name = ?, worker_id = ?, current_branch = ?, slack_channel_id = ?, slack_message_ts = ?
 		 WHERE id = ?`,
-		workspace.Name, githubRepo, workerID, currentBranch, slackChannelID, slackMessageTs, workspace.ID,
+		workspace.Name, nullString(workspace.GitHubRepositoryName), nullString(workspace.WorkerID),
+		nullString(workspace.CurrentBranch), nullString(workspace.SlackChannelID), nullString(workspace.SlackMessageTs),
+		workspace.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update workspace: %w", err)
@@ -169,7 +150,7 @@ func (r *OrgWorkspaceRepository) Update(workspace *OrgWorkspace) error {
 
 // Delete deletes an organization workspace by ID
 func (r *OrgWorkspaceRepository) Delete(id string) error {
-	_, err := r.db.Exec(`DELETE FROM workspaces WHERE id = ?`, id)
+	_, err := r.db.Exec(`DELETE FROM org_workspaces WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete workspace: %w", err)
 	}
@@ -180,7 +161,7 @@ func (r *OrgWorkspaceRepository) Delete(id string) error {
 func (r *OrgWorkspaceRepository) ListByOrganizationID(orgID string) ([]*OrgWorkspace, error) {
 	rows, err := r.db.Query(
 		`SELECT id, name, organization_id, github_repository_name, worker_id, current_branch, slack_channel_id, slack_message_ts, created_at
-		 FROM workspaces WHERE organization_id = ? ORDER BY created_at DESC`,
+		 FROM org_workspaces WHERE organization_id = ? ORDER BY created_at DESC`,
 		orgID,
 	)
 	if err != nil {
@@ -204,7 +185,7 @@ func (r *OrgWorkspaceRepository) ListByOrganizationID(orgID string) ([]*OrgWorks
 func (r *OrgWorkspaceRepository) GetByGitHubRepo(orgID, repoName string) (*OrgWorkspace, error) {
 	row := r.db.QueryRow(
 		`SELECT id, name, organization_id, github_repository_name, worker_id, current_branch, slack_channel_id, slack_message_ts, created_at
-		 FROM workspaces WHERE organization_id = ? AND github_repository_name = ?`,
+		 FROM org_workspaces WHERE organization_id = ? AND github_repository_name = ?`,
 		orgID, repoName,
 	)
 
@@ -223,7 +204,7 @@ func (r *OrgWorkspaceRepository) GetByGitHubRepo(orgID, repoName string) (*OrgWo
 func (r *OrgWorkspaceRepository) ListByBranch(branch string) ([]*OrgWorkspace, error) {
 	rows, err := r.db.Query(
 		`SELECT id, name, organization_id, github_repository_name, worker_id, current_branch, slack_channel_id, slack_message_ts, created_at
-		 FROM workspaces WHERE current_branch = ? ORDER BY created_at DESC`,
+		 FROM org_workspaces WHERE current_branch = ? ORDER BY created_at DESC`,
 		branch,
 	)
 	if err != nil {
@@ -245,14 +226,9 @@ func (r *OrgWorkspaceRepository) ListByBranch(branch string) ([]*OrgWorkspace, e
 
 // UpdateBranch updates only the current_branch field for a workspace
 func (r *OrgWorkspaceRepository) UpdateBranch(id, branch string) error {
-	var currentBranch sql.NullString
-	if branch != "" {
-		currentBranch = sql.NullString{String: branch, Valid: true}
-	}
-
 	_, err := r.db.Exec(
-		`UPDATE workspaces SET current_branch = ? WHERE id = ?`,
-		currentBranch, id,
+		`UPDATE org_workspaces SET current_branch = ? WHERE id = ?`,
+		nullString(branch), id,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update workspace branch: %w", err)
@@ -262,17 +238,9 @@ func (r *OrgWorkspaceRepository) UpdateBranch(id, branch string) error {
 
 // UpdateSlackInfo updates the Slack integration fields for a workspace
 func (r *OrgWorkspaceRepository) UpdateSlackInfo(id, channelID, messageTs string) error {
-	var slackChannelID, slackMessageTs sql.NullString
-	if channelID != "" {
-		slackChannelID = sql.NullString{String: channelID, Valid: true}
-	}
-	if messageTs != "" {
-		slackMessageTs = sql.NullString{String: messageTs, Valid: true}
-	}
-
 	_, err := r.db.Exec(
-		`UPDATE workspaces SET slack_channel_id = ?, slack_message_ts = ? WHERE id = ?`,
-		slackChannelID, slackMessageTs, id,
+		`UPDATE org_workspaces SET slack_channel_id = ?, slack_message_ts = ? WHERE id = ?`,
+		nullString(channelID), nullString(messageTs), id,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update workspace Slack info: %w", err)
