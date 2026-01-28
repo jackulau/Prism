@@ -21,10 +21,10 @@ import (
 	"github.com/jacklau/prism/internal/llm/google"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
+	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
-	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/tools"
 	"github.com/jacklau/prism/internal/tools/builtin"
 )
@@ -68,6 +68,7 @@ func main() {
 	fileHistoryRepo := repository.NewFileHistoryRepository(db.DB)
 	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
 	todoRepo := repository.NewTodoRepository(db.DB)
+	organizationRepo := repository.NewOrganizationRepository(db.DB)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -199,6 +200,7 @@ func main() {
 		ProviderKeyRepo:    providerKeyRepo,
 		IntegrationRepo:    integrationRepo,
 		FileHistoryRepo:    fileHistoryRepo,
+		OrganizationRepo:   organizationRepo,
 		LLMManager:         llmManager,
 		WSHub:              wsHub,
 		IntegrationManager: integrationManager,

@@ -39,6 +39,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
+	OrganizationRepo   *repository.OrganizationRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -295,6 +296,17 @@ func Setup(deps *Dependencies) *fiber.App {
 		stdioHandler := mcp.NewStdioHandler(deps.StdioMCPClient, deps.StdioMCPRepository)
 		stdioProtected := v1.Group("", middleware.AuthMiddleware(deps.JWTService))
 		stdioHandler.RegisterRoutes(stdioProtected)
+	}
+
+	// Organization routes (auth required)
+	if deps.OrganizationRepo != nil {
+		orgHandler := handlers.NewOrganizationHandler(deps.OrganizationRepo)
+		organizations := v1.Group("/organizations", middleware.AuthMiddleware(deps.JWTService))
+		organizations.Post("/", orgHandler.Create)
+		organizations.Get("/", orgHandler.List)
+		organizations.Get("/:id", orgHandler.GetByID)
+		organizations.Patch("/:id", orgHandler.Update)
+		organizations.Delete("/:id", orgHandler.Delete)
 	}
 
 	// Integrations routes (for Settings page)
