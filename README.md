@@ -6,7 +6,7 @@
 
 ## Features
 
-- **Multi-Provider LLM Support**: OpenAI, Anthropic, Google AI, and Ollama (local LLMs)
+- **Multi-Provider LLM Support**: OpenAI, Anthropic, Google AI, OpenRouter, Groq, DeepSeek, and Ollama
 - **Secure by Design**: AES-256 encrypted API key storage, JWT authentication, sandboxed Docker execution
 - **GitHub Integration**: OAuth-based repository access for code operations
 - **File Uploads**: Support for images, PDFs, and code files
@@ -88,12 +88,25 @@ make run-frontend
 
 ### LLM Providers
 
-Users configure their own API keys through the UI. Supported providers:
+Users configure their own API keys through the Settings UI. Prism supports a wide range of providers:
 
-- **OpenAI**: GPT-4, GPT-4 Turbo, GPT-3.5
-- **Anthropic**: Claude 3 Opus, Sonnet, Haiku
-- **Google AI**: Gemini Pro, Gemini Ultra
-- **Ollama**: Any local model (Llama, Mistral, etc.)
+| Provider | Models | Tools | Vision | Best For |
+|----------|--------|-------|--------|----------|
+| [OpenAI](https://platform.openai.com/api-keys) | GPT-4.1, o3, o4-mini | Yes | Yes | General purpose, reasoning |
+| [Anthropic](https://console.anthropic.com/settings/keys) | Claude Opus/Sonnet/Haiku 4.5 | Yes | Yes | Coding, analysis |
+| [Google AI](https://aistudio.google.com/app/apikey) | Gemini 2.5 Flash/Pro | Yes | Yes | Large context (1M tokens) |
+| [OpenRouter](https://openrouter.ai/keys) | 200+ models | Varies | Varies | Access to all models |
+| [Groq](https://console.groq.com/keys) | Llama 3.3, Mixtral | Yes | Some | Ultra-fast inference |
+| [DeepSeek](https://platform.deepseek.com/api_keys) | DeepSeek V3, R1, Coder | Yes | No | Cost-effective reasoning |
+| [Ollama](https://ollama.ai) | Any local model | Some | Some | Privacy, no API costs |
+
+#### Quick Setup
+
+1. Click the **Settings** icon in the sidebar
+2. Select a provider and enter your API key
+3. Choose a model from the dropdown
+
+For detailed setup instructions and model recommendations, see [Provider Documentation](docs/providers.md).
 
 ### GitHub OAuth Setup
 
