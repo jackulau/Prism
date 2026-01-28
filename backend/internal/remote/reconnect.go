@@ -168,6 +168,9 @@ func (rh *ReconnectHandler) HandleReconnect(req *ReconnectRequest) (*ReconnectRe
 	// Update client info if provided
 	if req.ClientInfo != nil {
 		reconnectedSession.mu.Lock()
+		if reconnectedSession.ClientInfo == nil {
+			reconnectedSession.ClientInfo = make(map[string]string)
+		}
 		for k, v := range req.ClientInfo {
 			reconnectedSession.ClientInfo[k] = v
 		}
