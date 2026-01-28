@@ -39,6 +39,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
+	ToolRepo           *repository.ToolRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -295,6 +296,18 @@ func Setup(deps *Dependencies) *fiber.App {
 		stdioHandler := mcp.NewStdioHandler(deps.StdioMCPClient, deps.StdioMCPRepository)
 		stdioProtected := v1.Group("", middleware.AuthMiddleware(deps.JWTService))
 		stdioHandler.RegisterRoutes(stdioProtected)
+	}
+
+	// Tool catalog routes (auth required)
+	if deps.ToolRepo != nil {
+		toolsCatalogHandler := handlers.NewToolsCatalogHandler(deps.ToolRepo)
+		toolsCatalog := v1.Group("/tools", middleware.AuthMiddleware(deps.JWTService))
+		toolsCatalog.Get("/", toolsCatalogHandler.ListTools)
+		toolsCatalog.Get("/slug/:slug", toolsCatalogHandler.GetToolBySlug)
+		toolsCatalog.Get("/:id", toolsCatalogHandler.GetTool)
+		toolsCatalog.Post("/", toolsCatalogHandler.CreateTool)
+		toolsCatalog.Put("/:id", toolsCatalogHandler.UpdateTool)
+		toolsCatalog.Delete("/:id", toolsCatalogHandler.DeleteTool)
 	}
 
 	// Integrations routes (for Settings page)
