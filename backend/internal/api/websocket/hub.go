@@ -161,6 +161,16 @@ const (
 	TypeSwarmStop            = "swarm.stop"
 	TypeSwarmStatus          = "swarm.status"
 	TypeSwarmList            = "swarm.list"
+
+	// Remote session message types
+	TypeRemoteHeartbeat       = "remote.heartbeat"
+	TypeRemoteHeartbeatAck    = "remote.heartbeat_ack"
+	TypeRemoteIdleWarning     = "remote.idle_warning"
+	TypeRemoteSessionExpiring = "remote.session_expiring"
+	TypeRemoteDisconnect      = "remote.disconnect"
+	TypeRemoteReconnect       = "remote.reconnect"
+	TypeRemoteReconnectAck    = "remote.reconnect_ack"
+	TypeRemoteSessionInfo     = "remote.session_info"
 )
 
 // FileContext represents file context for chat messages
@@ -812,6 +822,84 @@ func NewFileHistoryContent(historyID, filePath, content, operation, createdAt st
 			"history_id": historyID,
 			"operation":  operation,
 			"created_at": createdAt,
+		},
+	}
+}
+
+// Remote session message constructors
+
+// NewRemoteHeartbeatAck creates a new heartbeat acknowledgment message
+func NewRemoteHeartbeatAck(sessionID string, serverTime int64, nextHeartbeatMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type: TypeRemoteHeartbeatAck,
+		Metadata: map[string]interface{}{
+			"session_id":          sessionID,
+			"server_time":         serverTime,
+			"next_heartbeat_in_ms": nextHeartbeatMs,
+		},
+	}
+}
+
+// NewRemoteIdleWarning creates a new idle warning message
+func NewRemoteIdleWarning(sessionID string, idleTimeMs int64, timeoutInMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeRemoteIdleWarning,
+		Message: "Session approaching idle timeout",
+		Metadata: map[string]interface{}{
+			"session_id":    sessionID,
+			"idle_time_ms":  idleTimeMs,
+			"timeout_in_ms": timeoutInMs,
+		},
+	}
+}
+
+// NewRemoteSessionExpiring creates a new session expiring message
+func NewRemoteSessionExpiring(sessionID string, expiresInMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeRemoteSessionExpiring,
+		Message: "Session expiring soon",
+		Metadata: map[string]interface{}{
+			"session_id":    sessionID,
+			"expires_in_ms": expiresInMs,
+		},
+	}
+}
+
+// NewRemoteDisconnect creates a new disconnect message
+func NewRemoteDisconnect(sessionID, reason string, reconnectToken string, reconnectExpiryMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeRemoteDisconnect,
+		Message: reason,
+		Metadata: map[string]interface{}{
+			"session_id":          sessionID,
+			"reconnect_token":     reconnectToken,
+			"reconnect_expiry_ms": reconnectExpiryMs,
+		},
+	}
+}
+
+// NewRemoteReconnectAck creates a new reconnect acknowledgment message
+func NewRemoteReconnectAck(sessionID, newReconnectToken string, pendingMessageCount int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeRemoteReconnectAck,
+		Status: "reconnected",
+		Metadata: map[string]interface{}{
+			"session_id":            sessionID,
+			"new_reconnect_token":   newReconnectToken,
+			"pending_message_count": pendingMessageCount,
+		},
+	}
+}
+
+// NewRemoteSessionInfo creates a new session info message
+func NewRemoteSessionInfo(sessionID, state string, reconnectToken string, reconnectExpiryMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeRemoteSessionInfo,
+		Status: state,
+		Metadata: map[string]interface{}{
+			"session_id":          sessionID,
+			"reconnect_token":     reconnectToken,
+			"reconnect_expiry_ms": reconnectExpiryMs,
 		},
 	}
 }
