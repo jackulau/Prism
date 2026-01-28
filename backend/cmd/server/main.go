@@ -8,6 +8,7 @@ import (
 
 	"github.com/jacklau/prism/internal/agent"
 	"github.com/jacklau/prism/internal/api/routes"
+	"github.com/jacklau/prism/internal/api/sse"
 	"github.com/jacklau/prism/internal/api/websocket"
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database"
@@ -131,6 +132,10 @@ func main() {
 	wsHub := websocket.NewHub()
 	go wsHub.Run()
 
+	// Initialize SSE service for Server-Sent Events streaming
+	sseService := sse.NewService()
+	log.Println("SSE service initialized")
+
 	// Initialize integrations manager
 	integrationManager := integrations.NewManager()
 
@@ -201,6 +206,7 @@ func main() {
 		FileHistoryRepo:    fileHistoryRepo,
 		LLMManager:         llmManager,
 		WSHub:              wsHub,
+		SSEService:         sseService,
 		IntegrationManager: integrationManager,
 		AgentManager:       agentManager,
 		CodeRunner:         codeRunner,
