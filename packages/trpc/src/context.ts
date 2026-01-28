@@ -8,6 +8,7 @@ export interface Session {
 
 export interface Context {
   session: Session | null;
+  token: string | null;
 }
 
 interface JWTPayload extends jose.JWTPayload {
@@ -56,8 +57,8 @@ export async function createContext(
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
     const session = await validateToken(token);
-    return { session };
+    return { session, token };
   }
 
-  return { session: null };
+  return { session: null, token: null };
 }

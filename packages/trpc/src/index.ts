@@ -18,6 +18,10 @@ export {
   conflict,
 } from './utils/errors.js';
 
+// Integration router and schemas
+export { integrationsRouter, type IntegrationsRouter } from './routers/integrations/index.js';
+export * from './routers/integrations/schemas.js';
+
 export interface TRPCMiddlewareOptions {
   onError?: (opts: { error: Error; path: string | undefined }) => void;
 }
