@@ -31,6 +31,7 @@ type Dependencies struct {
 	Config             *config.Config
 	JWTService         *security.JWTService
 	EncryptionService  *security.EncryptionService
+	WorkOSService      *security.WorkOSService
 	UserRepo           *repository.UserRepository
 	SessionRepo        *repository.SessionRepository
 	ConversationRepo   *repository.ConversationRepository
@@ -69,6 +70,11 @@ func Setup(deps *Dependencies) *fiber.App {
 		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
 		AllowCredentials: true,
 	}))
+
+	// WorkOS SSO session middleware (extracts organization context from wos-session cookie)
+	if deps.WorkOSService != nil {
+		app.Use(middleware.WorkOSSessionMiddleware(deps.WorkOSService))
+	}
 
 	// Health check
 	app.Get("/health", func(c *fiber.Ctx) error {
