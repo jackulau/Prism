@@ -173,5 +173,10 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		}
 	}
 
+	// PostHog Documentation search (no API key required)
+	if err := registry.Register(NewPostHogDocsSearchTool()); err != nil {
+		return err
+	}
+
 	return nil
 }
