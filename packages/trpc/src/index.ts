@@ -18,6 +18,11 @@ export {
   conflict,
 } from './utils/errors.js';
 
+// Workers router exports
+export { workersRouter, type WorkersRouter } from './routers/workers/index.js';
+export * from './routers/workers/schemas.js';
+export { workerService } from './services/worker.js';
+
 export interface TRPCMiddlewareOptions {
   onError?: (opts: { error: Error; path: string | undefined }) => void;
 }
