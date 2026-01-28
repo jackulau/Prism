@@ -21,6 +21,7 @@ import (
 	"github.com/jacklau/prism/internal/llm/google"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
+	"github.com/jacklau/prism/internal/llm/together"
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
@@ -124,6 +125,10 @@ func main() {
 	// Google AI (API key set via UI)
 	googleClient := google.NewClient("")
 	llmManager.RegisterProvider(googleClient)
+
+	// Together AI (API key set via UI)
+	togetherClient := together.NewClient("")
+	llmManager.RegisterProvider(togetherClient)
 
 	log.Printf("Registered %d LLM providers", len(llmManager.ListProviders()))
 
