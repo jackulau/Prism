@@ -5,10 +5,33 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 )
+
+// RemoteAccessConfig contains configuration for remote access functionality
+type RemoteAccessConfig struct {
+	// Enabled determines if remote access is available
+	Enabled bool
+	// Port for remote connections (separate from main server port)
+	Port int
+	// Host to bind for remote access (default: 0.0.0.0)
+	Host string
+	// PasswordHash is the Argon2id hashed password for remote access authentication
+	PasswordHash string
+	// TLSCertPath is the path to TLS certificate for secure connections
+	TLSCertPath string
+	// TLSKeyPath is the path to TLS private key
+	TLSKeyPath string
+	// MaxConnections is the maximum concurrent remote connections allowed
+	MaxConnections int
+	// SessionTimeout is the duration after which idle remote sessions expire
+	SessionTimeout time.Duration
+	// AllowedIPs is a whitelist of IP addresses/CIDRs allowed to connect (empty = allow all)
+	AllowedIPs []string
+}
 
 type Config struct {
 	// Server
@@ -83,6 +106,9 @@ type Config struct {
 
 	// Guest Mode
 	GuestModeEnabled bool
+
+	// Remote Access
+	RemoteAccess RemoteAccessConfig
 }
 
 func Load() (*Config, error) {
@@ -162,10 +188,28 @@ func Load() (*Config, error) {
 
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+
+		// Remote Access - disabled by default for security
+		RemoteAccess: RemoteAccessConfig{
+			Enabled:        getBoolEnv("REMOTE_ACCESS_ENABLED", false),
+			Port:           getIntEnv("REMOTE_ACCESS_PORT", 8443),
+			Host:           getEnv("REMOTE_ACCESS_HOST", "0.0.0.0"),
+			PasswordHash:   getEnv("REMOTE_ACCESS_PASSWORD_HASH", ""),
+			TLSCertPath:    getEnv("REMOTE_ACCESS_TLS_CERT", ""),
+			TLSKeyPath:     getEnv("REMOTE_ACCESS_TLS_KEY", ""),
+			MaxConnections: getIntEnv("REMOTE_ACCESS_MAX_CONNECTIONS", 10),
+			SessionTimeout: getDurationEnv("REMOTE_ACCESS_SESSION_TIMEOUT", 1*time.Hour),
+			AllowedIPs:     getStringSliceEnv("REMOTE_ACCESS_ALLOWED_IPS", nil),
+		},
 	}
 
 	// Validate security configuration in production
 	if err := cfg.validateSecurity(); err != nil {
+		return nil, err
+	}
+
+	// Validate remote access configuration
+	if err := cfg.validateRemoteAccess(); err != nil {
 		return nil, err
 	}
 
@@ -201,6 +245,65 @@ func (cfg *Config) validateSecurity() error {
 	if cfg.GuestModeEnabled && isProduction {
 		log.Println("WARNING: Guest mode is enabled in production. This allows unauthenticated access.")
 	}
+
+	return nil
+}
+
+// validateRemoteAccess checks remote access configuration
+func (cfg *Config) validateRemoteAccess() error {
+	// Skip validation if remote access is disabled
+	if !cfg.RemoteAccess.Enabled {
+		return nil
+	}
+
+	isProduction := cfg.Environment == "production"
+
+	// Validate port is different from main server port
+	mainPort := 8080
+	if p, err := strconv.Atoi(cfg.Port); err == nil {
+		mainPort = p
+	}
+	if cfg.RemoteAccess.Port == mainPort {
+		return fmt.Errorf("REMOTE_ACCESS_PORT (%d) must be different from main server PORT (%d)", cfg.RemoteAccess.Port, mainPort)
+	}
+
+	// Validate port range
+	if cfg.RemoteAccess.Port < 1 || cfg.RemoteAccess.Port > 65535 {
+		return fmt.Errorf("REMOTE_ACCESS_PORT must be between 1 and 65535, got %d", cfg.RemoteAccess.Port)
+	}
+
+	// Require password hash when enabled
+	if cfg.RemoteAccess.PasswordHash == "" {
+		if isProduction {
+			return fmt.Errorf("REMOTE_ACCESS_PASSWORD_HASH must be set when remote access is enabled in production")
+		}
+		log.Println("WARNING: Remote access enabled without password. Set REMOTE_ACCESS_PASSWORD_HASH for security.")
+	}
+
+	// Require TLS in production
+	if isProduction {
+		if cfg.RemoteAccess.TLSCertPath == "" || cfg.RemoteAccess.TLSKeyPath == "" {
+			return fmt.Errorf("REMOTE_ACCESS_TLS_CERT and REMOTE_ACCESS_TLS_KEY must be set for remote access in production")
+		}
+	} else {
+		// Warn in development if TLS not configured
+		if cfg.RemoteAccess.TLSCertPath == "" || cfg.RemoteAccess.TLSKeyPath == "" {
+			log.Println("WARNING: Remote access TLS not configured. Connections will be unencrypted.")
+		}
+	}
+
+	// Warn if no IP restrictions in production
+	if isProduction && len(cfg.RemoteAccess.AllowedIPs) == 0 {
+		log.Println("WARNING: Remote access has no IP restrictions. Consider setting REMOTE_ACCESS_ALLOWED_IPS.")
+	}
+
+	// Validate max connections
+	if cfg.RemoteAccess.MaxConnections < 1 {
+		return fmt.Errorf("REMOTE_ACCESS_MAX_CONNECTIONS must be at least 1, got %d", cfg.RemoteAccess.MaxConnections)
+	}
+
+	log.Printf("Remote access enabled on %s:%d (max %d connections, timeout %s)",
+		cfg.RemoteAccess.Host, cfg.RemoteAccess.Port, cfg.RemoteAccess.MaxConnections, cfg.RemoteAccess.SessionTimeout)
 
 	return nil
 }
@@ -246,6 +349,24 @@ func getBoolEnv(key string, defaultValue bool) bool {
 		}
 		if value == "false" || value == "0" || value == "no" {
 			return false
+		}
+	}
+	return defaultValue
+}
+
+func getStringSliceEnv(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		// Split by comma and trim whitespace
+		parts := strings.Split(value, ",")
+		result := make([]string, 0, len(parts))
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				result = append(result, trimmed)
+			}
+		}
+		if len(result) > 0 {
+			return result
 		}
 	}
 	return defaultValue
