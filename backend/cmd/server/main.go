@@ -98,6 +98,14 @@ func main() {
 			FileHistoryRepo: fileHistoryRepo,
 			TodoRepo:        todoRepo,
 		}
+		// Add PostHog tool config if enabled
+		if cfg.PostHogAPIKey != "" && cfg.PostHogProjectID != "" {
+			toolConfig.PostHogToolConfig = &builtin.PostHogToolConfig{
+				APIKey:    cfg.PostHogAPIKey,
+				ProjectID: cfg.PostHogProjectID,
+				Host:      cfg.PostHogEndpoint,
+			}
+		}
 		if err := builtin.RegisterAll(toolRegistry, sandboxService, codeRunner, db.DB, toolConfig); err != nil {
 			log.Printf("Warning: Failed to register built-in tools: %v", err)
 		} else {

@@ -69,6 +69,7 @@ type Config struct {
 	PostHogEndpoint      string
 	PostHogBatchSize     int
 	PostHogFlushInterval time.Duration
+	PostHogProjectID     string // Project ID for PostHog query tools
 
 	// GitHub Webhooks
 	GitHubWebhookEnabled bool
@@ -148,6 +149,7 @@ func Load() (*Config, error) {
 		PostHogEndpoint:      getEnv("POSTHOG_ENDPOINT", "https://app.posthog.com"),
 		PostHogBatchSize:     getIntEnv("POSTHOG_BATCH_SIZE", 10),
 		PostHogFlushInterval: getDurationEnv("POSTHOG_FLUSH_INTERVAL", 30*time.Second),
+		PostHogProjectID:     getEnv("POSTHOG_PROJECT_ID", ""),
 
 		// GitHub Webhooks
 		GitHubWebhookEnabled: getBoolEnv("GITHUB_WEBHOOK_ENABLED", false),
