@@ -121,6 +121,11 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		return err
 	}
 
+	// Sandbox list files tool for ls -la based file listing
+	if err := registry.Register(NewListFilesSandboxTool(sandbox)); err != nil {
+		return err
+	}
+
 	// WebFetch tool for fetching web content
 	webFetchConfig := WebFetchConfig{
 		LLMManager: config.LLMProvider,
