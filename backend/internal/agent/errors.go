@@ -27,3 +27,14 @@ var (
 	ErrManagerNotInitialized = errors.New("agent manager not initialized")
 	ErrInvalidAgentConfig    = errors.New("invalid agent configuration")
 )
+
+// Workflow step errors
+var (
+	ErrSandboxNotReady       = errors.New("sandbox is not ready")
+	ErrInvalidRepository     = errors.New("invalid repository")
+	ErrTokenValidationFailed = errors.New("token validation failed")
+	ErrBranchCreationFailed  = errors.New("branch creation failed")
+	ErrCommitFailed          = errors.New("commit failed")
+	ErrMessageLoadFailed     = errors.New("failed to load messages")
+	ErrNoChangesToCommit     = errors.New("no changes to commit")
+)
