@@ -55,6 +55,11 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		return err
 	}
 
+	// Sandbox-specific file update tool
+	if err := registry.Register(NewUpdateFileSandboxTool(sandbox, config.FileHistoryRepo)); err != nil {
+		return err
+	}
+
 	// File history tools (for viewing and restoring previous versions)
 	if config.FileHistoryRepo != nil {
 		if err := registry.Register(NewFileHistoryListTool(config.FileHistoryRepo)); err != nil {
