@@ -83,6 +83,12 @@ type Config struct {
 
 	// Guest Mode
 	GuestModeEnabled bool
+
+	// WorkOS SSO Configuration
+	WorkOSAPIKey         string
+	WorkOSClientID       string
+	WorkOSRedirectURI    string
+	WorkOSCookiePassword string
 }
 
 func Load() (*Config, error) {
@@ -162,6 +168,12 @@ func Load() (*Config, error) {
 
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+
+		// WorkOS SSO Configuration
+		WorkOSAPIKey:         getEnv("WORKOS_API_KEY", ""),
+		WorkOSClientID:       getEnv("WORKOS_CLIENT_ID", ""),
+		WorkOSRedirectURI:    getEnv("WORKOS_REDIRECT_URI", "http://localhost:8080/api/v1/auth/sso/callback"),
+		WorkOSCookiePassword: getEnv("WORKOS_COOKIE_PASSWORD", ""),
 	}
 
 	// Validate security configuration in production
@@ -200,6 +212,14 @@ func (cfg *Config) validateSecurity() error {
 	// Warn about guest mode in production
 	if cfg.GuestModeEnabled && isProduction {
 		log.Println("WARNING: Guest mode is enabled in production. This allows unauthenticated access.")
+	}
+
+	// Warn if WorkOS SSO is not fully configured
+	workosConfigured := cfg.WorkOSAPIKey != "" && cfg.WorkOSClientID != "" && cfg.WorkOSCookiePassword != ""
+	if !workosConfigured {
+		if cfg.WorkOSAPIKey != "" || cfg.WorkOSClientID != "" {
+			log.Println("WARNING: WorkOS SSO is partially configured. Set WORKOS_API_KEY, WORKOS_CLIENT_ID, and WORKOS_COOKIE_PASSWORD to enable SSO.")
+		}
 	}
 
 	return nil
