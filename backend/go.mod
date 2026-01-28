@@ -13,6 +13,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/sqweek/dialog v0.0.0-20240226140203-065105509627
+	github.com/workos/workos-go/v4 v4.46.1
 	golang.org/x/crypto v0.16.0
 )
 
@@ -21,6 +22,7 @@ require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/fasthttp/websocket v1.5.4 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
