@@ -83,6 +83,16 @@ type Config struct {
 
 	// Guest Mode
 	GuestModeEnabled bool
+
+	// Remote Access
+	RemoteAccessEnabled         bool
+	RemoteAccessPort            string
+	RemoteAccessTLSCertFile     string
+	RemoteAccessTLSKeyFile      string
+	RemoteAccessMaxConnections  int
+	RemoteAccessMaxPerIP        int
+	RemoteAccessSessionDuration time.Duration
+	RemoteAccessPasswordHash    string
 }
 
 func Load() (*Config, error) {
@@ -162,6 +172,16 @@ func Load() (*Config, error) {
 
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+
+		// Remote Access - disabled by default for security
+		RemoteAccessEnabled:         getBoolEnv("REMOTE_ACCESS_ENABLED", false),
+		RemoteAccessPort:            getEnv("REMOTE_ACCESS_PORT", "8443"),
+		RemoteAccessTLSCertFile:     getEnv("REMOTE_ACCESS_TLS_CERT", ""),
+		RemoteAccessTLSKeyFile:      getEnv("REMOTE_ACCESS_TLS_KEY", ""),
+		RemoteAccessMaxConnections:  getIntEnv("REMOTE_ACCESS_MAX_CONNECTIONS", 100),
+		RemoteAccessMaxPerIP:        getIntEnv("REMOTE_ACCESS_MAX_PER_IP", 10),
+		RemoteAccessSessionDuration: getDurationEnv("REMOTE_ACCESS_SESSION_DURATION", 24*time.Hour),
+		RemoteAccessPasswordHash:    getEnv("REMOTE_ACCESS_PASSWORD_HASH", ""),
 	}
 
 	// Validate security configuration in production
@@ -200,6 +220,22 @@ func (cfg *Config) validateSecurity() error {
 	// Warn about guest mode in production
 	if cfg.GuestModeEnabled && isProduction {
 		log.Println("WARNING: Guest mode is enabled in production. This allows unauthenticated access.")
+	}
+
+	// Validate remote access configuration
+	if cfg.RemoteAccessEnabled {
+		if cfg.RemoteAccessTLSCertFile == "" || cfg.RemoteAccessTLSKeyFile == "" {
+			if isProduction {
+				return fmt.Errorf("REMOTE_ACCESS_TLS_CERT and REMOTE_ACCESS_TLS_KEY must be set when remote access is enabled in production")
+			}
+			log.Println("WARNING: Remote access enabled without TLS certificates. Generate certificates for production.")
+		}
+		if cfg.RemoteAccessPasswordHash == "" {
+			if isProduction {
+				return fmt.Errorf("REMOTE_ACCESS_PASSWORD_HASH must be set when remote access is enabled in production")
+			}
+			log.Println("WARNING: Remote access enabled without password. Set REMOTE_ACCESS_PASSWORD_HASH for production.")
+		}
 	}
 
 	return nil
