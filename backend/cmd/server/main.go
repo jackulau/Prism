@@ -57,6 +57,12 @@ func main() {
 
 	jwtService := security.NewJWTService(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
 
+	// Initialize WorkOS service for SSO
+	workosService := security.NewWorkOSService(cfg)
+	if workosService.IsConfigured() {
+		log.Println("WorkOS SSO service initialized")
+	}
+
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db.DB)
 	sessionRepo := repository.NewSessionRepository(db.DB)
@@ -191,6 +197,7 @@ func main() {
 		Config:             cfg,
 		JWTService:         jwtService,
 		EncryptionService:  encryptionService,
+		WorkOSService:      workosService,
 		UserRepo:           userRepo,
 		SessionRepo:        sessionRepo,
 		ConversationRepo:   conversationRepo,

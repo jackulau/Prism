@@ -83,6 +83,12 @@ type Config struct {
 
 	// Guest Mode
 	GuestModeEnabled bool
+
+	// WorkOS SSO
+	WorkOSAPIKey         string
+	WorkOSClientID       string
+	WorkOSCookiePassword string
+	WorkOSRedirectURL    string
 }
 
 func Load() (*Config, error) {
@@ -162,6 +168,12 @@ func Load() (*Config, error) {
 
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+
+		// WorkOS SSO
+		WorkOSAPIKey:         getEnv("WORKOS_API_KEY", ""),
+		WorkOSClientID:       getEnv("WORKOS_CLIENT_ID", ""),
+		WorkOSCookiePassword: getEnv("WORKOS_COOKIE_PASSWORD", ""),
+		WorkOSRedirectURL:    getEnv("WORKOS_REDIRECT_URL", ""),
 	}
 
 	// Validate security configuration in production
