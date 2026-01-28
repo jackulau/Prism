@@ -39,6 +39,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
+	AgentTaskRepo      *repository.AgentTaskRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -225,6 +226,17 @@ func Setup(deps *Dependencies) *fiber.App {
 		workspace.Get("/recent", workspaceHandler.ListRecentWorkspaces)
 		workspace.Post("/:id/current", workspaceHandler.SetCurrentWorkspace)
 		workspace.Delete("/:id", workspaceHandler.RemoveWorkspace)
+	}
+
+	// Agent tasks routes (auth required)
+	if deps.AgentTaskRepo != nil {
+		tasksHandler := handlers.NewTasksHandler(deps.AgentTaskRepo, deps.AgentManager)
+		tasks := v1.Group("/tasks", middleware.AuthMiddleware(deps.JWTService))
+		tasks.Get("/", tasksHandler.ListTasks)
+		tasks.Get("/stats", tasksHandler.GetTaskStats)
+		tasks.Get("/:id", tasksHandler.GetTask)
+		tasks.Delete("/:id", tasksHandler.CancelTask)
+		tasks.Post("/:id/retry", tasksHandler.RetryTask)
 	}
 
 	// GitHub webhook routes

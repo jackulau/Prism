@@ -57,6 +57,11 @@ func NewManager(llmManager *llm.Manager, config ManagerConfig) *Manager {
 	}
 }
 
+// SetTaskPersister sets the task persister for database persistence
+func (m *Manager) SetTaskPersister(persister TaskPersister) {
+	m.pool.SetPersister(persister)
+}
+
 // Start initializes and starts the manager
 func (m *Manager) Start() {
 	m.mu.Lock()

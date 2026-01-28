@@ -161,6 +161,14 @@ const (
 	TypeSwarmStop            = "swarm.stop"
 	TypeSwarmStatus          = "swarm.status"
 	TypeSwarmList            = "swarm.list"
+
+	// Task queue message types
+	TypeTaskQueued    = "task.queued"
+	TypeTaskStarted   = "task.started"
+	TypeTaskProgress  = "task.progress"
+	TypeTaskCompleted = "task.completed"
+	TypeTaskFailed    = "task.failed"
+	TypeTaskCancelled = "task.cancelled"
 )
 
 // FileContext represents file context for chat messages
@@ -813,5 +821,74 @@ func NewFileHistoryContent(historyID, filePath, content, operation, createdAt st
 			"operation":  operation,
 			"created_at": createdAt,
 		},
+	}
+}
+
+// Task queue message constructors
+
+// NewTaskQueued creates a new task queued message
+func NewTaskQueued(taskID, userID, prompt string, priority int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeTaskQueued,
+		TaskID: taskID,
+		Status: "pending",
+		Metadata: map[string]interface{}{
+			"user_id":  userID,
+			"prompt":   prompt,
+			"priority": priority,
+		},
+	}
+}
+
+// NewTaskStarted creates a new task started message
+func NewTaskStarted(taskID, agentID string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeTaskStarted,
+		TaskID:  taskID,
+		AgentID: agentID,
+		Status:  "running",
+	}
+}
+
+// NewTaskProgress creates a new task progress message
+func NewTaskProgress(taskID string, progress int, message string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeTaskProgress,
+		TaskID: taskID,
+		Status: "running",
+		Metadata: map[string]interface{}{
+			"progress": progress,
+			"message":  message,
+		},
+	}
+}
+
+// NewTaskCompleted creates a new task completed message
+func NewTaskCompleted(taskID, output string, durationMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:     TypeTaskCompleted,
+		TaskID:   taskID,
+		Output:   output,
+		Status:   "completed",
+		Duration: durationMs,
+	}
+}
+
+// NewTaskFailed creates a new task failed message
+func NewTaskFailed(taskID, errorMsg string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeTaskFailed,
+		TaskID: taskID,
+		Error:  errorMsg,
+		Status: "failed",
+	}
+}
+
+// NewTaskCancelled creates a new task cancelled message
+func NewTaskCancelled(taskID string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeTaskCancelled,
+		TaskID: taskID,
+		Status: "cancelled",
 	}
 }
