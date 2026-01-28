@@ -1,8 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@prism/trpc': path.resolve(__dirname, '../packages/trpc/src'),
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -96,6 +103,10 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         ws: true,
+      },
+      '/trpc': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
       },
     },
   },

@@ -14,6 +14,7 @@ import { MetricsDropdown } from './components/MetricsDropdown'
 import { EnhancedChatPanel } from './components/chat/EnhancedChatPanel'
 import { SettingsPanel } from './components/settings/SettingsPanel'
 import { ToastContainer } from './components/Toast'
+import { TRPCProvider } from './providers/TRPCProvider'
 import { useAppStore } from './store'
 import { useSandboxStore, FileNode } from './store/sandboxStore'
 import { apiService } from './services/api'
@@ -86,6 +87,7 @@ function App() {
   }, [isConnected, setFiles])
 
   return (
+    <TRPCProvider>
     <div className="h-screen w-screen flex flex-col bg-editor-bg text-editor-text overflow-hidden">
       {/* Top Header Bar */}
       <header className="h-12 bg-editor-bg border-b border-editor-border flex items-center justify-between px-4 flex-shrink-0">
@@ -223,6 +225,7 @@ function App() {
       {/* Toast Notifications */}
       <ToastContainer />
     </div>
+    </TRPCProvider>
   )
 }
 
