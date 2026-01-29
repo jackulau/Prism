@@ -1,20 +1,52 @@
-import { useState, useEffect } from 'react'
-import { MessageSquare, Settings, FolderTree, ChevronLeft, ChevronRight, Plus, Github, Trash2, Cpu, Loader2, type LucideIcon } from 'lucide-react'
-import { useAppStore } from '../../store'
-import { ConfirmDialog } from '../ConfirmDialog'
-import { toast } from '../../store/toastStore'
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  Home,
+  MessageSquare,
+  Bot,
+  Plug,
+  BarChart3,
+  Building,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Github,
+  Trash2,
+  Loader2,
+  Cpu,
+  type LucideIcon
+} from 'lucide-react';
+import { useAppStore } from '../../store';
+import { ConfirmDialog } from '../ConfirmDialog';
+import { toast } from '../../store/toastStore';
 
 interface SidebarProps {
-  isCollapsed: boolean
-  onToggle: () => void
+  isCollapsed: boolean;
+  onToggle: () => void;
 }
 
+interface NavItem {
+  icon: LucideIcon;
+  label: string;
+  path: string;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { icon: Home, label: 'Dashboard', path: '/' },
+  { icon: MessageSquare, label: 'Workspaces', path: '/workspace' },
+  { icon: Bot, label: 'Workers', path: '/workers' },
+  { icon: Plug, label: 'Integrations', path: '/integrations' },
+  { icon: BarChart3, label: 'Usage', path: '/usage' },
+  { icon: Building, label: 'Organization', path: '/organization' },
+  { icon: Settings, label: 'Settings', path: '/settings' },
+];
+
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const {
-    isFileTreeOpen,
-    toggleFileTree,
-    toggleSettingsPanel,
-    toggleChatPanel,
     conversations,
     currentConversationId,
     loadConversations,
@@ -24,52 +56,48 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     isLoadingConversations,
     conversationsError,
     clearConversationsError,
-  } = useAppStore()
-  const [activeView, setActiveView] = useState<'chat' | 'files' | 'settings'>('chat')
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  } = useAppStore();
+
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Load conversations on mount
   useEffect(() => {
-    loadConversations()
-  }, [loadConversations])
-
-  const handleFilesClick = () => {
-    setActiveView('files')
-    toggleFileTree()
-  }
-
-  const handleSettingsClick = () => {
-    setActiveView('settings')
-    toggleSettingsPanel()
-  }
-
-  const handleChatClick = () => {
-    setActiveView('chat')
-    toggleChatPanel()
-  }
+    loadConversations();
+  }, [loadConversations]);
 
   const handleNewChat = async () => {
-    await createNewConversation()
-  }
+    const id = await createNewConversation();
+    if (id) {
+      navigate(`/workspace/${id}`);
+    }
+  };
 
   const handleConversationClick = async (id: string) => {
     if (id !== currentConversationId) {
-      await loadMessages(id)
+      await loadMessages(id);
     }
-  }
+    navigate(`/workspace/${id}`);
+  };
 
   const handleDeleteConversation = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    setDeleteConfirmId(id)
-  }
+    e.stopPropagation();
+    setDeleteConfirmId(id);
+  };
 
   const confirmDelete = async () => {
     if (deleteConfirmId) {
-      await deleteConversation(deleteConfirmId)
-      toast.success('Conversation deleted')
-      setDeleteConfirmId(null)
+      await deleteConversation(deleteConfirmId);
+      toast.success('Conversation deleted');
+      setDeleteConfirmId(null);
     }
-  }
+  };
+
+  const isActivePath = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/';
+    }
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <div
@@ -86,6 +114,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
               alt="Prism"
               className="w-8 h-8 rounded-lg object-contain"
             />
+            <span className="font-semibold text-editor-text">Prism</span>
           </div>
         )}
         <button
@@ -98,33 +127,23 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 p-2 overflow-y-auto">
+        {/* Main Navigation */}
         <div className="space-y-1">
-          <NavItem
-            icon={MessageSquare}
-            label="Chat"
-            isCollapsed={isCollapsed}
-            active={activeView === 'chat'}
-            onClick={handleChatClick}
-          />
-          <NavItem
-            icon={FolderTree}
-            label="Files"
-            isCollapsed={isCollapsed}
-            active={isFileTreeOpen}
-            onClick={handleFilesClick}
-          />
-          <NavItem
-            icon={Settings}
-            label="Settings"
-            isCollapsed={isCollapsed}
-            active={activeView === 'settings'}
-            onClick={handleSettingsClick}
-          />
+          {NAV_ITEMS.map((item) => (
+            <NavItemButton
+              key={item.path}
+              icon={item.icon}
+              label={item.label}
+              isCollapsed={isCollapsed}
+              active={isActivePath(item.path)}
+              onClick={() => navigate(item.path)}
+            />
+          ))}
         </div>
 
         {/* Conversations List */}
-        {!isCollapsed && (
-          <div className="mt-4">
+        {!isCollapsed && location.pathname.startsWith('/workspace') && (
+          <div className="mt-6">
             <div className="flex items-center justify-between px-2 mb-2">
               <span className="text-xs font-semibold text-editor-muted uppercase tracking-wider">
                 Conversations
@@ -144,8 +163,8 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 {conversationsError}
                 <button
                   onClick={() => {
-                    clearConversationsError()
-                    loadConversations()
+                    clearConversationsError();
+                    loadConversations();
                   }}
                   className="ml-2 underline hover:no-underline"
                 >
@@ -199,7 +218,7 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
           title="View on GitHub"
         >
           <Github size={18} />
-          {!isCollapsed && <span className="text-sm">Prism</span>}
+          {!isCollapsed && <span className="text-sm">Open Source</span>}
         </a>
       </div>
 
@@ -214,18 +233,18 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         onCancel={() => setDeleteConfirmId(null)}
       />
     </div>
-  )
+  );
 }
 
-interface NavItemProps {
-  icon: LucideIcon
-  label: string
-  isCollapsed: boolean
-  active?: boolean
-  onClick?: () => void
+interface NavItemButtonProps {
+  icon: LucideIcon;
+  label: string;
+  isCollapsed: boolean;
+  active?: boolean;
+  onClick?: () => void;
 }
 
-function NavItem({ icon: Icon, label, isCollapsed, active, onClick }: NavItemProps) {
+function NavItemButton({ icon: Icon, label, isCollapsed, active, onClick }: NavItemButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -239,20 +258,20 @@ function NavItem({ icon: Icon, label, isCollapsed, active, onClick }: NavItemPro
       <Icon size={18} />
       {!isCollapsed && <span className="text-sm font-medium">{label}</span>}
     </button>
-  )
+  );
 }
 
 interface ConversationItemProps {
-  title: string
-  provider?: string
-  model?: string
-  active?: boolean
-  onClick?: () => void
-  onDelete?: (e: React.MouseEvent) => void
+  title: string;
+  provider?: string;
+  model?: string;
+  active?: boolean;
+  onClick?: () => void;
+  onDelete?: (e: React.MouseEvent) => void;
 }
 
 function ConversationItem({ title, provider, model, active, onClick, onDelete }: ConversationItemProps) {
-  const isOllama = provider === 'ollama'
+  const isOllama = provider === 'ollama';
   return (
     <button
       onClick={onClick}
@@ -284,5 +303,5 @@ function ConversationItem({ title, provider, model, active, onClick, onDelete }:
         </div>
       )}
     </button>
-  )
+  );
 }
