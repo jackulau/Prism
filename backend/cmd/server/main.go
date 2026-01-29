@@ -74,7 +74,7 @@ func main() {
 	fileHistoryRepo := repository.NewFileHistoryRepository(db.DB)
 	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
 	todoRepo := repository.NewTodoRepository(db.DB)
-	toolRepo := repository.NewToolRepository(db.DB)
+	agentTaskRepo := repository.NewAgentTaskRepository(db.DB)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -193,9 +193,10 @@ func main() {
 
 	// Initialize agent manager for parallel agent execution
 	agentManager := agent.NewManager(llmManager, agent.DefaultManagerConfig())
-	agentManager.SetAgentRepository(agentRepo)
+	// Set up task persister for the agent pool to enable database persistence
+	agentManager.SetTaskPersister(agent.NewRepositoryPersister(agentTaskRepo))
 	agentManager.Start()
-	log.Println("Agent manager started")
+	log.Println("Agent manager started (with task persistence)")
 
 	// Initialize MCP components
 	mcpServer := mcp.NewServer(toolRegistry)
@@ -242,7 +243,7 @@ func main() {
 		ProviderKeyRepo:    providerKeyRepo,
 		IntegrationRepo:    integrationRepo,
 		FileHistoryRepo:    fileHistoryRepo,
-		ToolRepo:           toolRepo,
+		AgentTaskRepo:      agentTaskRepo,
 		LLMManager:         llmManager,
 		WSHub:              wsHub,
 		IntegrationManager: integrationManager,

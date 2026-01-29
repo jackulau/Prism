@@ -174,25 +174,13 @@ const (
 	TypeSwarmStatus          = "swarm.status"
 	TypeSwarmList            = "swarm.list"
 
-	// Workflow message types
-	TypeWorkflowRun           = "workflow.run"
-	TypeWorkflowStarted       = "workflow.started"
-	TypeWorkflowPaused        = "workflow.paused"
-	TypeWorkflowResumed       = "workflow.resumed"
-	TypeWorkflowCompleted     = "workflow.completed"
-	TypeWorkflowFailed        = "workflow.failed"
-	TypeWorkflowCancelled     = "workflow.cancelled"
-	TypeWorkflowPause         = "workflow.pause"
-	TypeWorkflowResume        = "workflow.resume"
-	TypeWorkflowStop          = "workflow.stop"
-	TypeWorkflowStatus        = "workflow.status"
-	TypeWorkflowProgress      = "workflow.progress"
-	TypeWorkflowStepStarted   = "workflow.step_started"
-	TypeWorkflowStepCompleted = "workflow.step_completed"
-	TypeWorkflowStepFailed    = "workflow.step_failed"
-	TypeWorkflowStepSkipped   = "workflow.step_skipped"
-	TypeWorkflowWaitingInput  = "workflow.waiting_input"
-	TypeWorkflowProvideInput  = "workflow.provide_input"
+	// Task queue message types
+	TypeTaskQueued    = "task.queued"
+	TypeTaskStarted   = "task.started"
+	TypeTaskProgress  = "task.progress"
+	TypeTaskCompleted = "task.completed"
+	TypeTaskFailed    = "task.failed"
+	TypeTaskCancelled = "task.cancelled"
 )
 
 // FileContext represents file context for chat messages
@@ -865,108 +853,71 @@ func NewFileHistoryContent(historyID, filePath, content, operation, createdAt st
 	}
 }
 
-// Sandbox lifecycle message constructors
+// Task queue message constructors
 
-// SandboxInfo represents sandbox information in messages
-type SandboxInfo struct {
-	ID         string `json:"id"`
-	Provider   string `json:"provider"`
-	Status     string `json:"status"`
-	PreviewURL string `json:"preview_url,omitempty"`
-	Framework  string `json:"framework,omitempty"`
-	CreatedAt  int64  `json:"created_at,omitempty"`
-	UpdatedAt  int64  `json:"updated_at,omitempty"`
-}
-
-// DeploymentInfo represents deployment information in messages
-type DeploymentInfo struct {
-	ID         string `json:"id"`
-	Status     string `json:"status"`
-	PreviewURL string `json:"preview_url,omitempty"`
-	Error      string `json:"error,omitempty"`
-	CreatedAt  int64  `json:"created_at,omitempty"`
-	ReadyAt    int64  `json:"ready_at,omitempty"`
-}
-
-// NewSandboxCreated creates a new sandbox created message
-func NewSandboxCreated(sandbox SandboxInfo) *OutgoingMessage {
+// NewTaskQueued creates a new task queued message
+func NewTaskQueued(taskID, userID, prompt string, priority int) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:   TypeSandboxCreated,
-		Status: "created",
+		Type:   TypeTaskQueued,
+		TaskID: taskID,
+		Status: "pending",
 		Metadata: map[string]interface{}{
-			"sandbox": sandbox,
+			"user_id":  userID,
+			"prompt":   prompt,
+			"priority": priority,
 		},
 	}
 }
 
-// NewSandboxDeploying creates a new sandbox deploying message
-func NewSandboxDeploying(sandboxID string) *OutgoingMessage {
+// NewTaskStarted creates a new task started message
+func NewTaskStarted(taskID, agentID string) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:   TypeSandboxDeploying,
-		Status: "deploying",
+		Type:    TypeTaskStarted,
+		TaskID:  taskID,
+		AgentID: agentID,
+		Status:  "running",
+	}
+}
+
+// NewTaskProgress creates a new task progress message
+func NewTaskProgress(taskID string, progress int, message string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:   TypeTaskProgress,
+		TaskID: taskID,
+		Status: "running",
 		Metadata: map[string]interface{}{
-			"sandbox_id": sandboxID,
+			"progress": progress,
+			"message":  message,
 		},
 	}
 }
 
-// NewSandboxDeployed creates a new sandbox deployed message
-func NewSandboxDeployed(sandboxID string, deployment DeploymentInfo) *OutgoingMessage {
+// NewTaskCompleted creates a new task completed message
+func NewTaskCompleted(taskID, output string, durationMs int64) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:       TypeSandboxDeployed,
-		Status:     "deployed",
-		PreviewURL: deployment.PreviewURL,
-		Metadata: map[string]interface{}{
-			"sandbox_id": sandboxID,
-			"deployment": deployment,
-		},
+		Type:     TypeTaskCompleted,
+		TaskID:   taskID,
+		Output:   output,
+		Status:   "completed",
+		Duration: durationMs,
 	}
 }
 
-// NewSandboxFailed creates a new sandbox failed message
-func NewSandboxFailed(sandboxID, errorMsg string) *OutgoingMessage {
+// NewTaskFailed creates a new task failed message
+func NewTaskFailed(taskID, errorMsg string) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:   TypeSandboxFailed,
-		Status: "failed",
+		Type:   TypeTaskFailed,
+		TaskID: taskID,
 		Error:  errorMsg,
-		Metadata: map[string]interface{}{
-			"sandbox_id": sandboxID,
-		},
+		Status: "failed",
 	}
 }
 
-// NewSandboxLogs creates a new sandbox logs message
-func NewSandboxLogs(sandboxID, message, level, source string, timestamp int64) *OutgoingMessage {
+// NewTaskCancelled creates a new task cancelled message
+func NewTaskCancelled(taskID string) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:    TypeSandboxLogs,
-		Content: message,
-		Metadata: map[string]interface{}{
-			"sandbox_id": sandboxID,
-			"level":      level,
-			"source":     source,
-			"timestamp":  timestamp,
-		},
-	}
-}
-
-// NewSandboxDeleted creates a new sandbox deleted message
-func NewSandboxDeleted(sandboxID string) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:   TypeSandboxDeleted,
-		Status: "deleted",
-		Metadata: map[string]interface{}{
-			"sandbox_id": sandboxID,
-		},
-	}
-}
-
-// NewSandboxStatus creates a new sandbox status message
-func NewSandboxStatus(sandbox SandboxInfo) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:   TypeSandboxStatus,
-		Status: sandbox.Status,
-		Metadata: map[string]interface{}{
-			"sandbox": sandbox,
-		},
+		Type:   TypeTaskCancelled,
+		TaskID: taskID,
+		Status: "cancelled",
 	}
 }

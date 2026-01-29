@@ -43,7 +43,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
-	ToolRepo           *repository.ToolRepository
+	AgentTaskRepo      *repository.AgentTaskRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -270,17 +270,15 @@ func Setup(deps *Dependencies) *fiber.App {
 		workspace.Delete("/:id", workspaceHandler.RemoveWorkspace)
 	}
 
-	// Sandbox provider routes (Vercel, etc.) - auth required
-	if deps.SandboxManager != nil {
-		sandboxHandler := handlers.NewSandboxHandler(deps.SandboxManager)
-		sandboxProviders := v1.Group("/sandbox/providers", middleware.AuthMiddleware(deps.JWTService))
-		sandboxProviders.Get("/", sandboxHandler.ListProviders)
-		sandboxProviders.Post("/", sandboxHandler.CreateSandbox)
-		sandboxProviders.Post("/:id/deploy", sandboxHandler.DeploySandbox)
-		sandboxProviders.Get("/:id", sandboxHandler.GetSandbox)
-		sandboxProviders.Get("/:id/logs", sandboxHandler.GetSandboxLogs)
-		sandboxProviders.Delete("/:id", sandboxHandler.DeleteSandbox)
-		sandboxProviders.Get("/:id/preview", sandboxHandler.GetPreviewURL)
+	// Agent tasks routes (auth required)
+	if deps.AgentTaskRepo != nil {
+		tasksHandler := handlers.NewTasksHandler(deps.AgentTaskRepo, deps.AgentManager)
+		tasks := v1.Group("/tasks", middleware.AuthMiddleware(deps.JWTService))
+		tasks.Get("/", tasksHandler.ListTasks)
+		tasks.Get("/stats", tasksHandler.GetTaskStats)
+		tasks.Get("/:id", tasksHandler.GetTask)
+		tasks.Delete("/:id", tasksHandler.CancelTask)
+		tasks.Post("/:id/retry", tasksHandler.RetryTask)
 	}
 
 	// GitHub webhook routes

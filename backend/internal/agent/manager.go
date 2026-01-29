@@ -63,9 +63,9 @@ func NewManager(llmManager *llm.Manager, config ManagerConfig) *Manager {
 	}
 }
 
-// SetAgentRepository sets the agent repository for persistence
-func (m *Manager) SetAgentRepository(repo *repository.AgentRepository) {
-	m.agentRepo = repo
+// SetTaskPersister sets the task persister for database persistence
+func (m *Manager) SetTaskPersister(persister TaskPersister) {
+	m.pool.SetPersister(persister)
 }
 
 // Start initializes and starts the manager

@@ -2,12 +2,22 @@ package agent
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jacklau/prism/internal/llm"
 )
+
+// TaskPersister interface for persisting tasks to database
+type TaskPersister interface {
+	CreateTask(task *Task) error
+	UpdateTaskStatus(taskID string, status TaskStatus) error
+	SetTaskResult(taskID string, result map[string]interface{}) error
+	SetTaskError(taskID string, errorMsg string) error
+	GetPendingTasks(limit int) ([]*Task, error)
+}
 
 // PoolConfig holds configuration for the agent pool
 type PoolConfig struct {
@@ -49,6 +59,9 @@ type Pool struct {
 	// Event broadcasting
 	eventBroadcaster *EventBroadcaster
 
+	// Persistence (optional)
+	persister TaskPersister
+
 	// State
 	running bool
 	runMu   sync.RWMutex
@@ -70,6 +83,11 @@ func NewPool(llmManager *llm.Manager, config PoolConfig) *Pool {
 	}
 }
 
+// SetPersister sets the task persister for database persistence
+func (p *Pool) SetPersister(persister TaskPersister) {
+	p.persister = persister
+}
+
 // Start begins the pool's background processing
 func (p *Pool) Start() {
 	p.runMu.Lock()
@@ -80,7 +98,42 @@ func (p *Pool) Start() {
 	p.running = true
 	p.runMu.Unlock()
 
+	// Recover pending tasks from database on startup
+	if p.persister != nil {
+		if err := p.RecoverTasks(); err != nil {
+			log.Printf("Warning: failed to recover pending tasks: %v", err)
+		}
+	}
+
 	go p.processQueue()
+}
+
+// RecoverTasks recovers pending tasks from the database after server restart
+func (p *Pool) RecoverTasks() error {
+	if p.persister == nil {
+		return nil
+	}
+
+	tasks, err := p.persister.GetPendingTasks(p.config.QueueCapacity)
+	if err != nil {
+		return err
+	}
+
+	p.queueMu.Lock()
+	defer p.queueMu.Unlock()
+
+	recovered := 0
+	for _, task := range tasks {
+		if p.taskQueue.Push(task) {
+			recovered++
+		}
+	}
+
+	if recovered > 0 {
+		log.Printf("Recovered %d pending tasks from database", recovered)
+	}
+
+	return nil
 }
 
 // Stop gracefully shuts down the pool
@@ -133,6 +186,16 @@ func (p *Pool) Submit(task *Task, agentConfig AgentConfig) (string, error) {
 	// Store agent config in task if not already set
 	if task.AgentConfig == nil {
 		task.AgentConfig = &agentConfig
+	}
+
+	// Set initial status
+	task.Status = TaskStatusPending
+
+	// Persist task to database if persister is available
+	if p.persister != nil {
+		if err := p.persister.CreateTask(task); err != nil {
+			log.Printf("Warning: failed to persist task %s: %v", task.ID, err)
+		}
 	}
 
 	p.queueMu.Lock()
@@ -327,6 +390,16 @@ func (p *Pool) executeTask(task *Task) {
 
 // runAgent runs an agent with a task
 func (p *Pool) runAgent(agent *Agent, task *Task) {
+	// Update task status to running
+	task.Status = TaskStatusRunning
+	now := time.Now()
+	task.StartedAt = &now
+	if p.persister != nil {
+		if err := p.persister.UpdateTaskStatus(task.ID, TaskStatusRunning); err != nil {
+			log.Printf("Warning: failed to update task %s status to running: %v", task.ID, err)
+		}
+	}
+
 	// Set up timeout
 	timeout := p.config.DefaultTimeout
 	if task.Timeout > 0 {
@@ -345,15 +418,50 @@ func (p *Pool) runAgent(agent *Agent, task *Task) {
 
 	// Start the agent
 	if err := agent.Start(ctx, task); err != nil {
+		// Update task status to failed
+		task.Status = TaskStatusFailed
+		task.Error = err.Error()
+		completedAt := time.Now()
+		task.CompletedAt = &completedAt
+		if p.persister != nil {
+			p.persister.UpdateTaskStatus(task.ID, TaskStatusFailed)
+			p.persister.SetTaskError(task.ID, err.Error())
+		}
 		return
 	}
 
 	// Wait for completion or cancellation
 	select {
-	case <-agent.Results():
+	case result := <-agent.Results():
 		// Agent completed
+		if result.Success {
+			task.Status = TaskStatusCompleted
+			task.Result = map[string]interface{}{
+				"output":   result.Output,
+				"duration": result.Duration.Milliseconds(),
+			}
+			if p.persister != nil {
+				p.persister.UpdateTaskStatus(task.ID, TaskStatusCompleted)
+				p.persister.SetTaskResult(task.ID, task.Result)
+			}
+		} else {
+			task.Status = TaskStatusFailed
+			task.Error = result.Error
+			if p.persister != nil {
+				p.persister.UpdateTaskStatus(task.ID, TaskStatusFailed)
+				p.persister.SetTaskError(task.ID, result.Error)
+			}
+		}
+		completedAt := time.Now()
+		task.CompletedAt = &completedAt
 	case <-ctx.Done():
 		agent.Stop()
+		task.Status = TaskStatusCancelled
+		completedAt := time.Now()
+		task.CompletedAt = &completedAt
+		if p.persister != nil {
+			p.persister.UpdateTaskStatus(task.ID, TaskStatusCancelled)
+		}
 	}
 
 	// Cleanup agent after some time

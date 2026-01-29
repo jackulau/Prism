@@ -323,6 +323,25 @@ func (db *DB) Migrate() error {
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// Agent tasks for persistent task queue
+		`CREATE TABLE IF NOT EXISTS agent_tasks (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			prompt TEXT NOT NULL,
+			context TEXT,
+			priority INTEGER DEFAULT 1,
+			status TEXT DEFAULT 'pending',
+			agent_config TEXT,
+			metadata TEXT,
+			result TEXT,
+			error TEXT,
+			callback_url TEXT,
+			callback_data TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			started_at DATETIME,
+			completed_at DATETIME
+		)`,
+
 		// User integrations (generic per-user integration configs)
 		`CREATE TABLE IF NOT EXISTS user_integrations (
 			id TEXT PRIMARY KEY,
@@ -430,11 +449,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_agent_executions_user_id ON agent_executions(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_agent_executions_status ON agent_executions(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_agent_executions_provider ON agent_executions(provider)`,
-		`CREATE INDEX IF NOT EXISTS idx_agent_messages_execution_id ON agent_messages(execution_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_execution_id ON agent_tool_calls(execution_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_tasks_status ON agent_tasks(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_tasks_user_id ON agent_tasks(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_tasks_user_status ON agent_tasks(user_id, status)`,
 	}
 
 	for _, migration := range migrations {

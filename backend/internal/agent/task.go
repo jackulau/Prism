@@ -30,13 +30,19 @@ const (
 // Task represents a unit of work to be executed by an agent
 type Task struct {
 	ID          string                 `json:"id"`
+	UserID      string                 `json:"user_id,omitempty"`       // Owner of the task
 	Prompt      string                 `json:"prompt"`
 	Context     string                 `json:"context,omitempty"`
 	Priority    TaskPriority           `json:"priority"`
-	AgentConfig *AgentConfig           `json:"agent_config,omitempty"` // Optional: override default agent config
+	Status      TaskStatus             `json:"status"`                  // Current execution status
+	AgentConfig *AgentConfig           `json:"agent_config,omitempty"`  // Optional: override default agent config
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Result      map[string]interface{} `json:"result,omitempty"`        // Execution result
+	Error       string                 `json:"error,omitempty"`         // Error message if failed
 	CreatedAt   time.Time              `json:"created_at"`
-	Timeout     time.Duration          `json:"timeout,omitempty"` // Optional timeout for task execution
+	StartedAt   *time.Time             `json:"started_at,omitempty"`    // When execution started
+	CompletedAt *time.Time             `json:"completed_at,omitempty"`  // When execution completed
+	Timeout     time.Duration          `json:"timeout,omitempty"`       // Optional timeout for task execution
 
 	// Callback configuration
 	CallbackURL  string            `json:"callback_url,omitempty"`
@@ -52,6 +58,7 @@ func NewTask(prompt string, opts ...TaskOption) *Task {
 		ID:        uuid.New().String(),
 		Prompt:    prompt,
 		Priority:  TaskPriorityNormal,
+		Status:    TaskStatusPending,
 		CreatedAt: time.Now(),
 		Metadata:  make(map[string]interface{}),
 	}
@@ -67,6 +74,13 @@ func NewTask(prompt string, opts ...TaskOption) *Task {
 func WithTaskID(id string) TaskOption {
 	return func(t *Task) {
 		t.ID = id
+	}
+}
+
+// WithUserID sets the user ID for the task
+func WithUserID(userID string) TaskOption {
+	return func(t *Task) {
+		t.UserID = userID
 	}
 }
 
