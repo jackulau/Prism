@@ -3,6 +3,12 @@ import { persist } from 'zustand/middleware';
 import { wsService } from '../services/websocket';
 import { apiService } from '../services/api';
 
+// SSO callback state interface
+export interface SSOCallbackState {
+  code: string;
+  state: string;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -301,6 +307,57 @@ export const refreshAuth = async (): Promise<boolean> => {
   })();
 
   return refreshPromise;
+};
+
+// SSO Authentication
+export const initiateSSO = async (organization: string): Promise<void> => {
+  const response = await apiService.ssoAuthorize(organization);
+  if (response.error) {
+    throw new Error(response.error);
+  }
+  if (response.data?.authorization_url) {
+    window.location.href = response.data.authorization_url;
+  } else {
+    throw new Error('No authorization URL received');
+  }
+};
+
+export const handleSSOCallback = async (code: string, state: string): Promise<void> => {
+  const { setUser, setTokens } = useAuthStore.getState();
+
+  const response = await apiService.ssoCallback(code, state);
+  if (response.error) {
+    throw new Error(response.error);
+  }
+  if (!response.data) {
+    throw new Error('Invalid response from SSO callback');
+  }
+
+  setTokens(response.data.access_token, response.data.refresh_token);
+  setUser({
+    id: response.data.user.id,
+    email: response.data.user.email,
+    createdAt: response.data.user.created_at,
+  });
+
+  // Connect services with token
+  apiService.setToken(response.data.access_token);
+  wsService.connect(response.data.access_token);
+
+  // Clear URL params after successful SSO
+  window.history.replaceState({}, document.title, window.location.pathname);
+};
+
+// Check for SSO callback params in URL
+export const getSSOCallbackParams = (): SSOCallbackState | null => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+
+  if (code && state) {
+    return { code, state };
+  }
+  return null;
 };
 
 // Track ongoing init to prevent concurrent attempts
