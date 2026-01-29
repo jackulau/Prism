@@ -359,6 +359,57 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
 		`ALTER TABLE users ADD COLUMN github_connected_at DATETIME`,
 
+		// Agent executions table for tracking agent runs
+		`CREATE TABLE IF NOT EXISTS agent_executions (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			provider TEXT NOT NULL,
+			llm_provider TEXT NOT NULL,
+			model TEXT NOT NULL,
+			agent_name TEXT,
+			status TEXT NOT NULL DEFAULT 'pending',
+			prompt_tokens INTEGER DEFAULT 0,
+			completion_tokens INTEGER DEFAULT 0,
+			total_tokens INTEGER DEFAULT 0,
+			input_cost REAL DEFAULT 0,
+			output_cost REAL DEFAULT 0,
+			total_cost REAL DEFAULT 0,
+			currency TEXT DEFAULT 'USD',
+			error TEXT,
+			started_at DATETIME,
+			completed_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			metadata TEXT
+		)`,
+
+		// Agent messages table for conversation history within agent executions
+		`CREATE TABLE IF NOT EXISTS agent_messages (
+			id TEXT PRIMARY KEY,
+			execution_id TEXT NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+			role TEXT NOT NULL,
+			content TEXT NOT NULL,
+			tool_calls TEXT,
+			tool_call_id TEXT,
+			prompt_tokens INTEGER DEFAULT 0,
+			completion_tokens INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Agent tool calls table for tracking individual tool executions
+		`CREATE TABLE IF NOT EXISTS agent_tool_calls (
+			id TEXT PRIMARY KEY,
+			execution_id TEXT NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+			message_id TEXT REFERENCES agent_messages(id) ON DELETE SET NULL,
+			tool_name TEXT NOT NULL,
+			parameters TEXT NOT NULL,
+			output TEXT,
+			error TEXT,
+			status TEXT NOT NULL DEFAULT 'pending',
+			duration_ms INTEGER,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			completed_at DATETIME
+		)`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
@@ -382,9 +433,11 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_organizations_workos_id ON organizations(workos_organization_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_organization_members_org_id ON organization_members(organization_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_organization_members_user_id ON organization_members(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_executions_user_id ON agent_executions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_executions_status ON agent_executions(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_executions_provider ON agent_executions(provider)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_messages_execution_id ON agent_messages(execution_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_execution_id ON agent_tool_calls(execution_id)`,
 	}
 
 	for _, migration := range migrations {
