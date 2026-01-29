@@ -325,65 +325,6 @@ func (cfg *Config) validateSecurity() error {
 	return nil
 }
 
-// validateRemoteAccess checks remote access configuration
-func (cfg *Config) validateRemoteAccess() error {
-	// Skip validation if remote access is disabled
-	if !cfg.RemoteAccess.Enabled {
-		return nil
-	}
-
-	isProduction := cfg.Environment == "production"
-
-	// Validate port is different from main server port
-	mainPort := 8080
-	if p, err := strconv.Atoi(cfg.Port); err == nil {
-		mainPort = p
-	}
-	if cfg.RemoteAccess.Port == mainPort {
-		return fmt.Errorf("REMOTE_ACCESS_PORT (%d) must be different from main server PORT (%d)", cfg.RemoteAccess.Port, mainPort)
-	}
-
-	// Validate port range
-	if cfg.RemoteAccess.Port < 1 || cfg.RemoteAccess.Port > 65535 {
-		return fmt.Errorf("REMOTE_ACCESS_PORT must be between 1 and 65535, got %d", cfg.RemoteAccess.Port)
-	}
-
-	// Require password hash when enabled
-	if cfg.RemoteAccess.PasswordHash == "" {
-		if isProduction {
-			return fmt.Errorf("REMOTE_ACCESS_PASSWORD_HASH must be set when remote access is enabled in production")
-		}
-		log.Println("WARNING: Remote access enabled without password. Set REMOTE_ACCESS_PASSWORD_HASH for security.")
-	}
-
-	// Require TLS in production
-	if isProduction {
-		if cfg.RemoteAccess.TLSCertPath == "" || cfg.RemoteAccess.TLSKeyPath == "" {
-			return fmt.Errorf("REMOTE_ACCESS_TLS_CERT and REMOTE_ACCESS_TLS_KEY must be set for remote access in production")
-		}
-	} else {
-		// Warn in development if TLS not configured
-		if cfg.RemoteAccess.TLSCertPath == "" || cfg.RemoteAccess.TLSKeyPath == "" {
-			log.Println("WARNING: Remote access TLS not configured. Connections will be unencrypted.")
-		}
-	}
-
-	// Warn if no IP restrictions in production
-	if isProduction && len(cfg.RemoteAccess.AllowedIPs) == 0 {
-		log.Println("WARNING: Remote access has no IP restrictions. Consider setting REMOTE_ACCESS_ALLOWED_IPS.")
-	}
-
-	// Validate max connections
-	if cfg.RemoteAccess.MaxConnections < 1 {
-		return fmt.Errorf("REMOTE_ACCESS_MAX_CONNECTIONS must be at least 1, got %d", cfg.RemoteAccess.MaxConnections)
-	}
-
-	log.Printf("Remote access enabled on %s:%d (max %d connections, timeout %s)",
-		cfg.RemoteAccess.Host, cfg.RemoteAccess.Port, cfg.RemoteAccess.MaxConnections, cfg.RemoteAccess.SessionTimeout)
-
-	return nil
-}
-
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
