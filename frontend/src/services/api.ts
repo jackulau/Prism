@@ -31,10 +31,29 @@ class ApiService {
         headers,
       });
 
-      const data = await response.json();
+      // Handle empty responses (204 No Content, etc.)
+      const contentLength = response.headers.get('Content-Length');
+      const contentType = response.headers.get('Content-Type');
+      const hasJsonContent = contentType?.includes('application/json');
+      const hasContent = contentLength !== '0' && contentLength !== null;
+
+      let data: T | undefined;
+      if (hasContent || hasJsonContent) {
+        const text = await response.text();
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch {
+            // Response is not valid JSON
+            if (!response.ok) {
+              return { error: text || 'An error occurred' };
+            }
+          }
+        }
+      }
 
       if (!response.ok) {
-        return { error: data.error || 'An error occurred' };
+        return { error: (data as { error?: string })?.error || 'An error occurred' };
       }
 
       return { data };
@@ -439,6 +458,25 @@ class ApiService {
     return this.request<{ success: boolean }>(`/cloud/agents/${agentId}/messages`, {
       method: 'POST',
       body: JSON.stringify({ message, images }),
+    });
+  }
+
+  // SSO Authentication
+  async ssoAuthorize(organization: string) {
+    return this.request<{ authorization_url: string }>('/auth/sso/authorize', {
+      method: 'POST',
+      body: JSON.stringify({ organization }),
+    });
+  }
+
+  async ssoCallback(code: string, state: string) {
+    return this.request<{
+      access_token: string;
+      refresh_token: string;
+      user: { id: string; email: string; created_at: string };
+    }>('/auth/sso/callback', {
+      method: 'POST',
+      body: JSON.stringify({ code, state }),
     });
   }
 }

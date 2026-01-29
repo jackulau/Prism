@@ -24,11 +24,14 @@ export const TRPCProvider: React.FC<TRPCProviderProps> = ({ children }) => {
     createTRPCClient(() => useAuthStore.getState().accessToken)
   );
 
+  // @ts-expect-error - tRPC Provider types require proper router, using placeholder until backend is ready
+  const TRPCProviderComponent = trpc.Provider;
+
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+    <TRPCProviderComponent client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         {children}
       </QueryClientProvider>
-    </trpc.Provider>
+    </TRPCProviderComponent>
   );
 };

@@ -121,17 +121,35 @@ class TypedApiClient {
 
       if (timeoutId) clearTimeout(timeoutId);
 
-      const json = await response.json();
+      // Handle empty responses safely
+      const contentLength = response.headers.get('Content-Length');
+      const contentType = response.headers.get('Content-Type');
+      const hasJsonContent = contentType?.includes('application/json');
+      const hasContent = contentLength !== '0' && contentLength !== null;
+
+      let json: unknown;
+      if (hasContent || hasJsonContent) {
+        const text = await response.text();
+        if (text) {
+          try {
+            json = JSON.parse(text);
+          } catch {
+            if (!response.ok) {
+              return { success: false, error: text || `HTTP ${response.status}: ${response.statusText}` };
+            }
+          }
+        }
+      }
 
       if (!response.ok) {
         return {
           success: false,
-          error: json.error || `HTTP ${response.status}: ${response.statusText}`,
+          error: (json as { error?: string })?.error || `HTTP ${response.status}: ${response.statusText}`,
         };
       }
 
       // Validate response with Zod
-      if (!skipValidation) {
+      if (!skipValidation && json !== undefined) {
         const result = schema.safeParse(json);
         if (!result.success) {
           console.warn('API response validation failed:', result.error.issues);

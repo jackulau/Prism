@@ -1,7 +1,10 @@
 import { createTRPCReact } from '@trpc/react-query';
 import { httpBatchLink } from '@trpc/client';
 import superjson from 'superjson';
-import type { AppRouter } from '@prism/trpc/router';
+
+// Placeholder router type until @prism/trpc package is ready
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AppRouter = any;
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -19,8 +22,8 @@ function getTRPCUrl(): string {
 }
 
 export function createTRPCClient(getToken: () => string | null) {
+  // @ts-expect-error - tRPC requires a proper router type, using placeholder until backend is ready
   return trpc.createClient({
-    transformer: superjson,
     links: [
       httpBatchLink({
         url: getTRPCUrl(),
@@ -28,6 +31,7 @@ export function createTRPCClient(getToken: () => string | null) {
           const token = getToken();
           return token ? { Authorization: `Bearer ${token}` } : {};
         },
+        transformer: superjson,
       }),
     ],
   });

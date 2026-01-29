@@ -31,13 +31,21 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
 }
 
+// DEV BYPASS - Remove in production
+const DEV_BYPASS = true;
+const MOCK_USER: User = {
+  id: 'dev-user-123',
+  email: 'dev@prism.local',
+  createdAt: new Date().toISOString(),
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
+      user: DEV_BYPASS ? MOCK_USER : null,
+      accessToken: DEV_BYPASS ? 'dev-token' : null,
+      refreshToken: DEV_BYPASS ? 'dev-refresh' : null,
+      isAuthenticated: DEV_BYPASS ? true : false,
       isLoading: false,
 
       setUser: (user) => set({

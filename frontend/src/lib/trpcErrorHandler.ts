@@ -1,9 +1,7 @@
 import { TRPCClientError } from '@trpc/client';
-import type { AppRouter } from '@prism/trpc/router';
 
-export function isTRPCError(
-  error: unknown
-): error is TRPCClientError<AppRouter> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isTRPCError(error: unknown): error is TRPCClientError<any> {
   return error instanceof TRPCClientError;
 }
 

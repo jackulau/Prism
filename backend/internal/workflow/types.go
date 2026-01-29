@@ -1,231 +1,332 @@
 package workflow
 
 import (
-	"context"
+	"encoding/json"
 	"time"
-
-	"github.com/jacklau/prism/internal/database/repository"
-	"github.com/jacklau/prism/internal/llm"
-	"github.com/jacklau/prism/internal/sandbox"
 )
 
-// WorkflowStep represents a step in the workflow execution
-type WorkflowStep string
-
-const (
-	StepLoadAgent         WorkflowStep = "load_agent"
-	StepValidateGitHub    WorkflowStep = "validate_github"
-	StepCreateSandbox     WorkflowStep = "create_sandbox"
-	StepLoadHistory       WorkflowStep = "load_history"
-	StepCreateBranch      WorkflowStep = "create_branch"
-	StepRunLLM            WorkflowStep = "run_llm"
-	StepSaveResponse      WorkflowStep = "save_response"
-	StepCommitChanges     WorkflowStep = "commit_changes"
-	StepCleanupSandbox    WorkflowStep = "cleanup_sandbox"
-	StepMarkComplete      WorkflowStep = "mark_complete"
-)
-
-// WorkflowStatus represents the status of a workflow execution
+// WorkflowStatus represents the current status of a workflow
 type WorkflowStatus string
 
 const (
-	WorkflowStatusPending   WorkflowStatus = "pending"
-	WorkflowStatusRunning   WorkflowStatus = "running"
-	WorkflowStatusCompleted WorkflowStatus = "completed"
-	WorkflowStatusFailed    WorkflowStatus = "failed"
-	WorkflowStatusCancelled WorkflowStatus = "cancelled"
+	StatusPending   WorkflowStatus = "pending"
+	StatusRunning   WorkflowStatus = "running"
+	StatusPaused    WorkflowStatus = "paused"
+	StatusCompleted WorkflowStatus = "completed"
+	StatusFailed    WorkflowStatus = "failed"
+	StatusCancelled WorkflowStatus = "cancelled"
 )
 
-// WorkflowRepositories holds all required repositories for workflow execution
-type WorkflowRepositories struct {
-	Agent          AgentRepository
-	Conversation   *repository.ConversationRepository
-	Message        *repository.MessageRepository
-	GitHub         GitHubRepository
-	AgentExecution *AgentExecutionRepository
-	TokenUsage     *TokenUsageRepository
-}
+// StepStatus represents the status of a workflow step
+type StepStatus string
 
-// AgentRepository defines the interface for agent data access
-type AgentRepository interface {
-	GetByID(ctx context.Context, id string) (*AgentData, error)
-	UpdateStatus(ctx context.Context, id string, status string, errorMsg string) error
-	UpdateBranch(ctx context.Context, id string, branchName string) error
-}
+const (
+	StepStatusPending   StepStatus = "pending"
+	StepStatusRunning   StepStatus = "running"
+	StepStatusCompleted StepStatus = "completed"
+	StepStatusFailed    StepStatus = "failed"
+	StepStatusSkipped   StepStatus = "skipped"
+)
 
-// AgentData represents agent data from the database
-type AgentData struct {
-	ID             string            `json:"id"`
-	UserID         string            `json:"user_id"`
-	Name           string            `json:"name"`
-	Description    string            `json:"description"`
-	RepoURL        string            `json:"repo_url"`
-	BranchName     string            `json:"branch_name"`
-	ConversationID string            `json:"conversation_id"`
-	Provider       string            `json:"provider"`
-	Model          string            `json:"model"`
-	SystemPrompt   string            `json:"system_prompt"`
-	Tools          []llm.ToolDefinition `json:"tools"`
-	Status         string            `json:"status"`
-	CurrentTask    string            `json:"current_task"`
-	Metadata       map[string]string `json:"metadata"`
-	CreatedAt      time.Time         `json:"created_at"`
-	UpdatedAt      time.Time         `json:"updated_at"`
-}
+// StepType represents the type of a workflow step
+type StepType string
 
-// GitHubRepository defines the interface for GitHub token management
-type GitHubRepository interface {
-	GetToken(ctx context.Context, userID string) (string, error)
-	ValidateToken(ctx context.Context, token string) (bool, error)
-}
+const (
+	StepTypeAgent     StepType = "agent"     // Run agent with prompt
+	StepTypeTool      StepType = "tool"      // Execute specific tool
+	StepTypeCondition StepType = "condition" // Evaluate condition
+	StepTypeParallel  StepType = "parallel"  // Run multiple steps in parallel
+	StepTypeWait      StepType = "wait"      // Wait for external input
+	StepTypeTransform StepType = "transform" // Transform data
+)
 
-// SandboxContext holds the context for a sandbox environment
-type SandboxContext struct {
-	UserID     string
-	WorkDir    string
-	RepoURL    string
-	BranchName string
-	Service    *sandbox.Service
-	GitClient  GitClient
-	CloneDepth int
-}
-
-// GitClient defines the interface for git operations
-type GitClient interface {
-	Clone(ctx context.Context, url, dest, token string) error
-	CreateBranch(ctx context.Context, workDir, branchName string) error
-	Checkout(ctx context.Context, workDir, branchName string) error
-	Add(ctx context.Context, workDir string, paths ...string) error
-	Commit(ctx context.Context, workDir, message string) error
-	Push(ctx context.Context, workDir, remote, branch, token string) error
-	HasChanges(ctx context.Context, workDir string) (bool, error)
-	GetCurrentBranch(ctx context.Context, workDir string) (string, error)
-}
-
-// LLMLoopConfig configures the LLM execution loop
-type LLMLoopConfig struct {
-	Agent         *AgentData
-	Messages      []llm.Message
-	Tools         []llm.ToolDefinition
-	MaxIterations int
-	SandboxCtx    *SandboxContext
-	ToolExecutor  ToolExecutor
-}
-
-// ToolExecutor defines the interface for executing tools
-type ToolExecutor interface {
-	Execute(ctx context.Context, toolCall llm.ToolCall, sandboxCtx *SandboxContext) (string, error)
-	GetAvailableTools() []llm.ToolDefinition
-}
-
-// LLMResult holds the results from an LLM execution loop
-type LLMResult struct {
-	Output       string                 `json:"output"`
-	ToolCalls    []ToolCallResult       `json:"tool_calls,omitempty"`
-	TokenUsage   *llm.Usage             `json:"token_usage,omitempty"`
-	Iterations   int                    `json:"iterations"`
-	Messages     []llm.Message          `json:"messages"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	FilesChanged []string               `json:"files_changed,omitempty"`
-}
-
-// ToolCallResult represents the result of a tool execution
-type ToolCallResult struct {
-	ToolCallID string                 `json:"tool_call_id"`
-	Name       string                 `json:"name"`
-	Parameters map[string]interface{} `json:"parameters,omitempty"`
-	Output     string                 `json:"output"`
-	Error      string                 `json:"error,omitempty"`
-	Duration   time.Duration          `json:"duration"`
-}
-
-// WorkflowEvent represents an event during workflow execution
-type WorkflowEvent struct {
-	ExecutionID string                 `json:"execution_id"`
-	AgentID     string                 `json:"agent_id"`
-	Step        WorkflowStep           `json:"step"`
-	Status      string                 `json:"status"` // "started", "completed", "failed"
-	Data        map[string]interface{} `json:"data,omitempty"`
+// Workflow represents a workflow definition and its execution state
+type Workflow struct {
+	ID          string                 `json:"id"`
+	UserID      string                 `json:"user_id"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Steps       []Step                 `json:"steps"`
+	Status      WorkflowStatus         `json:"status"`
+	CurrentStep int                    `json:"current_step"`
+	State       map[string]interface{} `json:"state,omitempty"`
 	Error       string                 `json:"error,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+	StartedAt   *time.Time             `json:"started_at,omitempty"`
+	CompletedAt *time.Time             `json:"completed_at,omitempty"`
 }
 
-// WorkflowEventHandler is a function that handles workflow events
-type WorkflowEventHandler func(event WorkflowEvent)
-
-// ExecutorConfig holds configuration for the workflow executor
-type ExecutorConfig struct {
-	MaxLLMIterations   int           `json:"max_llm_iterations"`
-	DefaultTimeout     time.Duration `json:"default_timeout"`
-	CloneDepth         int           `json:"clone_depth"`
-	AutoCommit         bool          `json:"auto_commit"`
-	CommitMessagePrefix string       `json:"commit_message_prefix"`
+// Step represents a single step in a workflow
+type Step struct {
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Description string        `json:"description,omitempty"`
+	Type        StepType      `json:"type"`
+	Config      StepConfig    `json:"config"`
+	Condition   *Condition    `json:"condition,omitempty"`   // Optional: skip if condition false
+	OnSuccess   string        `json:"on_success,omitempty"`  // Next step ID on success
+	OnFailure   string        `json:"on_failure,omitempty"`  // Next step ID on failure
+	Timeout     time.Duration `json:"timeout,omitempty"`
+	RetryPolicy *RetryPolicy  `json:"retry_policy,omitempty"`
 }
 
-// DefaultExecutorConfig returns the default executor configuration
-func DefaultExecutorConfig() ExecutorConfig {
-	return ExecutorConfig{
-		MaxLLMIterations:   50,
-		DefaultTimeout:     30 * time.Minute,
-		CloneDepth:         1,
-		AutoCommit:         true,
-		CommitMessagePrefix: "[agent] ",
-	}
+// StepConfig holds configuration for different step types
+type StepConfig struct {
+	AgentConfig     *AgentStepConfig     `json:"agent_config,omitempty"`
+	ToolConfig      *ToolStepConfig      `json:"tool_config,omitempty"`
+	ConditionConfig *ConditionConfig     `json:"condition_config,omitempty"`
+	ParallelConfig  *ParallelStepConfig  `json:"parallel_config,omitempty"`
+	WaitConfig      *WaitStepConfig      `json:"wait_config,omitempty"`
+	TransformConfig *TransformStepConfig `json:"transform_config,omitempty"`
 }
 
-// ExecutionContext holds the context for a workflow execution
-type ExecutionContext struct {
-	Context       context.Context
-	Cancel        context.CancelFunc
-	ExecutionID   string
-	AgentID       string
-	UserID        string
-	AgentData     *AgentData
-	SandboxCtx    *SandboxContext
-	GitHubToken   string
-	Messages      []llm.Message
-	LLMResult     *LLMResult
-	CurrentStep   WorkflowStep
-	StartedAt     time.Time
-	CompletedAt   *time.Time
-	Error         error
+// AgentStepConfig configures an agent execution step
+type AgentStepConfig struct {
+	Provider     string   `json:"provider"`
+	Model        string   `json:"model"`
+	SystemPrompt string   `json:"system_prompt,omitempty"`
+	Prompt       string   `json:"prompt"`               // Can include {{state.variable}} placeholders
+	Temperature  float64  `json:"temperature,omitempty"`
+	MaxTokens    int      `json:"max_tokens,omitempty"`
+	Tools        []string `json:"tools,omitempty"`      // Tool names to enable
+	OutputKey    string   `json:"output_key,omitempty"` // Key to store output in state
 }
 
-// AgentExecution represents a tracked agent execution in the database
-type AgentExecution struct {
-	ID             string     `json:"id"`
-	AgentID        string     `json:"agent_id"`
-	UserID         string     `json:"user_id"`
-	ConversationID string     `json:"conversation_id"`
-	Status         string     `json:"status"`
-	CurrentStep    string     `json:"current_step"`
-	StartedAt      *time.Time `json:"started_at"`
-	CompletedAt    *time.Time `json:"completed_at"`
-	Error          string     `json:"error"`
-	BranchName     string     `json:"branch_name"`
-	CommitSHA      string     `json:"commit_sha"`
-	Iterations     int        `json:"iterations"`
+// ToolStepConfig configures a tool execution step
+type ToolStepConfig struct {
+	ToolName   string                 `json:"tool_name"`
+	Parameters map[string]interface{} `json:"parameters"`           // Can include {{state.variable}} placeholders
+	OutputKey  string                 `json:"output_key,omitempty"` // Key to store output in state
 }
 
-// TokenUsageRecord represents a token usage record in the database
-type TokenUsageRecord struct {
-	ID               string    `json:"id"`
-	ExecutionID      string    `json:"execution_id"`
-	UserID           string    `json:"user_id"`
-	Provider         string    `json:"provider"`
-	Model            string    `json:"model"`
-	PromptTokens     int       `json:"prompt_tokens"`
-	CompletionTokens int       `json:"completion_tokens"`
-	TotalTokens      int       `json:"total_tokens"`
-	CostUSD          float64   `json:"cost_usd"`
-	CreatedAt        time.Time `json:"created_at"`
+// ConditionConfig configures a condition evaluation
+type ConditionConfig struct {
+	Expression  string `json:"expression"`   // Expression to evaluate
+	TrueBranch  string `json:"true_branch"`  // Step ID if true
+	FalseBranch string `json:"false_branch"` // Step ID if false
 }
 
-// StepResult represents the result of a workflow step
+// ParallelStepConfig configures parallel step execution
+type ParallelStepConfig struct {
+	Steps       []Step `json:"steps"`         // Steps to execute in parallel
+	WaitForAll  bool   `json:"wait_for_all"`  // Wait for all to complete
+	FailOnFirst bool   `json:"fail_on_first"` // Fail immediately on first error
+}
+
+// WaitStepConfig configures a wait step
+type WaitStepConfig struct {
+	WaitType    string        `json:"wait_type"` // "user_input", "webhook", "timeout"
+	Timeout     time.Duration `json:"timeout,omitempty"`
+	PromptText  string        `json:"prompt_text,omitempty"`  // For user input
+	WebhookPath string        `json:"webhook_path,omitempty"` // For webhook wait
+	OutputKey   string        `json:"output_key,omitempty"`
+}
+
+// TransformStepConfig configures a data transformation step
+type TransformStepConfig struct {
+	Type      string            `json:"type"` // "jq", "template", "script"
+	Template  string            `json:"template,omitempty"`
+	Script    string            `json:"script,omitempty"`
+	InputKey  string            `json:"input_key,omitempty"`
+	OutputKey string            `json:"output_key,omitempty"`
+	Mapping   map[string]string `json:"mapping,omitempty"` // Simple key mapping
+}
+
+// Condition represents a condition for step execution
+type Condition struct {
+	Type       string `json:"type"`                 // "expression", "state_check"
+	Expression string `json:"expression,omitempty"` // Expression to evaluate
+	StateKey   string `json:"state_key,omitempty"`  // Key to check in state
+	Operator   string `json:"operator,omitempty"`   // "equals", "not_equals", "exists", "contains"
+	Value      string `json:"value,omitempty"`      // Value to compare against
+}
+
+// RetryPolicy defines retry behavior for a step
+type RetryPolicy struct {
+	MaxRetries  int           `json:"max_retries"`
+	Delay       time.Duration `json:"delay"`
+	BackoffType string        `json:"backoff_type,omitempty"` // "fixed", "exponential"
+	MaxDelay    time.Duration `json:"max_delay,omitempty"`
+}
+
+// StepResult represents the result of a step execution
 type StepResult struct {
-	Step      WorkflowStep
-	Success   bool
-	Error     error
-	Data      map[string]interface{}
-	Duration  time.Duration
+	StepID      string                 `json:"step_id"`
+	StepName    string                 `json:"step_name"`
+	Status      StepStatus             `json:"status"`
+	Output      interface{}            `json:"output,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Duration    time.Duration          `json:"duration"`
+	RetryCount  int                    `json:"retry_count,omitempty"`
+	StartedAt   time.Time              `json:"started_at"`
+	CompletedAt time.Time              `json:"completed_at"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// WorkflowDefinition is used for creating new workflows
+type WorkflowDefinition struct {
+	Name         string                 `json:"name"`
+	Description  string                 `json:"description,omitempty"`
+	Steps        []Step                 `json:"steps"`
+	InitialState map[string]interface{} `json:"initial_state,omitempty"`
+}
+
+// WorkflowFilter for listing workflows
+type WorkflowFilter struct {
+	UserID string           `json:"user_id,omitempty"`
+	Status []WorkflowStatus `json:"status,omitempty"`
+	Name   string           `json:"name,omitempty"`
+	Limit  int              `json:"limit,omitempty"`
+	Offset int              `json:"offset,omitempty"`
+}
+
+// WorkflowEvent represents an event from a workflow during execution
+type WorkflowEvent struct {
+	WorkflowID string                 `json:"workflow_id"`
+	Type       WorkflowEventType      `json:"type"`
+	StepID     string                 `json:"step_id,omitempty"`
+	StepName   string                 `json:"step_name,omitempty"`
+	Data       map[string]interface{} `json:"data,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+}
+
+// WorkflowEventType represents types of workflow events
+type WorkflowEventType string
+
+const (
+	WorkflowEventStarted       WorkflowEventType = "workflow_started"
+	WorkflowEventPaused        WorkflowEventType = "workflow_paused"
+	WorkflowEventResumed       WorkflowEventType = "workflow_resumed"
+	WorkflowEventCompleted     WorkflowEventType = "workflow_completed"
+	WorkflowEventFailed        WorkflowEventType = "workflow_failed"
+	WorkflowEventCancelled     WorkflowEventType = "workflow_cancelled"
+	WorkflowEventStepStarted   WorkflowEventType = "step_started"
+	WorkflowEventStepCompleted WorkflowEventType = "step_completed"
+	WorkflowEventStepFailed    WorkflowEventType = "step_failed"
+	WorkflowEventStepSkipped   WorkflowEventType = "step_skipped"
+	WorkflowEventStepRetrying  WorkflowEventType = "step_retrying"
+	WorkflowEventStateUpdated  WorkflowEventType = "state_updated"
+	WorkflowEventWaitingInput  WorkflowEventType = "waiting_input"
+)
+
+// MarshalJSON implements custom JSON marshaling for Duration fields
+func (s Step) MarshalJSON() ([]byte, error) {
+	type Alias Step
+	return json.Marshal(&struct {
+		Timeout int64 `json:"timeout,omitempty"`
+		*Alias
+	}{
+		Timeout: int64(s.Timeout / time.Millisecond),
+		Alias:   (*Alias)(&s),
+	})
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for Duration fields
+func (s *Step) UnmarshalJSON(data []byte) error {
+	type Alias Step
+	aux := &struct {
+		Timeout int64 `json:"timeout,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	s.Timeout = time.Duration(aux.Timeout) * time.Millisecond
+	return nil
+}
+
+// Clone creates a deep copy of the workflow
+func (w *Workflow) Clone() *Workflow {
+	if w == nil {
+		return nil
+	}
+
+	clone := *w
+
+	// Deep copy steps
+	clone.Steps = make([]Step, len(w.Steps))
+	copy(clone.Steps, w.Steps)
+
+	// Deep copy state
+	if w.State != nil {
+		clone.State = make(map[string]interface{})
+		for k, v := range w.State {
+			clone.State[k] = v
+		}
+	}
+
+	return &clone
+}
+
+// GetCurrentStep returns the current step being executed
+func (w *Workflow) GetCurrentStep() *Step {
+	if w.CurrentStep < 0 || w.CurrentStep >= len(w.Steps) {
+		return nil
+	}
+	return &w.Steps[w.CurrentStep]
+}
+
+// GetStepByID finds a step by its ID
+func (w *Workflow) GetStepByID(stepID string) *Step {
+	for i := range w.Steps {
+		if w.Steps[i].ID == stepID {
+			return &w.Steps[i]
+		}
+	}
+	return nil
+}
+
+// GetStepIndex returns the index of a step by its ID
+func (w *Workflow) GetStepIndex(stepID string) int {
+	for i, step := range w.Steps {
+		if step.ID == stepID {
+			return i
+		}
+	}
+	return -1
+}
+
+// SetStateValue sets a value in the workflow state
+func (w *Workflow) SetStateValue(key string, value interface{}) {
+	if w.State == nil {
+		w.State = make(map[string]interface{})
+	}
+	w.State[key] = value
+}
+
+// GetStateValue gets a value from the workflow state
+func (w *Workflow) GetStateValue(key string) (interface{}, bool) {
+	if w.State == nil {
+		return nil, false
+	}
+	val, ok := w.State[key]
+	return val, ok
+}
+
+// IsTerminal returns true if the workflow is in a terminal state
+func (w *Workflow) IsTerminal() bool {
+	return w.Status == StatusCompleted || w.Status == StatusFailed || w.Status == StatusCancelled
+}
+
+// CanStart returns true if the workflow can be started
+func (w *Workflow) CanStart() bool {
+	return w.Status == StatusPending
+}
+
+// CanPause returns true if the workflow can be paused
+func (w *Workflow) CanPause() bool {
+	return w.Status == StatusRunning
+}
+
+// CanResume returns true if the workflow can be resumed
+func (w *Workflow) CanResume() bool {
+	return w.Status == StatusPaused
+}
+
+// CanCancel returns true if the workflow can be cancelled
+func (w *Workflow) CanCancel() bool {
+	return w.Status == StatusPending || w.Status == StatusRunning || w.Status == StatusPaused
 }

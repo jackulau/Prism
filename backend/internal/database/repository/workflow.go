@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jacklau/prism/internal/agent/workflow"
+	"github.com/jacklau/prism/internal/workflow"
 )
 
 // WorkflowRepository handles workflow persistence
