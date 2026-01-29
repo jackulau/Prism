@@ -14,6 +14,7 @@ import (
 	"github.com/jacklau/prism/internal/agent"
 	"github.com/jacklau/prism/internal/api/handlers"
 	"github.com/jacklau/prism/internal/api/middleware"
+	"github.com/jacklau/prism/internal/api/sse"
 	ws "github.com/jacklau/prism/internal/api/websocket"
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
@@ -41,6 +42,7 @@ type Dependencies struct {
 	FileHistoryRepo    *repository.FileHistoryRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
+	SSEService         *sse.Service
 	IntegrationManager *integrations.Manager
 	AgentManager       *agent.Manager
 	CodeRunner         *coderunner.Runner
@@ -182,6 +184,23 @@ func Setup(deps *Dependencies) *fiber.App {
 		// when client sends Sec-WebSocket-Protocol: auth, <token>
 		Subprotocols: []string{"auth"},
 	}))
+
+	// SSE routes (Server-Sent Events - alternative to WebSocket)
+	if deps.SSEService != nil {
+		// SSE connection endpoint - establishes event stream
+		v1.Get("/sse", middleware.AuthMiddleware(deps.JWTService), handlers.SSEHandler(deps.SSEService))
+
+		// SSE chat endpoints - for sending messages and controlling chat
+		sseChat := v1.Group("/sse", middleware.AuthMiddleware(deps.JWTService))
+		sseChat.Post("/chat", HandleSSEChat(deps, deps.SSEService))
+		sseChat.Post("/chat/stop", HandleSSEChatStop(deps, deps.SSEService))
+		sseChat.Post("/tool/confirm", HandleSSEToolConfirm(deps, deps.SSEService))
+
+		// SSE status endpoint
+		v1.Get("/sse/status", handlers.SSEStatusHandler(deps.SSEService))
+
+		log.Println("SSE streaming enabled - alternative to WebSocket")
+	}
 
 	// Provider routes (auth required)
 	providers := v1.Group("/providers", middleware.AuthMiddleware(deps.JWTService))
