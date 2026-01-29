@@ -134,19 +134,11 @@ type Config struct {
 	// Guest Mode
 	GuestModeEnabled bool
 
-	// Legacy fields for backward compatibility (deprecated)
-	// These are kept to avoid breaking existing code that references them directly
-	DatabaseURL          string // Use Database.URL instead
-	GitHubClientID       string // Use GitHub.ClientID instead
-	GitHubClientSecret   string // Use GitHub.ClientSecret instead
-	GitHubRedirectURL    string // Use GitHub.RedirectURL instead
-	GitHubWebhookEnabled bool   // Use GitHub.WebhookEnabled instead
-	GitHubWebhookSecret  string // Use GitHub.WebhookSecret instead
-	PostHogEnabled       bool   // Use Analytics.Enabled instead
-	PostHogAPIKey        string // Use Analytics.APIKey instead
-	PostHogEndpoint      string // Use Analytics.Endpoint instead
-	PostHogBatchSize     int    // Use Analytics.BatchSize instead
-	PostHogFlushInterval time.Duration // Use Analytics.FlushInterval instead
+	// WorkOS Integration
+	WorkOSEnabled       bool
+	WorkOSAPIKey        string
+	WorkOSClientID      string
+	WorkOSWebhookSecret string
 }
 
 func Load() (*Config, error) {
@@ -237,6 +229,12 @@ func Load() (*Config, error) {
 
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
+
+		// WorkOS Integration - disabled by default
+		WorkOSEnabled:       getBoolEnv("WORKOS_ENABLED", false),
+		WorkOSAPIKey:        getEnv("WORKOS_API_KEY", ""),
+		WorkOSClientID:      getEnv("WORKOS_CLIENT_ID", ""),
+		WorkOSWebhookSecret: getEnv("WORKOS_WEBHOOK_SECRET", ""),
 	}
 
 	// Set legacy fields for backward compatibility

@@ -335,24 +335,23 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
-		// Organizations (multi-tenant organization management)
+		// Organizations table for WorkOS integration
 		`CREATE TABLE IF NOT EXISTS organizations (
 			id TEXT PRIMARY KEY,
-			workos_organization_id TEXT UNIQUE,
 			name TEXT NOT NULL,
-			stripe_customer_id TEXT,
-			stripe_subscription_id TEXT,
-			subscription_tier TEXT NOT NULL DEFAULT 'FREE' CHECK(subscription_tier IN ('FREE', 'PAID', 'ENTERPRISE')),
-			subscription_status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(subscription_status IN ('ACTIVE', 'CANCELED', 'PAST_DUE', 'INCOMPLETE')),
-			cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
-			token_cost_used_microdollars INTEGER NOT NULL DEFAULT 0,
-			token_cost_limit_microdollars INTEGER NOT NULL DEFAULT 0,
-			sandbox_time_used_seconds INTEGER NOT NULL DEFAULT 0,
-			sandbox_time_limit_seconds INTEGER NOT NULL DEFAULT 0,
-			billing_period_start DATETIME,
-			billing_period_end DATETIME,
+			workos_organization_id TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Organization members (linking users to organizations)
+		`CREATE TABLE IF NOT EXISTS organization_members (
+			id TEXT PRIMARY KEY,
+			organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			role TEXT NOT NULL DEFAULT 'member',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(organization_id, user_id)
 		)`,
 
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
@@ -383,8 +382,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_organizations_workos_org_id ON organizations(workos_organization_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_organizations_stripe_customer_id ON organizations(stripe_customer_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_organizations_workos_id ON organizations(workos_organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_organization_members_org_id ON organization_members(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_organization_members_user_id ON organization_members(user_id)`,
 	}
 
 	for _, migration := range migrations {

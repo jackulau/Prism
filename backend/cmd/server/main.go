@@ -18,6 +18,7 @@ import (
 	"github.com/jacklau/prism/internal/integrations/discord"
 	"github.com/jacklau/prism/internal/integrations/posthog"
 	"github.com/jacklau/prism/internal/integrations/slack"
+	"github.com/jacklau/prism/internal/integrations/workos"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/llm/anthropic"
 	"github.com/jacklau/prism/internal/llm/deepseek"
@@ -207,11 +208,17 @@ func main() {
 	}
 	log.Println("MCP server and clients initialized")
 
-	// Initialize cloud provider manager
-	cloudProviderManager := cloudprovider.NewManager()
-	// Note: Cloud providers will be registered when their implementations are available
-	// (e.g., claude-cloud, openai-assistants)
-	log.Println("Cloud provider manager initialized")
+	// Initialize WorkOS client (optional)
+	var workosClient *workos.Client
+	if cfg.WorkOSEnabled {
+		workosClient = workos.NewClient(&workos.Config{
+			APIKey:        cfg.WorkOSAPIKey,
+			ClientID:      cfg.WorkOSClientID,
+			WebhookSecret: cfg.WorkOSWebhookSecret,
+			Enabled:       cfg.WorkOSEnabled,
+		})
+		log.Println("WorkOS client initialized")
+	}
 
 	// Setup routes
 	deps := &routes.Dependencies{
@@ -239,6 +246,8 @@ func main() {
 		MCPRepository:      mcpRepo,
 		StdioMCPClient:     stdioMCPClient,
 		StdioMCPRepository: stdioMCPRepo,
+		OrganizationRepo:   organizationRepo,
+		WorkOSClient:       workosClient,
 	}
 
 	app := routes.Setup(deps)

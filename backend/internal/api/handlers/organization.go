@@ -1,315 +1,554 @@
 package handlers
 
 import (
-	"strings"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacklau/prism/internal/database/repository"
+	"github.com/jacklau/prism/internal/integrations/workos"
 )
 
-// OrganizationHandler handles organization-related HTTP requests
+// OrganizationHandler handles organization-related endpoints
 type OrganizationHandler struct {
-	orgRepo *repository.OrganizationRepository
+	orgRepo      *repository.OrganizationRepository
+	workosClient *workos.Client
 }
 
 // NewOrganizationHandler creates a new organization handler
-func NewOrganizationHandler(orgRepo *repository.OrganizationRepository) *OrganizationHandler {
-	return &OrganizationHandler{orgRepo: orgRepo}
+func NewOrganizationHandler(
+	orgRepo *repository.OrganizationRepository,
+	workosClient *workos.Client,
+) *OrganizationHandler {
+	return &OrganizationHandler{
+		orgRepo:      orgRepo,
+		workosClient: workosClient,
+	}
 }
 
-// CreateOrganizationRequest represents a request to create an organization
-type CreateOrganizationRequest struct {
-	Name string `json:"name" validate:"required,min=1,max=255"`
-}
+// CreateOrganization creates a new organization
+func (h *OrganizationHandler) CreateOrganization(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
 
-// UpdateOrganizationRequest represents a request to update an organization
-type UpdateOrganizationRequest struct {
-	Name                       *string `json:"name,omitempty"`
-	SubscriptionTier           *string `json:"subscription_tier,omitempty"`
-	SubscriptionStatus         *string `json:"subscription_status,omitempty"`
-	CancelAtPeriodEnd          *bool   `json:"cancel_at_period_end,omitempty"`
-	TokenCostLimitMicrodollars *int64  `json:"token_cost_limit_microdollars,omitempty"`
-	SandboxTimeLimitSeconds    *int64  `json:"sandbox_time_limit_seconds,omitempty"`
-}
-
-// OrganizationResponse represents an organization response
-type OrganizationResponse struct {
-	ID                         string  `json:"id"`
-	WorkOSOrganizationID       *string `json:"workos_organization_id,omitempty"`
-	Name                       string  `json:"name"`
-	StripeCustomerID           *string `json:"stripe_customer_id,omitempty"`
-	StripeSubscriptionID       *string `json:"stripe_subscription_id,omitempty"`
-	SubscriptionTier           string  `json:"subscription_tier"`
-	SubscriptionStatus         string  `json:"subscription_status"`
-	CancelAtPeriodEnd          bool    `json:"cancel_at_period_end"`
-	TokenCostUsedMicrodollars  int64   `json:"token_cost_used_microdollars"`
-	TokenCostLimitMicrodollars int64   `json:"token_cost_limit_microdollars"`
-	SandboxTimeUsedSeconds     int64   `json:"sandbox_time_used_seconds"`
-	SandboxTimeLimitSeconds    int64   `json:"sandbox_time_limit_seconds"`
-	BillingPeriodStart         *string `json:"billing_period_start,omitempty"`
-	BillingPeriodEnd           *string `json:"billing_period_end,omitempty"`
-	CreatedAt                  string  `json:"created_at"`
-	UpdatedAt                  string  `json:"updated_at"`
-}
-
-// Valid subscription tiers
-var validSubscriptionTiers = map[string]bool{
-	"FREE":       true,
-	"PAID":       true,
-	"ENTERPRISE": true,
-}
-
-// Valid subscription statuses
-var validSubscriptionStatuses = map[string]bool{
-	"ACTIVE":     true,
-	"CANCELED":   true,
-	"PAST_DUE":   true,
-	"INCOMPLETE": true,
-}
-
-// toOrganizationResponse converts an Organization entity to an OrganizationResponse
-func toOrganizationResponse(org *repository.Organization) *OrganizationResponse {
-	resp := &OrganizationResponse{
-		ID:                         org.ID,
-		WorkOSOrganizationID:       org.WorkOSOrganizationID,
-		Name:                       org.Name,
-		StripeCustomerID:           org.StripeCustomerID,
-		StripeSubscriptionID:       org.StripeSubscriptionID,
-		SubscriptionTier:           org.SubscriptionTier,
-		SubscriptionStatus:         org.SubscriptionStatus,
-		CancelAtPeriodEnd:          org.CancelAtPeriodEnd,
-		TokenCostUsedMicrodollars:  org.TokenCostUsedMicrodollars,
-		TokenCostLimitMicrodollars: org.TokenCostLimitMicrodollars,
-		SandboxTimeUsedSeconds:     org.SandboxTimeUsedSeconds,
-		SandboxTimeLimitSeconds:    org.SandboxTimeLimitSeconds,
-		CreatedAt:                  org.CreatedAt.Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:                  org.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	var req struct {
+		Name       string `json:"name"`
+		SyncWorkOS bool   `json:"sync_workos"`
 	}
 
-	if org.BillingPeriodStart != nil {
-		formatted := org.BillingPeriodStart.Format("2006-01-02T15:04:05Z")
-		resp.BillingPeriodStart = &formatted
-	}
-	if org.BillingPeriodEnd != nil {
-		formatted := org.BillingPeriodEnd.Format("2006-01-02T15:04:05Z")
-		resp.BillingPeriodEnd = &formatted
-	}
-
-	return resp
-}
-
-// Create creates a new organization
-// POST /organizations
-func (h *OrganizationHandler) Create(c *fiber.Ctx) error {
-	var req CreateOrganizationRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
 		})
 	}
 
-	// Validate name
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
+	if req.Name == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "name is required",
 		})
 	}
-	if len(name) > 255 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "name must be at most 255 characters",
-		})
+
+	var workosOrgID string
+
+	// Optionally create in WorkOS
+	if req.SyncWorkOS && h.workosClient != nil && h.workosClient.Enabled() {
+		workosOrg, err := h.workosClient.CreateOrganization(req.Name)
+		if err != nil {
+			log.Printf("Failed to create organization in WorkOS: %v", err)
+			// Continue without WorkOS - graceful degradation
+		} else {
+			workosOrgID = workosOrg.ID
+		}
 	}
 
-	org, err := h.orgRepo.Create(name)
+	// Create in local database
+	org, err := h.orgRepo.Create(req.Name, workosOrgID)
 	if err != nil {
+		log.Printf("Failed to create organization: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create organization",
 		})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(toOrganizationResponse(org))
+	// Add the creator as an admin member
+	_, err = h.orgRepo.AddMember(org.ID, userID, "admin")
+	if err != nil {
+		log.Printf("Failed to add creator as admin: %v", err)
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"id":                     org.ID,
+		"name":                   org.Name,
+		"workos_organization_id": workosOrgID,
+		"created_at":             org.CreatedAt,
+	})
 }
 
-// GetByID retrieves an organization by ID
-// GET /organizations/:id
-func (h *OrganizationHandler) GetByID(c *fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "organization id is required",
-		})
-	}
+// GetOrganization retrieves an organization by ID
+func (h *OrganizationHandler) GetOrganization(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	orgID := c.Params("id")
 
-	org, err := h.orgRepo.GetByID(id)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to get organization",
-		})
-	}
-	if org == nil {
+	org, err := h.orgRepo.GetByID(orgID)
+	if err != nil || org == nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "organization not found",
 		})
 	}
 
-	return c.JSON(toOrganizationResponse(org))
-}
-
-// Update updates an organization
-// PATCH /organizations/:id
-func (h *OrganizationHandler) Update(c *fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "organization id is required",
+	// Check membership
+	isMember, err := h.orgRepo.IsMember(orgID, userID)
+	if err != nil || !isMember {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "access denied",
 		})
 	}
 
-	var req UpdateOrganizationRequest
+	workosOrgID := ""
+	if org.WorkOSOrganizationID.Valid {
+		workosOrgID = org.WorkOSOrganizationID.String
+	}
+
+	return c.JSON(fiber.Map{
+		"id":                     org.ID,
+		"name":                   org.Name,
+		"workos_organization_id": workosOrgID,
+		"created_at":             org.CreatedAt,
+		"updated_at":             org.UpdatedAt,
+	})
+}
+
+// UpdateOrganization updates an organization
+func (h *OrganizationHandler) UpdateOrganization(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	orgID := c.Params("id")
+
+	// Check admin role
+	role, err := h.orgRepo.GetMemberRole(orgID, userID)
+	if err != nil || role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "access denied",
+		})
+	}
+
+	org, err := h.orgRepo.GetByID(orgID)
+	if err != nil || org == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "organization not found",
+		})
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
 		})
 	}
 
-	// Get existing organization
-	org, err := h.orgRepo.GetByID(id)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to get organization",
-		})
-	}
-	if org == nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "organization not found",
+	if req.Name == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "name is required",
 		})
 	}
 
-	// Apply partial updates
-	if req.Name != nil {
-		name := strings.TrimSpace(*req.Name)
-		if name == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "name cannot be empty",
-			})
+	// Update in WorkOS if linked
+	if org.WorkOSOrganizationID.Valid && h.workosClient != nil && h.workosClient.Enabled() {
+		if err := h.workosClient.UpdateOrganization(org.WorkOSOrganizationID.String, req.Name); err != nil {
+			log.Printf("Failed to update organization in WorkOS: %v", err)
+			// Continue without WorkOS update - graceful degradation
 		}
-		if len(name) > 255 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "name must be at most 255 characters",
-			})
-		}
-		org.Name = name
 	}
 
-	if req.SubscriptionTier != nil {
-		tier := strings.ToUpper(*req.SubscriptionTier)
-		if !validSubscriptionTiers[tier] {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid subscription_tier, must be one of: FREE, PAID, ENTERPRISE",
-			})
-		}
-		org.SubscriptionTier = tier
+	workosOrgID := ""
+	if org.WorkOSOrganizationID.Valid {
+		workosOrgID = org.WorkOSOrganizationID.String
 	}
 
-	if req.SubscriptionStatus != nil {
-		status := strings.ToUpper(*req.SubscriptionStatus)
-		if !validSubscriptionStatuses[status] {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid subscription_status, must be one of: ACTIVE, CANCELED, PAST_DUE, INCOMPLETE",
-			})
-		}
-		org.SubscriptionStatus = status
-	}
-
-	if req.CancelAtPeriodEnd != nil {
-		org.CancelAtPeriodEnd = *req.CancelAtPeriodEnd
-	}
-
-	if req.TokenCostLimitMicrodollars != nil {
-		if *req.TokenCostLimitMicrodollars < 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "token_cost_limit_microdollars must be non-negative",
-			})
-		}
-		org.TokenCostLimitMicrodollars = *req.TokenCostLimitMicrodollars
-	}
-
-	if req.SandboxTimeLimitSeconds != nil {
-		if *req.SandboxTimeLimitSeconds < 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "sandbox_time_limit_seconds must be non-negative",
-			})
-		}
-		org.SandboxTimeLimitSeconds = *req.SandboxTimeLimitSeconds
-	}
-
-	if err := h.orgRepo.Update(org); err != nil {
+	// Update in local database
+	if err := h.orgRepo.Update(orgID, req.Name, workosOrgID); err != nil {
+		log.Printf("Failed to update organization: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to update organization",
 		})
 	}
 
-	return c.JSON(toOrganizationResponse(org))
+	return c.JSON(fiber.Map{
+		"id":   orgID,
+		"name": req.Name,
+	})
 }
 
-// Delete deletes an organization
-// DELETE /organizations/:id
-func (h *OrganizationHandler) Delete(c *fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "organization id is required",
+// DeleteOrganization deletes an organization
+func (h *OrganizationHandler) DeleteOrganization(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	orgID := c.Params("id")
+
+	// Check admin role
+	role, err := h.orgRepo.GetMemberRole(orgID, userID)
+	if err != nil || role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "access denied",
 		})
 	}
 
-	err := h.orgRepo.Delete(id)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": "organization not found",
-			})
+	org, err := h.orgRepo.GetByID(orgID)
+	if err != nil || org == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "organization not found",
+		})
+	}
+
+	// Delete from WorkOS if linked
+	if org.WorkOSOrganizationID.Valid && h.workosClient != nil && h.workosClient.Enabled() {
+		if err := h.workosClient.DeleteOrganization(org.WorkOSOrganizationID.String); err != nil {
+			log.Printf("Failed to delete organization from WorkOS: %v", err)
+			// Continue with local delete - graceful degradation
 		}
+	}
+
+	// Delete from local database
+	if err := h.orgRepo.Delete(orgID); err != nil {
+		log.Printf("Failed to delete organization: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to delete organization",
 		})
 	}
 
-	return c.SendStatus(fiber.StatusNoContent)
+	return c.JSON(fiber.Map{
+		"message": "organization deleted",
+	})
 }
 
-// List lists organizations with pagination
-// GET /organizations
-func (h *OrganizationHandler) List(c *fiber.Ctx) error {
-	limit := c.QueryInt("limit", 20)
-	offset := c.QueryInt("offset", 0)
+// ListOrganizations lists organizations for the current user
+func (h *OrganizationHandler) ListOrganizations(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
 
-	// Validate pagination params
-	if limit < 1 {
-		limit = 1
-	}
-	if limit > 100 {
-		limit = 100
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	organizations, err := h.orgRepo.List(limit, offset)
+	orgs, err := h.orgRepo.GetUserOrganizations(userID)
 	if err != nil {
+		log.Printf("Failed to list organizations: %v", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to list organizations",
 		})
 	}
 
-	responses := make([]*OrganizationResponse, len(organizations))
-	for i, org := range organizations {
-		responses[i] = toOrganizationResponse(org)
+	result := make([]fiber.Map, len(orgs))
+	for i, org := range orgs {
+		workosOrgID := ""
+		if org.WorkOSOrganizationID.Valid {
+			workosOrgID = org.WorkOSOrganizationID.String
+		}
+		result[i] = fiber.Map{
+			"id":                     org.ID,
+			"name":                   org.Name,
+			"workos_organization_id": workosOrgID,
+			"created_at":             org.CreatedAt,
+		}
 	}
 
 	return c.JSON(fiber.Map{
-		"organizations": responses,
-		"limit":         limit,
-		"offset":        offset,
+		"organizations": result,
+	})
+}
+
+// GetMembers retrieves members of an organization
+func (h *OrganizationHandler) GetMembers(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	orgID := c.Params("id")
+
+	// Check membership
+	isMember, err := h.orgRepo.IsMember(orgID, userID)
+	if err != nil || !isMember {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "access denied",
+		})
+	}
+
+	members, err := h.orgRepo.GetMembers(orgID)
+	if err != nil {
+		log.Printf("Failed to get organization members: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get members",
+		})
+	}
+
+	result := make([]fiber.Map, len(members))
+	for i, m := range members {
+		result[i] = fiber.Map{
+			"id":         m.ID,
+			"user_id":    m.UserID,
+			"role":       m.Role,
+			"created_at": m.CreatedAt,
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"members": result,
+	})
+}
+
+// AddMember adds a member to an organization
+func (h *OrganizationHandler) AddMember(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	orgID := c.Params("id")
+
+	// Check admin role
+	role, err := h.orgRepo.GetMemberRole(orgID, userID)
+	if err != nil || role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "access denied",
+		})
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+		Role   string `json:"role"`
+	}
+
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	if req.UserID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "user_id is required",
+		})
+	}
+
+	if req.Role == "" {
+		req.Role = "member"
+	}
+
+	member, err := h.orgRepo.AddMember(orgID, req.UserID, req.Role)
+	if err != nil {
+		log.Printf("Failed to add organization member: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to add member",
+		})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"id":         member.ID,
+		"user_id":    member.UserID,
+		"role":       member.Role,
+		"created_at": member.CreatedAt,
+	})
+}
+
+// RemoveMember removes a member from an organization
+func (h *OrganizationHandler) RemoveMember(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	orgID := c.Params("id")
+	memberUserID := c.Params("userId")
+
+	// Check admin role
+	role, err := h.orgRepo.GetMemberRole(orgID, userID)
+	if err != nil || role != "admin" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "access denied",
+		})
+	}
+
+	if err := h.orgRepo.RemoveMember(orgID, memberUserID); err != nil {
+		log.Printf("Failed to remove organization member: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to remove member",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "member removed",
+	})
+}
+
+// HandleWorkOSWebhook handles incoming WorkOS webhooks
+func (h *OrganizationHandler) HandleWorkOSWebhook(c *fiber.Ctx) error {
+	if h.workosClient == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "workos integration not configured",
+		})
+	}
+
+	// Get signature and timestamp headers
+	signature := c.Get("WorkOS-Signature")
+	timestamp := c.Get("WorkOS-Timestamp")
+
+	if signature == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "missing WorkOS-Signature header",
+		})
+	}
+
+	// Read the raw body
+	body := c.Body()
+
+	// Verify signature
+	if !h.workosClient.VerifyWebhookSignature(body, signature, timestamp) {
+		log.Printf("WorkOS webhook signature verification failed")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "invalid signature",
+		})
+	}
+
+	// Parse the event
+	event, err := h.workosClient.ParseWebhookEvent(body)
+	if err != nil {
+		log.Printf("Failed to parse WorkOS webhook event: %v", err)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "failed to parse event",
+		})
+	}
+
+	log.Printf("Received WorkOS webhook: event=%s, id=%s", event.Event, event.ID)
+
+	// Process the event based on type
+	switch event.Event {
+	case workos.EventOrganizationCreated:
+		if err := h.handleOrganizationCreated(event); err != nil {
+			log.Printf("Failed to handle organization.created: %v", err)
+		}
+
+	case workos.EventOrganizationUpdated:
+		if err := h.handleOrganizationUpdated(event); err != nil {
+			log.Printf("Failed to handle organization.updated: %v", err)
+		}
+
+	case workos.EventOrganizationDeleted:
+		if err := h.handleOrganizationDeleted(event); err != nil {
+			log.Printf("Failed to handle organization.deleted: %v", err)
+		}
+
+	default:
+		log.Printf("Unhandled WorkOS event type: %s", event.Event)
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "webhook received",
+		"id":      event.ID,
+	})
+}
+
+// handleOrganizationCreated handles organization.created webhook events
+func (h *OrganizationHandler) handleOrganizationCreated(event *workos.WebhookEvent) error {
+	// Check if we already have this organization
+	existing, err := h.orgRepo.GetByWorkOSID(event.Data.ID)
+	if err != nil {
+		return err
+	}
+
+	if existing != nil {
+		log.Printf("Organization %s already exists locally", event.Data.ID)
+		return nil
+	}
+
+	// Create the organization locally
+	_, err = h.orgRepo.Create(event.Data.Name, event.Data.ID)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Created local organization from WorkOS: %s (%s)", event.Data.Name, event.Data.ID)
+	return nil
+}
+
+// handleOrganizationUpdated handles organization.updated webhook events
+func (h *OrganizationHandler) handleOrganizationUpdated(event *workos.WebhookEvent) error {
+	// Find the local organization
+	org, err := h.orgRepo.GetByWorkOSID(event.Data.ID)
+	if err != nil {
+		return err
+	}
+
+	if org == nil {
+		log.Printf("No local organization found for WorkOS ID %s", event.Data.ID)
+		return nil
+	}
+
+	// Update the organization name
+	if err := h.orgRepo.Update(org.ID, event.Data.Name, event.Data.ID); err != nil {
+		return err
+	}
+
+	log.Printf("Updated local organization from WorkOS: %s", event.Data.ID)
+	return nil
+}
+
+// handleOrganizationDeleted handles organization.deleted webhook events
+func (h *OrganizationHandler) handleOrganizationDeleted(event *workos.WebhookEvent) error {
+	// Delete the local organization
+	if err := h.orgRepo.DeleteByWorkOSID(event.Data.ID); err != nil {
+		return err
+	}
+
+	log.Printf("Deleted local organization from WorkOS: %s", event.Data.ID)
+	return nil
+}
+
+// SyncFromWorkOS syncs all organizations from WorkOS
+func (h *OrganizationHandler) SyncFromWorkOS(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+
+	// This is an admin-only operation - you may want to add additional checks here
+	_ = userID
+
+	if h.workosClient == nil || !h.workosClient.Enabled() {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "workos integration not configured",
+		})
+	}
+
+	var synced, created, updated int
+	var cursor string
+
+	for {
+		orgs, nextCursor, err := h.workosClient.ListOrganizations(100, cursor)
+		if err != nil {
+			log.Printf("Failed to list organizations from WorkOS: %v", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to sync from workos",
+			})
+		}
+
+		for _, org := range orgs {
+			synced++
+
+			existing, err := h.orgRepo.GetByWorkOSID(org.ID)
+			if err != nil {
+				log.Printf("Error checking organization %s: %v", org.ID, err)
+				continue
+			}
+
+			if existing == nil {
+				// Create new organization
+				if _, err := h.orgRepo.Create(org.Name, org.ID); err != nil {
+					log.Printf("Error creating organization %s: %v", org.ID, err)
+				} else {
+					created++
+				}
+			} else {
+				// Update existing organization
+				if err := h.orgRepo.Update(existing.ID, org.Name, org.ID); err != nil {
+					log.Printf("Error updating organization %s: %v", org.ID, err)
+				} else {
+					updated++
+				}
+			}
+		}
+
+		if nextCursor == "" {
+			break
+		}
+		cursor = nextCursor
+	}
+
+	log.Printf("WorkOS sync complete: synced=%d, created=%d, updated=%d", synced, created, updated)
+
+	return c.JSON(fiber.Map{
+		"message": "sync complete",
+		"synced":  synced,
+		"created": created,
+		"updated": updated,
 	})
 }
