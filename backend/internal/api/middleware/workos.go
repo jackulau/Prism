@@ -17,7 +17,7 @@ func WorkOSSessionMiddleware(workosService *security.WorkOSService) fiber.Handle
 		}
 
 		// Decrypt and validate session
-		session, err := workosService.DecryptSession(cookie)
+		session, err := workosService.DecryptSessionCookie(cookie)
 		if err != nil {
 			// Invalid session, clear cookie and continue
 			c.Cookie(&fiber.Cookie{

@@ -70,9 +70,9 @@ func (h *WorkOSHandler) Authorize(c *fiber.Ctx) error {
 		})
 	}
 
-	authURL, err := h.workosService.GenerateAuthorizationURL(security.AuthorizationOptions{
-		Organization: organization,
-		ConnectionID: connectionID,
+	authURL, _, err := h.workosService.GenerateAuthorizationURL(security.AuthorizationOptions{
+		OrganizationID: organization,
+		ConnectionID:   connectionID,
 	})
 	if err != nil {
 		log.Printf("WorkOS SSO authorization failed: %v", err)
@@ -119,7 +119,7 @@ func (h *WorkOSHandler) Callback(c *fiber.Ctx) error {
 	}
 
 	// Exchange code for profile
-	profile, err := h.workosService.HandleCallback(code)
+	profile, err := h.workosService.HandleCallback(c.Context(), code)
 	if err != nil {
 		log.Printf("WorkOS SSO callback failed: %v", err)
 		return c.Redirect(fmt.Sprintf("%s/login?sso=error&message=authentication_failed", frontendURL))

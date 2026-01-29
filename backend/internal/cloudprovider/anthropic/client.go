@@ -460,5 +460,20 @@ func (c *Client) storeAssistantMessage(agentID string, resp *messageResponse) {
 	}
 }
 
+// Capabilities returns the capabilities of this provider
+func (c *Client) Capabilities() cloudprovider.ProviderCapabilities {
+	return cloudprovider.ProviderCapabilities{
+		SupportsTools:     true,
+		SupportsVision:    true,
+		SupportsStreaming: true,
+		SupportedModels: []string{
+			"claude-sonnet-4-5-20250929",
+			"claude-haiku-4-5-20251001",
+			"claude-opus-4-5-20250929",
+		},
+		MaxContextWindow: 200000,
+	}
+}
+
 // Ensure Client implements CloudProvider
 var _ cloudprovider.CloudProvider = (*Client)(nil)

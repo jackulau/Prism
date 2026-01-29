@@ -10,7 +10,6 @@ import (
 	"github.com/jacklau/prism/internal/api/routes"
 	"github.com/jacklau/prism/internal/api/sse"
 	"github.com/jacklau/prism/internal/api/websocket"
-	"github.com/jacklau/prism/internal/cloudprovider"
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database"
 	"github.com/jacklau/prism/internal/database/repository"
@@ -21,11 +20,11 @@ import (
 	"github.com/jacklau/prism/internal/integrations/workos"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/llm/anthropic"
-	"github.com/jacklau/prism/internal/llm/deepseek"
 	"github.com/jacklau/prism/internal/llm/google"
 	"github.com/jacklau/prism/internal/llm/lmstudio"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
+	"github.com/jacklau/prism/internal/llm/openrouter"
 	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
@@ -42,7 +41,7 @@ func main() {
 	}
 
 	// Initialize database
-	db, err := database.NewSQLite(cfg.DatabaseURL)
+	db, err := database.NewSQLite(cfg.Database.URL)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -63,7 +62,12 @@ func main() {
 	jwtService := security.NewJWTService(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
 
 	// Initialize WorkOS service for SSO
-	workosService := security.NewWorkOSService(cfg)
+	workosService := security.NewWorkOSService(
+		cfg.WorkOSAPIKey,
+		cfg.WorkOSClientID,
+		cfg.WorkOSRedirectURI,
+		cfg.WorkOSCookiePassword,
+	)
 	if workosService.IsConfigured() {
 		log.Println("WorkOS SSO service initialized")
 	}
@@ -81,6 +85,8 @@ func main() {
 	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
 	todoRepo := repository.NewTodoRepository(db.DB)
 	orgWorkspaceRepo := repository.NewOrgWorkspaceRepository(db.DB)
+	agentTaskRepo := repository.NewAgentTaskRepository(db.DB)
+	organizationRepo := repository.NewOrganizationRepository(db.DB)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -108,16 +114,14 @@ func main() {
 	toolRegistry := tools.NewRegistry()
 	if sandboxService != nil {
 		toolConfig := builtin.Config{
-			FileHistoryRepo:   fileHistoryRepo,
-			TodoRepo:          todoRepo,
-			UserRepo:          userRepo,
-			EncryptionService: encryptionService,
+			FileHistoryRepo: fileHistoryRepo,
+			TodoRepo:        todoRepo,
 		}
 		// Add PostHog tools configuration if enabled
-		if cfg.PostHogToolsEnabled && cfg.PostHogToolsAPIKey != "" && cfg.PostHogToolsProjectID != "" {
+		if cfg.PostHogToolsAPIKey != "" && cfg.PostHogToolsProject != "" {
 			toolConfig.PostHogConfig = &builtin.PostHogConfig{
 				APIKey:    cfg.PostHogToolsAPIKey,
-				ProjectID: cfg.PostHogToolsProjectID,
+				ProjectID: cfg.PostHogToolsProject,
 				Host:      cfg.PostHogToolsHost,
 			}
 			log.Println("PostHog tools configured")
@@ -226,12 +230,12 @@ func main() {
 
 	// Initialize WorkOS client (optional)
 	var workosClient *workos.Client
-	if cfg.WorkOSEnabled {
+	if cfg.WorkOSAPIKey != "" && cfg.WorkOSClientID != "" {
 		workosClient = workos.NewClient(&workos.Config{
 			APIKey:        cfg.WorkOSAPIKey,
 			ClientID:      cfg.WorkOSClientID,
-			WebhookSecret: cfg.WorkOSWebhookSecret,
-			Enabled:       cfg.WorkOSEnabled,
+			WebhookSecret: cfg.WorkOS.WebhookSecret,
+			Enabled:       true,
 		})
 		log.Println("WorkOS client initialized")
 	}
@@ -251,10 +255,13 @@ func main() {
 		IntegrationRepo:    integrationRepo,
 		FileHistoryRepo:    fileHistoryRepo,
 		OrgWorkspaceRepo:   orgWorkspaceRepo,
+		CustomProviderRepo: customProviderRepo,
 		LLMManager:         llmManager,
 		WSHub:              wsHub,
+		SSEService:         sseService,
 		IntegrationManager: integrationManager,
 		AgentManager:       agentManager,
+		AgentTaskRepo:      agentTaskRepo,
 		CodeRunner:         codeRunner,
 		SandboxService:     sandboxService,
 		ToolRegistry:       toolRegistry,
@@ -284,14 +291,6 @@ func main() {
 		// Stop all stdio MCP servers
 		stdioMCPClient.StopAll()
 		log.Println("Stdio MCP servers stopped")
-
-		// Stop tunnel server if running
-		if tunnelServer != nil {
-			if err := tunnelServer.Stop(); err != nil {
-				log.Printf("Error stopping tunnel server: %v", err)
-			}
-			log.Println("Tunnel server stopped")
-		}
 
 		// Close integrations manager
 		if err := integrationManager.Close(); err != nil {

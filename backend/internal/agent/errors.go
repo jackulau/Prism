@@ -33,3 +33,13 @@ var (
 	ErrTooManyAgents         = errors.New("maximum number of sub-agents reached")
 	ErrOrchestratorNotRunning = errors.New("orchestrator workflow is not running")
 )
+
+// Workflow step errors
+var (
+	ErrInvalidRepository    = errors.New("invalid repository")
+	ErrSandboxNotReady      = errors.New("sandbox not ready")
+	ErrMessageLoadFailed    = errors.New("failed to load messages")
+	ErrBranchCreationFailed = errors.New("failed to create branch")
+	ErrCommitFailed         = errors.New("failed to commit changes")
+	ErrNoChangesToCommit    = errors.New("no changes to commit")
+)

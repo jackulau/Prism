@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/workos/workos-go/v4/pkg/organizations"
 	"github.com/workos/workos-go/v4/pkg/sso"
 )
 
@@ -26,6 +27,7 @@ type SSOProfile struct {
 	LastName       string                 `json:"last_name"`
 	OrganizationID string                 `json:"organization_id"`
 	ConnectionID   string                 `json:"connection_id"`
+	ConnectionType string                 `json:"connection_type"`
 	IdpID          string                 `json:"idp_id"`
 	RawAttributes  map[string]interface{} `json:"raw_attributes"`
 }
@@ -48,8 +50,10 @@ type AuthorizationOptions struct {
 
 // SessionData contains the data stored in the wos-session cookie
 type SessionData struct {
+	ID             string    `json:"id"`
 	UserID         string    `json:"user_id"`
 	OrganizationID string    `json:"organization_id"`
+	ConnectionID   string    `json:"connection_id"`
 	Email          string    `json:"email"`
 	ExpiresAt      time.Time `json:"expires_at"`
 }
@@ -274,6 +278,7 @@ func (s *WorkOSService) HandleCallback(ctx context.Context, code string) (*SSOPr
 		LastName:       profileResponse.Profile.LastName,
 		OrganizationID: profileResponse.Profile.OrganizationID,
 		ConnectionID:   profileResponse.Profile.ConnectionID,
+		ConnectionType: string(profileResponse.Profile.ConnectionType),
 		IdpID:          profileResponse.Profile.IdpID,
 		RawAttributes:  profileResponse.Profile.RawAttributes,
 	}
@@ -384,4 +389,59 @@ func (s *WorkOSService) CreateSessionData(profile *SSOProfile, expiryDuration ti
 		Email:          profile.Email,
 		ExpiresAt:      time.Now().Add(expiryDuration),
 	}
+}
+
+// SSOConnection represents an SSO connection from WorkOS
+type SSOConnection struct {
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	ConnectionType string `json:"connection_type"`
+	State          string `json:"state"`
+}
+
+// ListConnections lists SSO connections for an organization
+func (s *WorkOSService) ListConnections(organizationID string) ([]SSOConnection, error) {
+	if !s.configured {
+		return nil, errors.New("workos: not configured")
+	}
+
+	if organizationID == "" {
+		return nil, errors.New("workos: organization ID required")
+	}
+
+	// List connections from WorkOS
+	resp, err := sso.ListConnections(context.Background(), sso.ListConnectionsOpts{
+		OrganizationID: organizationID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list connections: %w", err)
+	}
+
+	connections := make([]SSOConnection, len(resp.Data))
+	for i, conn := range resp.Data {
+		connections[i] = SSOConnection{
+			ID:             conn.ID,
+			Name:           conn.Name,
+			ConnectionType: string(conn.ConnectionType),
+			State:          string(conn.State),
+		}
+	}
+
+	return connections, nil
+}
+
+// GetOrganization retrieves an organization by ID
+func (s *WorkOSService) GetOrganization(ctx context.Context, organizationID string) (*organizations.Organization, error) {
+	if !s.configured {
+		return nil, errors.New("workos: not configured")
+	}
+
+	org, err := organizations.GetOrganization(ctx, organizations.GetOrganizationOpts{
+		Organization: organizationID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get organization: %w", err)
+	}
+
+	return &org, nil
 }

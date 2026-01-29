@@ -78,7 +78,7 @@ func (t *UpdateFileSandboxTool) Execute(ctx context.Context, params map[string]i
 	}
 
 	// Validate path - reject directory traversal and absolute paths
-	if err := validatePath(relativeFilePath); err != nil {
+	if err := validateFilePath(relativeFilePath); err != nil {
 		return nil, err
 	}
 
@@ -126,8 +126,8 @@ func (t *UpdateFileSandboxTool) RequiresConfirmation() bool {
 	return true // Writing files should require confirmation
 }
 
-// validatePath validates that the path is safe
-func validatePath(path string) error {
+// validateFilePath validates that the path is safe for file operations
+func validateFilePath(path string) error {
 	// Reject absolute paths
 	if filepath.IsAbs(path) {
 		return fmt.Errorf("absolute paths are not allowed")

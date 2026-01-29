@@ -23,6 +23,9 @@ var (
 	// ErrInvalidInput is returned when the input parameters are invalid.
 	ErrInvalidInput = errors.New("invalid input parameters")
 
+	// ErrInvalidRequest is returned when the request is invalid.
+	ErrInvalidRequest = errors.New("invalid request")
+
 	// ErrProviderUnavailable is returned when the provider's service is unavailable.
 	ErrProviderUnavailable = errors.New("provider service unavailable")
 
@@ -91,6 +94,33 @@ func (e *ProviderError) WithStatusCode(code int) *ProviderError {
 func (e *ProviderError) WithMessage(msg string) *ProviderError {
 	e.Message = msg
 	return e
+}
+
+// APIError represents an error from the provider's API.
+type APIError struct {
+	// StatusCode is the HTTP status code
+	StatusCode int
+	// Type is the error type from the API
+	Type string
+	// Message is the error message
+	Message string
+}
+
+// Error implements the error interface.
+func (e *APIError) Error() string {
+	if e.Type != "" {
+		return fmt.Sprintf("API error %d (%s): %s", e.StatusCode, e.Type, e.Message)
+	}
+	return fmt.Sprintf("API error %d: %s", e.StatusCode, e.Message)
+}
+
+// NewAPIError creates a new APIError.
+func NewAPIError(statusCode int, errType, message string) *APIError {
+	return &APIError{
+		StatusCode: statusCode,
+		Type:       errType,
+		Message:    message,
+	}
 }
 
 // IsRetryable returns true if the error suggests the operation could succeed if retried.

@@ -17,10 +17,10 @@ import (
 	"github.com/jacklau/prism/internal/api/middleware"
 	"github.com/jacklau/prism/internal/api/sse"
 	ws "github.com/jacklau/prism/internal/api/websocket"
-	"github.com/jacklau/prism/internal/cloudprovider"
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/integrations"
+	"github.com/jacklau/prism/internal/integrations/github"
 	"github.com/jacklau/prism/internal/integrations/workos"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/mcp"
@@ -45,14 +45,18 @@ type Dependencies struct {
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
 	OrgWorkspaceRepo   *repository.OrgWorkspaceRepository
+	CustomProviderRepo *repository.CustomProviderRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
+	SSEService         *sse.Service
 	IntegrationManager *integrations.Manager
 	AgentManager       *agent.Manager
+	AgentTaskRepo      *repository.AgentTaskRepository
 	CodeRunner         *coderunner.Runner
 	SandboxService     *sandbox.Service
 	SandboxManager     *sandbox.Manager
 	ToolRegistry       *tools.Registry
+	ToolRepo           *repository.ToolRepository
 	MCPServer          *mcp.Server
 	MCPClient          *mcp.Client
 	MCPRepository      *mcp.Repository
@@ -60,6 +64,9 @@ type Dependencies struct {
 	StdioMCPRepository *mcp.StdioRepository
 	OrganizationRepo   *repository.OrganizationRepository
 	WorkOSClient       *workos.Client
+	GitHubApp          *github.GitHubApp
+	GitHubInstallationRepo *repository.GitHubInstallationRepo
+	WorkflowEngine     *workflow.Engine
 }
 
 // Setup sets up the Fiber app with all routes

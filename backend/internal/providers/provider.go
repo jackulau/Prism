@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jacklau/prism/internal/llm"
@@ -55,8 +56,14 @@ type CreateAgentRequest struct {
 	// Model is the specific model to use
 	Model string `json:"model"`
 
+	// Prompt is the initial prompt/task for the agent
+	Prompt string `json:"prompt,omitempty"`
+
 	// SystemPrompt is the system prompt for the agent
 	SystemPrompt string `json:"system_prompt,omitempty"`
+
+	// WorkspaceID is the workspace for the agent
+	WorkspaceID string `json:"workspace_id,omitempty"`
 
 	// Tools is the list of tools available to the agent
 	Tools []llm.ToolDefinition `json:"tools,omitempty"`
@@ -76,7 +83,10 @@ type Agent struct {
 	// ID is the unique identifier for this agent
 	ID string `json:"id"`
 
-	// ProviderName identifies which provider manages this agent
+	// Provider identifies which provider manages this agent
+	Provider string `json:"provider"`
+
+	// ProviderName identifies which provider manages this agent (alias for Provider)
 	ProviderName string `json:"provider_name"`
 
 	// UserID is the ID of the user who owns this agent
@@ -123,11 +133,13 @@ type Agent struct {
 type AgentStatus string
 
 const (
+	AgentStatusPending   AgentStatus = "pending"
 	AgentStatusIdle      AgentStatus = "idle"
 	AgentStatusRunning   AgentStatus = "running"
 	AgentStatusCompleted AgentStatus = "completed"
 	AgentStatusFailed    AgentStatus = "failed"
 	AgentStatusCancelled AgentStatus = "cancelled"
+	AgentStatusStopped   AgentStatus = "stopped"
 )
 
 // Message represents a message in an agent's conversation
@@ -149,6 +161,9 @@ type Message struct {
 
 	// Timestamp is when the message was created
 	Timestamp time.Time `json:"timestamp"`
+
+	// CreatedAt is when the message was created (alias for Timestamp)
+	CreatedAt time.Time `json:"created_at"`
 
 	// Usage contains token usage for this message
 	Usage *Usage `json:"usage,omitempty"`
@@ -177,6 +192,9 @@ type StreamChunk struct {
 	// ToolCall contains tool call information
 	ToolCall *ToolCall `json:"tool_call,omitempty"`
 
+	// ToolCalls contains multiple tool calls
+	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
+
 	// ToolResult contains tool execution result
 	ToolResult *ToolResult `json:"tool_result,omitempty"`
 
@@ -188,6 +206,12 @@ type StreamChunk struct {
 
 	// Error contains error information
 	Error error `json:"error,omitempty"`
+
+	// FinishReason indicates why the stream finished
+	FinishReason string `json:"finish_reason,omitempty"`
+
+	// MessageID is the ID of the message (typically on final chunk)
+	MessageID string `json:"message_id,omitempty"`
 
 	// Done indicates this is the final chunk
 	Done bool `json:"done,omitempty"`
@@ -272,4 +296,33 @@ type ProviderCapabilities struct {
 
 	// Persistence indicates support for conversation persistence
 	Persistence bool `json:"persistence"`
+}
+
+// ProviderError represents an error from a provider
+type ProviderError struct {
+	// Provider is the name of the provider
+	Provider string `json:"provider"`
+	// StatusCode is the HTTP status code
+	StatusCode int `json:"status_code"`
+	// Code is an optional error code
+	Code string `json:"code,omitempty"`
+	// Message is the error message
+	Message string `json:"message"`
+	// Retryable indicates if the error is retryable
+	Retryable bool `json:"retryable,omitempty"`
+	// Err is the underlying error
+	Err error `json:"-"`
+}
+
+// Error implements the error interface
+func (e *ProviderError) Error() string {
+	if e.Code != "" {
+		return fmt.Sprintf("%s error %d (%s): %s", e.Provider, e.StatusCode, e.Code, e.Message)
+	}
+	return fmt.Sprintf("%s error %d: %s", e.Provider, e.StatusCode, e.Message)
+}
+
+// Unwrap returns the underlying error
+func (e *ProviderError) Unwrap() error {
+	return e.Err
 }

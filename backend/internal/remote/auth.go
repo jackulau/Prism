@@ -15,15 +15,15 @@ import (
 var (
 	ErrInvalidCredentials           = errors.New("invalid credentials")
 	ErrSessionExpired               = errors.New("session expired")
-	ErrSessionNotFound              = errors.New("session not found")
+	ErrAuthSessionNotFound          = errors.New("auth session not found")
 	ErrConnectionLimitExceeded      = errors.New("connection limit exceeded")
 	ErrConnectionLimitPerIPExceeded = errors.New("connection limit per IP exceeded")
 	ErrRemoteAccessDisabled         = errors.New("remote access is disabled")
 	ErrInvalidToken                 = errors.New("invalid token")
 )
 
-// RemoteSession represents an authenticated remote session
-type RemoteSession struct {
+// AuthSession represents an authenticated remote session
+type AuthSession struct {
 	ID           string    `json:"id"`
 	Token        string    `json:"-"` // Don't serialize the token
 	TokenHash    string    `json:"-"` // Store hash for validation
@@ -35,7 +35,7 @@ type RemoteSession struct {
 }
 
 // IsExpired checks if the session has expired
-func (s *RemoteSession) IsExpired() bool {
+func (s *AuthSession) IsExpired() bool {
 	return time.Now().After(s.ExpiresAt)
 }
 
@@ -69,8 +69,8 @@ func DefaultRemoteAuthConfig() *RemoteAuthConfig {
 // RemoteAuthService handles authentication for remote access
 type RemoteAuthService struct {
 	config   *RemoteAuthConfig
-	sessions map[string]*RemoteSession
-	byToken  map[string]*RemoteSession
+	sessions map[string]*AuthSession
+	byToken  map[string]*AuthSession
 	mu       sync.RWMutex
 }
 
@@ -82,8 +82,8 @@ func NewRemoteAuthService(cfg *RemoteAuthConfig) *RemoteAuthService {
 
 	return &RemoteAuthService{
 		config:   cfg,
-		sessions: make(map[string]*RemoteSession),
-		byToken:  make(map[string]*RemoteSession),
+		sessions: make(map[string]*AuthSession),
+		byToken:  make(map[string]*AuthSession),
 	}
 }
 
@@ -93,7 +93,7 @@ func (s *RemoteAuthService) IsEnabled() bool {
 }
 
 // Authenticate validates credentials and creates a new session
-func (s *RemoteAuthService) Authenticate(password, clientIP, userAgent string) (*RemoteSession, string, error) {
+func (s *RemoteAuthService) Authenticate(password, clientIP, userAgent string) (*AuthSession, string, error) {
 	if !s.config.Enabled {
 		return nil, "", ErrRemoteAccessDisabled
 	}
@@ -132,7 +132,7 @@ func (s *RemoteAuthService) Authenticate(password, clientIP, userAgent string) (
 	tokenHash := security.HashAPIKey(token)
 
 	now := time.Now()
-	session := &RemoteSession{
+	session := &AuthSession{
 		ID:           sessionID,
 		Token:        token,
 		TokenHash:    tokenHash,
@@ -150,7 +150,7 @@ func (s *RemoteAuthService) Authenticate(password, clientIP, userAgent string) (
 }
 
 // ValidateToken validates a session token and returns the session
-func (s *RemoteAuthService) ValidateToken(token string) (*RemoteSession, error) {
+func (s *RemoteAuthService) ValidateToken(token string) (*AuthSession, error) {
 	if token == "" {
 		return nil, ErrInvalidToken
 	}
@@ -162,7 +162,7 @@ func (s *RemoteAuthService) ValidateToken(token string) (*RemoteSession, error) 
 	s.mu.RUnlock()
 
 	if !ok {
-		return nil, ErrSessionNotFound
+		return nil, ErrAuthSessionNotFound
 	}
 
 	if session.IsExpired() {
@@ -185,7 +185,7 @@ func (s *RemoteAuthService) InvalidateSession(sessionID string) error {
 
 	session, ok := s.sessions[sessionID]
 	if !ok {
-		return ErrSessionNotFound
+		return ErrAuthSessionNotFound
 	}
 
 	delete(s.sessions, sessionID)
@@ -195,13 +195,13 @@ func (s *RemoteAuthService) InvalidateSession(sessionID string) error {
 }
 
 // GetSession returns a session by ID
-func (s *RemoteAuthService) GetSession(sessionID string) (*RemoteSession, error) {
+func (s *RemoteAuthService) GetSession(sessionID string) (*AuthSession, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	session, ok := s.sessions[sessionID]
 	if !ok {
-		return nil, ErrSessionNotFound
+		return nil, ErrAuthSessionNotFound
 	}
 
 	if session.IsExpired() {
@@ -212,11 +212,11 @@ func (s *RemoteAuthService) GetSession(sessionID string) (*RemoteSession, error)
 }
 
 // GetActiveSessions returns all active sessions
-func (s *RemoteAuthService) GetActiveSessions() []*RemoteSession {
+func (s *RemoteAuthService) GetActiveSessions() []*AuthSession {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	sessions := make([]*RemoteSession, 0, len(s.sessions))
+	sessions := make([]*AuthSession, 0, len(s.sessions))
 	for _, session := range s.sessions {
 		if !session.IsExpired() {
 			sessions = append(sessions, session)
@@ -270,8 +270,8 @@ func (s *RemoteAuthService) Disable() {
 	defer s.mu.Unlock()
 
 	s.config.Enabled = false
-	s.sessions = make(map[string]*RemoteSession)
-	s.byToken = make(map[string]*RemoteSession)
+	s.sessions = make(map[string]*AuthSession)
+	s.byToken = make(map[string]*AuthSession)
 }
 
 // SessionCount returns the number of active sessions

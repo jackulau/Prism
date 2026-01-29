@@ -12,6 +12,8 @@ const (
 	AgentStatusActive AgentStatus = "active"
 	// AgentStatusIdle indicates the agent is idle and waiting for input
 	AgentStatusIdle AgentStatus = "idle"
+	// AgentStatusProcessing indicates the agent is processing a request
+	AgentStatusProcessing AgentStatus = "processing"
 	// AgentStatusTerminated indicates the agent has been terminated
 	AgentStatusTerminated AgentStatus = "terminated"
 	// AgentStatusError indicates the agent encountered an error
@@ -30,6 +32,8 @@ type Agent struct {
 	Provider string `json:"provider"`
 	// Model is the model being used by this agent
 	Model string `json:"model,omitempty"`
+	// SystemPrompt is the system prompt/instructions for the agent
+	SystemPrompt string `json:"system_prompt,omitempty"`
 	// Status is the current status of the agent
 	Status AgentStatus `json:"status"`
 	// CreatedAt is when the agent was created
@@ -95,6 +99,9 @@ type ToolUseRequest struct {
 	// Parameters are the arguments passed to the tool
 	Parameters map[string]interface{} `json:"parameters"`
 }
+
+// ToolCall is an alias for ToolUseRequest for backward compatibility
+type ToolCall = ToolUseRequest
 
 // ImageData represents an image in a message
 type ImageData struct {

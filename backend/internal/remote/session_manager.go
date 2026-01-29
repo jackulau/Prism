@@ -62,6 +62,8 @@ type RemoteSession struct {
 	ID              string
 	UserID          string
 	AuthSession     *security.Claims
+	ClientIP        string
+	ExpiresAt       time.Time
 	LastActivity    time.Time
 	LastHeartbeat   time.Time
 	ReconnectToken  string

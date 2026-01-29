@@ -7,24 +7,24 @@ import (
 
 // EventBus manages workflow event subscriptions and broadcasting
 type EventBus struct {
-	subscribers map[string][]chan WorkflowEvent
+	subscribers map[string][]chan ExecutorEvent
 	mu          sync.RWMutex
 }
 
 // NewEventBus creates a new event bus
 func NewEventBus() *EventBus {
 	return &EventBus{
-		subscribers: make(map[string][]chan WorkflowEvent),
+		subscribers: make(map[string][]chan ExecutorEvent),
 	}
 }
 
 // Subscribe creates a subscription for events related to an execution
 // Returns a channel that receives events and an unsubscribe function
-func (b *EventBus) Subscribe(executionID string) (<-chan WorkflowEvent, func()) {
+func (b *EventBus) Subscribe(executionID string) (<-chan ExecutorEvent, func()) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	ch := make(chan WorkflowEvent, 100)
+	ch := make(chan ExecutorEvent, 100)
 	b.subscribers[executionID] = append(b.subscribers[executionID], ch)
 
 	unsubscribe := func() {
@@ -51,12 +51,12 @@ func (b *EventBus) Subscribe(executionID string) (<-chan WorkflowEvent, func()) 
 
 // SubscribeAll creates a subscription for all events
 // Returns a channel that receives all events and an unsubscribe function
-func (b *EventBus) SubscribeAll() (<-chan WorkflowEvent, func()) {
+func (b *EventBus) SubscribeAll() (<-chan ExecutorEvent, func()) {
 	return b.Subscribe("*")
 }
 
 // Publish sends an event to all subscribers
-func (b *EventBus) Publish(event WorkflowEvent) {
+func (b *EventBus) Publish(event ExecutorEvent) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
@@ -93,7 +93,7 @@ func (b *EventBus) Close() {
 			close(ch)
 		}
 	}
-	b.subscribers = make(map[string][]chan WorkflowEvent)
+	b.subscribers = make(map[string][]chan ExecutorEvent)
 }
 
 // EventEmitter provides a convenient way to emit events during workflow execution
@@ -171,7 +171,7 @@ func (e *EventEmitter) EmitToolExecution(toolName string, status string, output 
 }
 
 func (e *EventEmitter) emit(step WorkflowStep, status string, data map[string]interface{}, errMsg string) {
-	event := WorkflowEvent{
+	event := ExecutorEvent{
 		ExecutionID: e.executionID,
 		AgentID:     e.agentID,
 		Step:        step,
@@ -192,7 +192,7 @@ func (e *EventEmitter) emit(step WorkflowStep, status string, data map[string]in
 	}
 }
 
-// WorkflowEventType constants for common event types
+// ExecutorEventType constants for common event types
 const (
 	EventStatusStarted   = "started"
 	EventStatusCompleted = "completed"

@@ -80,6 +80,11 @@ type Config struct {
 	GitHubAppClientSecret  string
 	GitHubAppWebhookSecret string
 
+	// GitHub OAuth (for user authentication)
+	GitHubClientID     string
+	GitHubClientSecret string
+	GitHubRedirectURL  string
+
 	// Ollama
 	OllamaHost string
 
@@ -192,6 +197,11 @@ func Load() (*Config, error) {
 		GitHubAppClientID:      getEnv("GITHUB_APP_CLIENT_ID", ""),
 		GitHubAppClientSecret:  getEnv("GITHUB_APP_CLIENT_SECRET", ""),
 		GitHubAppWebhookSecret: getEnv("GITHUB_APP_WEBHOOK_SECRET", ""),
+
+		// GitHub OAuth (for user authentication)
+		GitHubClientID:     getEnv("GITHUB_CLIENT_ID", ""),
+		GitHubClientSecret: getEnv("GITHUB_CLIENT_SECRET", ""),
+		GitHubRedirectURL:  getEnv("GITHUB_REDIRECT_URL", ""),
 
 		// Ollama
 		OllamaHost: getEnv("OLLAMA_HOST", "http://localhost:11434"),

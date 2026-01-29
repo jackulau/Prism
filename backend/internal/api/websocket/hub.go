@@ -181,6 +181,26 @@ const (
 	TypeTaskCompleted = "task.completed"
 	TypeTaskFailed    = "task.failed"
 	TypeTaskCancelled = "task.cancelled"
+
+	// Workflow message types
+	TypeWorkflowRun          = "workflow.run"
+	TypeWorkflowStarted      = "workflow.started"
+	TypeWorkflowPause        = "workflow.pause"
+	TypeWorkflowPaused       = "workflow.paused"
+	TypeWorkflowResume       = "workflow.resume"
+	TypeWorkflowResumed      = "workflow.resumed"
+	TypeWorkflowStop         = "workflow.stop"
+	TypeWorkflowCancelled    = "workflow.cancelled"
+	TypeWorkflowStatus       = "workflow.status"
+	TypeWorkflowProgress     = "workflow.progress"
+	TypeWorkflowStepStarted  = "workflow.step_started"
+	TypeWorkflowStepCompleted = "workflow.step_completed"
+	TypeWorkflowStepFailed   = "workflow.step_failed"
+	TypeWorkflowStepSkipped  = "workflow.step_skipped"
+	TypeWorkflowCompleted    = "workflow.completed"
+	TypeWorkflowFailed       = "workflow.failed"
+	TypeWorkflowWaitingInput = "workflow.waiting_input"
+	TypeWorkflowProvideInput = "workflow.provide_input"
 )
 
 // FileContext represents file context for chat messages
@@ -397,6 +417,20 @@ type BatchProgressInfo struct {
 	FailedTasks    int `json:"failed_tasks"`
 	RunningTasks   int `json:"running_tasks"`
 	PendingTasks   int `json:"pending_tasks"`
+}
+
+// WorkflowInfo represents information about a workflow execution
+type WorkflowInfo struct {
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name,omitempty"`
+	Description string                 `json:"description,omitempty"`
+	Status      string                 `json:"status"`
+	CurrentStep int                    `json:"current_step"`
+	TotalSteps  int                    `json:"total_steps"`
+	StartedAt   int64                  `json:"started_at,omitempty"`
+	CompletedAt *int64                 `json:"completed_at,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // NewChatChunk creates a new chat chunk message
@@ -919,5 +953,156 @@ func NewTaskCancelled(taskID string) *OutgoingMessage {
 		Type:   TypeTaskCancelled,
 		TaskID: taskID,
 		Status: "cancelled",
+	}
+}
+
+// Workflow message constructors
+
+// NewWorkflowStarted creates a new workflow started message
+func NewWorkflowStarted(workflowID, name string, totalSteps int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowStarted,
+		WorkflowID: workflowID,
+		Status:     "running",
+		TotalSteps: totalSteps,
+		WorkflowInfo: &WorkflowInfo{
+			ID:         workflowID,
+			Name:       name,
+			Status:     "running",
+			TotalSteps: totalSteps,
+		},
+	}
+}
+
+// NewWorkflowPaused creates a new workflow paused message
+func NewWorkflowPaused(workflowID string, currentStep int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowPaused,
+		WorkflowID:  workflowID,
+		Status:      "paused",
+		CurrentStep: currentStep,
+	}
+}
+
+// NewWorkflowResumed creates a new workflow resumed message
+func NewWorkflowResumed(workflowID string, currentStep int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowResumed,
+		WorkflowID:  workflowID,
+		Status:      "running",
+		CurrentStep: currentStep,
+	}
+}
+
+// NewWorkflowCancelled creates a new workflow cancelled message
+func NewWorkflowCancelled(workflowID string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowCancelled,
+		WorkflowID: workflowID,
+		Status:     "cancelled",
+	}
+}
+
+// NewWorkflowProgress creates a new workflow progress message
+func NewWorkflowProgress(workflowID string, currentStep, totalSteps int, state map[string]interface{}) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowProgress,
+		WorkflowID:  workflowID,
+		CurrentStep: currentStep,
+		TotalSteps:  totalSteps,
+		State:       state,
+	}
+}
+
+// NewWorkflowStatus creates a new workflow status message
+func NewWorkflowStatus(info *WorkflowInfo, state map[string]interface{}) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:         TypeWorkflowStatus,
+		WorkflowID:   info.ID,
+		WorkflowInfo: info,
+		State:        state,
+	}
+}
+
+// NewWorkflowStepStarted creates a new workflow step started message
+func NewWorkflowStepStarted(workflowID, stepID, stepName, stepType string, stepIndex int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowStepStarted,
+		WorkflowID:  workflowID,
+		StepID:      stepID,
+		StepName:    stepName,
+		StepType:    stepType,
+		CurrentStep: stepIndex,
+		Status:      "running",
+	}
+}
+
+// NewWorkflowStepCompleted creates a new workflow step completed message
+func NewWorkflowStepCompleted(workflowID, stepID, stepName string, output interface{}, durationMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowStepCompleted,
+		WorkflowID: workflowID,
+		StepID:     stepID,
+		StepName:   stepName,
+		Result:     output,
+		Duration:   durationMs,
+		Status:     "completed",
+	}
+}
+
+// NewWorkflowStepFailed creates a new workflow step failed message
+func NewWorkflowStepFailed(workflowID, stepID, stepName, errorMsg string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowStepFailed,
+		WorkflowID: workflowID,
+		StepID:     stepID,
+		StepName:   stepName,
+		Error:      errorMsg,
+		Status:     "failed",
+	}
+}
+
+// NewWorkflowStepSkipped creates a new workflow step skipped message
+func NewWorkflowStepSkipped(workflowID, stepID, stepName string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowStepSkipped,
+		WorkflowID: workflowID,
+		StepID:     stepID,
+		StepName:   stepName,
+		Status:     "skipped",
+	}
+}
+
+// NewWorkflowCompleted creates a new workflow completed message
+func NewWorkflowCompleted(workflowID string, state map[string]interface{}, durationMs int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowCompleted,
+		WorkflowID: workflowID,
+		State:      state,
+		Duration:   durationMs,
+		Status:     "completed",
+	}
+}
+
+// NewWorkflowFailed creates a new workflow failed message
+func NewWorkflowFailed(workflowID, errorMsg string, currentStep int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeWorkflowFailed,
+		WorkflowID:  workflowID,
+		Error:       errorMsg,
+		CurrentStep: currentStep,
+		Status:      "failed",
+	}
+}
+
+// NewWorkflowWaitingInput creates a new workflow waiting input message
+func NewWorkflowWaitingInput(workflowID, stepID, stepName, promptText string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeWorkflowWaitingInput,
+		WorkflowID: workflowID,
+		StepID:     stepID,
+		StepName:   stepName,
+		Message:    promptText,
+		Status:     "waiting_input",
 	}
 }
