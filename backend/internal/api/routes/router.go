@@ -35,6 +35,7 @@ type Dependencies struct {
 	Config             *config.Config
 	JWTService         *security.JWTService
 	EncryptionService  *security.EncryptionService
+	WorkOSService      *security.WorkOSService
 	UserRepo           *repository.UserRepository
 	SessionRepo        *repository.SessionRepository
 	ConversationRepo   *repository.ConversationRepository
@@ -117,6 +118,29 @@ func Setup(deps *Dependencies) *fiber.App {
 	authProtected := auth.Group("", middleware.AuthMiddleware(deps.JWTService))
 	authProtected.Post("/logout", authHandler.Logout)
 	authProtected.Get("/me", authHandler.Me)
+
+	// SSO routes (WorkOS)
+	if deps.WorkOSService != nil && deps.WorkOSService.IsConfigured() {
+		workosHandler := handlers.NewWorkOSHandler(
+			deps.WorkOSService,
+			deps.UserRepo,
+			deps.JWTService,
+			deps.SessionRepo,
+			deps.Config,
+		)
+
+		// Public SSO routes (no auth required for authorize/callback)
+		sso := auth.Group("/sso")
+		sso.Get("/authorize", workosHandler.Authorize)
+		sso.Get("/callback", workosHandler.Callback)
+
+		// Protected SSO routes
+		ssoProtected := auth.Group("/sso", middleware.AuthMiddleware(deps.JWTService))
+		ssoProtected.Get("/connections", workosHandler.GetConnections)
+		ssoProtected.Get("/status", workosHandler.GetStatus)
+
+		log.Println("WorkOS SSO routes registered")
+	}
 
 	// Chat routes (auth required)
 	chatHandler := handlers.NewChatHandler(deps.ConversationRepo, deps.MessageRepo)

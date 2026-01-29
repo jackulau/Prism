@@ -16,12 +16,13 @@ type User struct {
 	GitHubToken       string
 	GitHubUsername    string
 	GitHubConnectedAt *time.Time
-	WorkOSID          string
-	OrganizationID    string
-	SSOConnectionID   string
-	SSOProvider       string // "saml", "oidc", etc.
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// WorkOS SSO fields
+	WorkOSID        string
+	OrganizationID  string
+	SSOConnectionID string
+	SSOProvider     string // "saml", "oidc", etc.
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // UserRepository handles user database operations
@@ -64,9 +65,12 @@ func (r *UserRepository) GetByID(id string) (*User, error) {
 	var workosID, organizationID, ssoConnectionID, ssoProvider sql.NullString
 
 	err := r.db.QueryRow(
-		`SELECT id, email, password_hash, github_token, github_username, github_connected_at, workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at FROM users WHERE id = ?`,
+		`SELECT id, email, password_hash, github_token, github_username, github_connected_at,
+		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
+		 FROM users WHERE id = ?`,
 		id,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt, &workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt,
+		&workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -96,9 +100,12 @@ func (r *UserRepository) GetByEmail(email string) (*User, error) {
 	var workosID, organizationID, ssoConnectionID, ssoProvider sql.NullString
 
 	err := r.db.QueryRow(
-		`SELECT id, email, password_hash, github_token, github_username, github_connected_at, workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at FROM users WHERE email = ?`,
+		`SELECT id, email, password_hash, github_token, github_username, github_connected_at,
+		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
+		 FROM users WHERE email = ?`,
 		email,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt, &workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt,
+		&workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -247,12 +254,15 @@ func (r *UserRepository) GetByWorkOSID(workosID string) (*User, error) {
 	user := &User{}
 	var githubToken, githubUsername sql.NullString
 	var githubConnectedAt sql.NullTime
-	var workosIDNull, organizationID, ssoConnectionID, ssoProvider sql.NullString
+	var workosIDVal, organizationID, ssoConnectionID, ssoProvider sql.NullString
 
 	err := r.db.QueryRow(
-		`SELECT id, email, password_hash, github_token, github_username, github_connected_at, workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at FROM users WHERE workos_id = ?`,
+		`SELECT id, email, password_hash, github_token, github_username, github_connected_at,
+		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
+		 FROM users WHERE workos_id = ?`,
 		workosID,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt, &workosIDNull, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt,
+		&workosIDVal, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -266,7 +276,7 @@ func (r *UserRepository) GetByWorkOSID(workosID string) (*User, error) {
 	if githubConnectedAt.Valid {
 		user.GitHubConnectedAt = &githubConnectedAt.Time
 	}
-	user.WorkOSID = workosIDNull.String
+	user.WorkOSID = workosIDVal.String
 	user.OrganizationID = organizationID.String
 	user.SSOConnectionID = ssoConnectionID.String
 	user.SSOProvider = ssoProvider.String
@@ -280,7 +290,8 @@ func (r *UserRepository) CreateFromSSO(email, workosID, orgID, connectionID, pro
 	now := time.Now()
 
 	_, err := r.db.Exec(
-		`INSERT INTO users (id, email, password_hash, workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at) VALUES (?, ?, '', ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO users (id, email, password_hash, workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at)
+		 VALUES (?, ?, '', ?, ?, ?, ?, ?, ?)`,
 		id, email, workosID, orgID, connectionID, provider, now, now,
 	)
 	if err != nil {
@@ -315,7 +326,9 @@ func (r *UserRepository) LinkWorkOSAccount(userID, workosID, orgID, connectionID
 // GetByOrganization returns all users in an organization
 func (r *UserRepository) GetByOrganization(orgID string) ([]*User, error) {
 	rows, err := r.db.Query(
-		`SELECT id, email, password_hash, github_token, github_username, github_connected_at, workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at FROM users WHERE organization_id = ?`,
+		`SELECT id, email, password_hash, github_token, github_username, github_connected_at,
+		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
+		 FROM users WHERE organization_id = ?`,
 		orgID,
 	)
 	if err != nil {
@@ -330,7 +343,8 @@ func (r *UserRepository) GetByOrganization(orgID string) ([]*User, error) {
 		var githubConnectedAt sql.NullTime
 		var workosID, organizationID, ssoConnectionID, ssoProvider sql.NullString
 
-		err := rows.Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt, &workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
+		err := rows.Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt,
+			&workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
@@ -346,10 +360,6 @@ func (r *UserRepository) GetByOrganization(orgID string) ([]*User, error) {
 		user.SSOProvider = ssoProvider.String
 
 		users = append(users, user)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to iterate users: %w", err)
 	}
 
 	return users, nil
