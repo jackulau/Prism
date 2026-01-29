@@ -44,7 +44,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
-	AgentTaskRepo      *repository.AgentTaskRepository
+	OrgWorkspaceRepo   *repository.OrgWorkspaceRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -444,21 +444,16 @@ func Setup(deps *Dependencies) *fiber.App {
 		})
 	}
 
-	// Workflow routes (auth required)
-	if deps.WorkflowEngine != nil {
-		workflowHandler := handlers.NewWorkflowHandler(deps.WorkflowEngine)
-		workflows := v1.Group("/workflows", middleware.AuthMiddleware(deps.JWTService))
-		workflows.Post("/", workflowHandler.CreateWorkflow)
-		workflows.Get("/", workflowHandler.ListWorkflows)
-		workflows.Get("/templates", workflowHandler.ListTemplates)
-		workflows.Get("/templates/:id", workflowHandler.GetTemplate)
-		workflows.Get("/:id", workflowHandler.GetWorkflow)
-		workflows.Get("/:id/state", workflowHandler.GetWorkflowState)
-		workflows.Post("/:id/start", workflowHandler.StartWorkflow)
-		workflows.Post("/:id/pause", workflowHandler.PauseWorkflow)
-		workflows.Post("/:id/resume", workflowHandler.ResumeWorkflow)
-		workflows.Post("/:id/input", workflowHandler.ProvideInput)
-		workflows.Delete("/:id", workflowHandler.CancelWorkflow)
+	// Organization workspace routes
+	if deps.OrgWorkspaceRepo != nil {
+		orgWorkspaceHandler := handlers.NewOrgWorkspaceHandler(deps.OrgWorkspaceRepo)
+		orgWorkspaces := v1.Group("/org/workspaces", middleware.AuthMiddleware(deps.JWTService))
+		orgWorkspaces.Post("/", orgWorkspaceHandler.Create)
+		orgWorkspaces.Get("/", orgWorkspaceHandler.List)
+		orgWorkspaces.Get("/:id", orgWorkspaceHandler.Get)
+		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
+		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
+		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
 	}
 
 	return app

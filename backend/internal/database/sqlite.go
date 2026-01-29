@@ -354,18 +354,17 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
-		// Tool catalog (available tools in the system)
-		`CREATE TABLE IF NOT EXISTS tools (
+		// Organization-scoped workspaces for agent sessions
+		`CREATE TABLE IF NOT EXISTS org_workspaces (
 			id TEXT PRIMARY KEY,
-			display_name TEXT NOT NULL,
-			slug_name TEXT NOT NULL,
-			description TEXT,
-			is_model INTEGER DEFAULT 0,
-			provider_id TEXT,
-			parameters_schema TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(display_name, provider_id, slug_name)
+			name TEXT NOT NULL,
+			organization_id TEXT NOT NULL,
+			github_repository_name TEXT,
+			worker_id TEXT,
+			current_branch TEXT,
+			slack_channel_id TEXT,
+			slack_message_ts TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
@@ -404,10 +403,8 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
-
-		// WorkOS indexes
-		`CREATE INDEX IF NOT EXISTS idx_users_workos_id ON users(workos_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_users_organization_id ON users(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
 	}
 
 	for _, migration := range migrations {
