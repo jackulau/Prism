@@ -43,7 +43,7 @@ type Dependencies struct {
 	ProviderKeyRepo    *repository.ProviderKeyRepository
 	IntegrationRepo    *repository.IntegrationRepository
 	FileHistoryRepo    *repository.FileHistoryRepository
-	OrganizationRepo   *repository.OrganizationRepository
+	ToolRepo           *repository.ToolRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	IntegrationManager *integrations.Manager
@@ -365,30 +365,16 @@ func Setup(deps *Dependencies) *fiber.App {
 		stdioHandler.RegisterRoutes(stdioProtected)
 	}
 
-	// Organization routes
-	if deps.OrganizationRepo != nil {
-		orgHandler := handlers.NewOrganizationHandler(deps.OrganizationRepo, deps.WorkOSClient)
-
-		// Public WorkOS webhook endpoint (no auth - verified by signature)
-		v1.Post("/webhooks/workos", orgHandler.HandleWorkOSWebhook)
-
-		// Protected organization routes
-		orgs := v1.Group("/organizations", middleware.AuthMiddleware(deps.JWTService))
-		orgs.Get("/", orgHandler.ListOrganizations)
-		orgs.Post("/", orgHandler.CreateOrganization)
-		orgs.Get("/:id", orgHandler.GetOrganization)
-		orgs.Put("/:id", orgHandler.UpdateOrganization)
-		orgs.Delete("/:id", orgHandler.DeleteOrganization)
-
-		// Organization member management
-		orgs.Get("/:id/members", orgHandler.GetMembers)
-		orgs.Post("/:id/members", orgHandler.AddMember)
-		orgs.Delete("/:id/members/:userId", orgHandler.RemoveMember)
-
-		// WorkOS sync (admin-only)
-		orgs.Post("/sync/workos", orgHandler.SyncFromWorkOS)
-
-		log.Println("Organization routes registered")
+	// Tool catalog routes (auth required)
+	if deps.ToolRepo != nil {
+		toolsCatalogHandler := handlers.NewToolsCatalogHandler(deps.ToolRepo)
+		toolsCatalog := v1.Group("/tools", middleware.AuthMiddleware(deps.JWTService))
+		toolsCatalog.Get("/", toolsCatalogHandler.ListTools)
+		toolsCatalog.Get("/slug/:slug", toolsCatalogHandler.GetToolBySlug)
+		toolsCatalog.Get("/:id", toolsCatalogHandler.GetTool)
+		toolsCatalog.Post("/", toolsCatalogHandler.CreateTool)
+		toolsCatalog.Put("/:id", toolsCatalogHandler.UpdateTool)
+		toolsCatalog.Delete("/:id", toolsCatalogHandler.DeleteTool)
 	}
 
 	// Integrations routes (for Settings page)

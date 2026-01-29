@@ -335,23 +335,18 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
-		// Organizations table for WorkOS integration
-		`CREATE TABLE IF NOT EXISTS organizations (
+		// Tool catalog (available tools in the system)
+		`CREATE TABLE IF NOT EXISTS tools (
 			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			workos_organization_id TEXT,
+			display_name TEXT NOT NULL,
+			slug_name TEXT NOT NULL,
+			description TEXT,
+			is_model INTEGER DEFAULT 0,
+			provider_id TEXT,
+			parameters_schema TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-
-		// Organization members (linking users to organizations)
-		`CREATE TABLE IF NOT EXISTS organization_members (
-			id TEXT PRIMARY KEY,
-			organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			role TEXT NOT NULL DEFAULT 'member',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(organization_id, user_id)
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(display_name, provider_id, slug_name)
 		)`,
 
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
@@ -428,6 +423,8 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_key_hash ON mcp_api_keys(key_hash)`,
 		`CREATE INDEX IF NOT EXISTS idx_mcp_stdio_servers_user_id ON mcp_stdio_servers(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_integrations_user_id ON user_integrations(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_tools_slug ON tools(slug_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_tools_provider ON tools(provider_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_user_id ON file_history(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_file_path ON file_history(user_id, file_path)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
