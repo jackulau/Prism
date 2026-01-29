@@ -405,6 +405,7 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
+		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_current_branch ON org_workspaces(current_branch)`,
 	}
 
 	for _, migration := range migrations {
