@@ -33,11 +33,8 @@ type Config struct {
 	// LLM provider for WebFetch AI analysis (optional)
 	LLMProvider llm.Provider
 
-	// User repository for accessing user data (e.g., GitHub tokens)
-	UserRepo *repository.UserRepository
-
-	// Encryption service for decrypting stored tokens
-	EncryptionService *security.EncryptionService
+	// LLM manager for agent-related tools (spawn_sub_agent)
+	LLMManager *llm.Manager
 }
 
 // RegisterAll registers all built-in tools with the registry
@@ -198,9 +195,11 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		}
 	}
 
-	// GitHub tools
-	if err := registry.Register(NewGitHubViewCommitTool(sandbox)); err != nil {
-		return err
+	// Spawn sub-agent tool for orchestrator workflows
+	if config.LLMManager != nil {
+		if err := registry.Register(NewSpawnSubAgentTool(config.LLMManager)); err != nil {
+			return err
+		}
 	}
 
 	return nil
