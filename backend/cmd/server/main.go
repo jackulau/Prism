@@ -18,6 +18,7 @@ import (
 	"github.com/jacklau/prism/internal/integrations/slack"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/llm/anthropic"
+	"github.com/jacklau/prism/internal/llm/deepseek"
 	"github.com/jacklau/prism/internal/llm/google"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
@@ -124,6 +125,10 @@ func main() {
 	// Google AI (API key set via UI)
 	googleClient := google.NewClient("")
 	llmManager.RegisterProvider(googleClient)
+
+	// DeepSeek (API key set via UI)
+	deepseekClient := deepseek.NewClient("")
+	llmManager.RegisterProvider(deepseekClient)
 
 	log.Printf("Registered %d LLM providers", len(llmManager.ListProviders()))
 
