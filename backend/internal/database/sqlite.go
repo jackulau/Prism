@@ -335,36 +335,17 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
-		// Workflows table for structured multi-step agent execution
-		`CREATE TABLE IF NOT EXISTS workflows (
+		// Generic encrypted configuration storage
+		`CREATE TABLE IF NOT EXISTS data_configs (
 			id TEXT PRIMARY KEY,
 			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			name TEXT NOT NULL,
-			description TEXT,
-			definition TEXT NOT NULL,
-			status TEXT NOT NULL DEFAULT 'pending',
-			current_step INTEGER DEFAULT 0,
-			state TEXT,
-			error TEXT,
+			config_type TEXT NOT NULL,
+			config_key TEXT NOT NULL,
+			encrypted_data BLOB NOT NULL,
+			data_nonce BLOB NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			started_at DATETIME,
-			completed_at DATETIME
-		)`,
-
-		// Workflow steps table for tracking individual step execution
-		`CREATE TABLE IF NOT EXISTS workflow_steps (
-			id TEXT PRIMARY KEY,
-			workflow_id TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
-			step_index INTEGER NOT NULL,
-			name TEXT NOT NULL,
-			type TEXT NOT NULL,
-			config TEXT NOT NULL,
-			status TEXT DEFAULT 'pending',
-			result TEXT,
-			started_at DATETIME,
-			completed_at DATETIME,
-			error TEXT
+			UNIQUE(user_id, config_type, config_key)
 		)`,
 
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
@@ -395,10 +376,7 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_workflows_user_id ON workflows(user_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_workflows_user_status ON workflows(user_id, status)`,
-		`CREATE INDEX IF NOT EXISTS idx_workflow_steps_workflow_id ON workflow_steps(workflow_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_data_configs_user_type ON data_configs(user_id, config_type)`,
 	}
 
 	for _, migration := range migrations {

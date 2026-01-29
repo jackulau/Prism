@@ -72,7 +72,7 @@ func main() {
 	fileHistoryRepo := repository.NewFileHistoryRepository(db.DB)
 	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
 	todoRepo := repository.NewTodoRepository(db.DB)
-	agentRepo := repository.NewAgentRepository(db.DB)
+	dataConfigRepo := repository.NewDataConfigRepository(db.DB, encryptionService)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -225,7 +225,7 @@ func main() {
 		ProviderKeyRepo:    providerKeyRepo,
 		IntegrationRepo:    integrationRepo,
 		FileHistoryRepo:    fileHistoryRepo,
-		AgentRepo:          agentRepo,
+		DataConfigRepo:     dataConfigRepo,
 		LLMManager:         llmManager,
 		WSHub:              wsHub,
 		SSEService:         sseService,
