@@ -236,9 +236,10 @@ func (sm *SessionManager) GetSessionByReconnectToken(token string) (*RemoteSessi
 	}
 
 	session.mu.RLock()
-	defer session.mu.RUnlock()
+	expired := time.Now().After(session.ReconnectExpiry)
+	session.mu.RUnlock()
 
-	if time.Now().After(session.ReconnectExpiry) {
+	if expired {
 		return nil, ErrReconnectTokenExpired
 	}
 
@@ -326,17 +327,21 @@ func (sm *SessionManager) Reconnect(token string) (*RemoteSession, error) {
 		return nil, err
 	}
 
-	session.mu.Lock()
-	if session.State == StateClosed {
-		session.mu.Unlock()
-		return nil, ErrSessionClosed
-	}
-
-	// Generate new reconnect token
+	// Generate new reconnect token first (before locking)
 	newToken, err := generateReconnectToken()
 	if err != nil {
-		session.mu.Unlock()
 		return nil, err
+	}
+
+	// Lock in consistent order: sm.mu first, then session.mu
+	// This prevents deadlock with cleanup loop
+	sm.mu.Lock()
+	session.mu.Lock()
+
+	if session.State == StateClosed {
+		session.mu.Unlock()
+		sm.mu.Unlock()
+		return nil, ErrSessionClosed
 	}
 
 	// Update session state
@@ -348,12 +353,12 @@ func (sm *SessionManager) Reconnect(token string) (*RemoteSession, error) {
 	session.LastActivity = now
 	session.LastHeartbeat = now
 	session.DisconnectedAt = nil
-	session.mu.Unlock()
 
-	// Update token map
-	sm.mu.Lock()
+	// Update token map (already holding sm.mu)
 	delete(sm.reconnectTokens, oldToken)
 	sm.reconnectTokens[newToken] = session.ID
+
+	session.mu.Unlock()
 	sm.mu.Unlock()
 
 	if sm.onSessionReconnect != nil {

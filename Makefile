@@ -51,6 +51,15 @@ test-backend: ## Run backend tests
 test-frontend: ## Run frontend tests
 	cd frontend && npm test
 
+test-remote: ## Run remote access tests
+	cd backend && go test -v ./internal/remote/... ./internal/security/...
+
+test-remote-integration: ## Run remote access integration tests
+	cd backend && go test -v -tags=integration ./internal/remote/...
+
+test-remote-coverage: ## Run remote tests with coverage report
+	cd backend && go test -coverprofile=coverage.out ./internal/remote/... ./internal/security/... && go tool cover -html=coverage.out -o coverage.html && echo "Coverage report: backend/coverage.html"
+
 # Database
 db-migrate: ## Run database migrations
 	cd backend && go run ./cmd/server -migrate
