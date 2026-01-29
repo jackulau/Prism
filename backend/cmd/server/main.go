@@ -25,7 +25,7 @@ import (
 	"github.com/jacklau/prism/internal/llm/lmstudio"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
-	"github.com/jacklau/prism/internal/llm/openrouter"
+	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
@@ -73,7 +73,7 @@ func main() {
 	fileHistoryRepo := repository.NewFileHistoryRepository(db.DB)
 	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
 	todoRepo := repository.NewTodoRepository(db.DB)
-	dataConfigRepo := repository.NewDataConfigRepository(db.DB, encryptionService)
+	organizationRepo := repository.NewOrganizationRepository(db.DB)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -215,30 +215,30 @@ func main() {
 
 	// Setup routes
 	deps := &routes.Dependencies{
-		Config:               cfg,
-		JWTService:           jwtService,
-		EncryptionService:    encryptionService,
-		UserRepo:             userRepo,
-		SessionRepo:          sessionRepo,
-		ConversationRepo:     conversationRepo,
-		MessageRepo:          messageRepo,
-		WebhookRepo:          webhookRepo,
-		ProviderKeyRepo:      providerKeyRepo,
-		CustomProviderRepo:   customProviderRepo,
-		IntegrationRepo:      integrationRepo,
-		FileHistoryRepo:      fileHistoryRepo,
-		LLMManager:           llmManager,
-		WSHub:                wsHub,
-		IntegrationManager:   integrationManager,
-		AgentManager:         agentManager,
-		CodeRunner:           codeRunner,
-		SandboxService:       sandboxService,
-		ToolRegistry:         toolRegistry,
-		MCPServer:            mcpServer,
-		MCPClient:            mcpClient,
-		MCPRepository:        mcpRepo,
-		StdioMCPClient:       stdioMCPClient,
-		StdioMCPRepository:   stdioMCPRepo,
+		Config:             cfg,
+		JWTService:         jwtService,
+		EncryptionService:  encryptionService,
+		UserRepo:           userRepo,
+		SessionRepo:        sessionRepo,
+		ConversationRepo:   conversationRepo,
+		MessageRepo:        messageRepo,
+		WebhookRepo:        webhookRepo,
+		ProviderKeyRepo:    providerKeyRepo,
+		IntegrationRepo:    integrationRepo,
+		FileHistoryRepo:    fileHistoryRepo,
+		OrganizationRepo:   organizationRepo,
+		LLMManager:         llmManager,
+		WSHub:              wsHub,
+		IntegrationManager: integrationManager,
+		AgentManager:       agentManager,
+		CodeRunner:         codeRunner,
+		SandboxService:     sandboxService,
+		ToolRegistry:       toolRegistry,
+		MCPServer:          mcpServer,
+		MCPClient:          mcpClient,
+		MCPRepository:      mcpRepo,
+		StdioMCPClient:     stdioMCPClient,
+		StdioMCPRepository: stdioMCPRepo,
 	}
 
 	app := routes.Setup(deps)

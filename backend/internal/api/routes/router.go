@@ -32,30 +32,30 @@ import (
 
 // Dependencies holds all the dependencies for the router
 type Dependencies struct {
-	Config               *config.Config
-	JWTService           *security.JWTService
-	EncryptionService    *security.EncryptionService
-	UserRepo             *repository.UserRepository
-	SessionRepo          *repository.SessionRepository
-	ConversationRepo     *repository.ConversationRepository
-	MessageRepo          *repository.MessageRepository
-	WebhookRepo          *repository.WebhookRepository
-	ProviderKeyRepo      *repository.ProviderKeyRepository
-	CustomProviderRepo   *repository.CustomProviderRepository
-	IntegrationRepo      *repository.IntegrationRepository
-	FileHistoryRepo      *repository.FileHistoryRepository
-	LLMManager           *llm.Manager
-	WSHub                *ws.Hub
-	IntegrationManager   *integrations.Manager
-	AgentManager         *agent.Manager
-	CodeRunner           *coderunner.Runner
-	SandboxService       *sandbox.Service
-	ToolRegistry         *tools.Registry
-	MCPServer            *mcp.Server
-	MCPClient            *mcp.Client
-	MCPRepository        *mcp.Repository
-	StdioMCPClient       *mcp.StdioClient
-	StdioMCPRepository   *mcp.StdioRepository
+	Config             *config.Config
+	JWTService         *security.JWTService
+	EncryptionService  *security.EncryptionService
+	UserRepo           *repository.UserRepository
+	SessionRepo        *repository.SessionRepository
+	ConversationRepo   *repository.ConversationRepository
+	MessageRepo        *repository.MessageRepository
+	WebhookRepo        *repository.WebhookRepository
+	ProviderKeyRepo    *repository.ProviderKeyRepository
+	IntegrationRepo    *repository.IntegrationRepository
+	FileHistoryRepo    *repository.FileHistoryRepository
+	OrganizationRepo   *repository.OrganizationRepository
+	LLMManager         *llm.Manager
+	WSHub              *ws.Hub
+	IntegrationManager *integrations.Manager
+	AgentManager       *agent.Manager
+	CodeRunner         *coderunner.Runner
+	SandboxService     *sandbox.Service
+	ToolRegistry       *tools.Registry
+	MCPServer          *mcp.Server
+	MCPClient          *mcp.Client
+	MCPRepository      *mcp.Repository
+	StdioMCPClient     *mcp.StdioClient
+	StdioMCPRepository *mcp.StdioRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -363,15 +363,15 @@ func Setup(deps *Dependencies) *fiber.App {
 		stdioHandler.RegisterRoutes(stdioProtected)
 	}
 
-	// Data Config routes (encrypted configuration storage)
-	if deps.DataConfigRepo != nil {
-		dataConfigHandler := handlers.NewDataConfigHandler(deps.DataConfigRepo)
-		configRoutes := v1.Group("/config", middleware.AuthMiddleware(deps.JWTService))
-		configRoutes.Get("/:type", dataConfigHandler.ListConfigs)
-		configRoutes.Post("/:type/:key", dataConfigHandler.SetConfig)
-		configRoutes.Get("/:type/:key", dataConfigHandler.GetConfig)
-		configRoutes.Delete("/:type/:key", dataConfigHandler.DeleteConfig)
-		configRoutes.Get("/:type/:key/exists", dataConfigHandler.HasConfig)
+	// Organization routes (auth required)
+	if deps.OrganizationRepo != nil {
+		orgHandler := handlers.NewOrganizationHandler(deps.OrganizationRepo)
+		organizations := v1.Group("/organizations", middleware.AuthMiddleware(deps.JWTService))
+		organizations.Post("/", orgHandler.Create)
+		organizations.Get("/", orgHandler.List)
+		organizations.Get("/:id", orgHandler.GetByID)
+		organizations.Patch("/:id", orgHandler.Update)
+		organizations.Delete("/:id", orgHandler.Delete)
 	}
 
 	// Integrations routes (for Settings page)
