@@ -21,6 +21,7 @@ import (
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/integrations"
+	"github.com/jacklau/prism/internal/integrations/github"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/sandbox"
@@ -52,12 +53,13 @@ type Dependencies struct {
 	CodeRunner         *coderunner.Runner
 	SandboxService     *sandbox.Service
 	ToolRegistry       *tools.Registry
-	MCPServer              *mcp.Server
-	MCPClient              *mcp.Client
-	MCPRepository          *mcp.Repository
-	StdioMCPClient         *mcp.StdioClient
-	StdioMCPRepository     *mcp.StdioRepository
-	CloudProviderManager   *cloudprovider.ProviderManager
+	MCPServer          *mcp.Server
+	MCPClient          *mcp.Client
+	MCPRepository      *mcp.Repository
+	StdioMCPClient           *mcp.StdioClient
+	StdioMCPRepository       *mcp.StdioRepository
+	GitHubApp                *github.GitHubApp
+	GitHubInstallationRepo   *repository.GitHubInstallationRepo
 }
 
 // Setup sets up the Fiber app with all routes
@@ -304,6 +306,32 @@ func Setup(deps *Dependencies) *fiber.App {
 			workspaceHandler := handlers.NewWorkspaceHandler(deps.SandboxService)
 			githubAccount.Post("/clone", workspaceHandler.CloneGitHubRepo)
 		}
+	}
+
+	// GitHub App routes
+	if deps.GitHubApp != nil && deps.GitHubApp.IsConfigured() && deps.GitHubInstallationRepo != nil {
+		githubAppHandler := handlers.NewGitHubAppHandler(deps.GitHubApp, deps.GitHubInstallationRepo)
+
+		// Public webhook endpoint (no auth - verified by signature)
+		githubAppWebhookHandler := handlers.NewGitHubAppWebhookHandler(
+			deps.GitHubApp,
+			deps.GitHubInstallationRepo,
+			deps.Config.GitHubAppWebhookSecret,
+		)
+		v1.Post("/github/app/webhook", githubAppWebhookHandler.HandleWebhook)
+
+		// Public setup callback (no auth - called by GitHub after App installation)
+		v1.Get("/github/app/setup", githubAppHandler.HandleSetup)
+
+		// Protected GitHub App routes
+		githubApp := v1.Group("/github/app", middleware.AuthMiddleware(deps.JWTService))
+		githubApp.Get("/status", githubAppHandler.GetStatus)
+		githubApp.Get("/installations", githubAppHandler.ListInstallations)
+		githubApp.Get("/installations/:installationID", githubAppHandler.GetInstallation)
+		githubApp.Get("/installations/:installationID/repos", githubAppHandler.ListInstallationRepos)
+		githubApp.Post("/installations/:installationID/repos/refresh", githubAppHandler.RefreshInstallationRepos)
+		githubApp.Get("/repos", githubAppHandler.ListAllRepos)
+		githubApp.Post("/sync", githubAppHandler.SyncAllInstallations)
 	}
 
 	// MCP routes

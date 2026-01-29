@@ -96,6 +96,20 @@ func ParseEvent(eventType string, payload []byte) (interface{}, error) {
 		}
 		return &event, nil
 
+	case "installation":
+		var event InstallationEvent
+		if err := json.Unmarshal(payload, &event); err != nil {
+			return nil, fmt.Errorf("failed to parse installation event: %w", err)
+		}
+		return &event, nil
+
+	case "installation_repositories":
+		var event InstallationRepositoriesEvent
+		if err := json.Unmarshal(payload, &event); err != nil {
+			return nil, fmt.Errorf("failed to parse installation_repositories event: %w", err)
+		}
+		return &event, nil
+
 	default:
 		// For unsupported events, return a generic map
 		var event map[string]interface{}
@@ -127,6 +141,10 @@ func GetEventAction(event interface{}) string {
 		return e.Action
 	case *PushEvent:
 		return "push"
+	case *InstallationEvent:
+		return e.Action
+	case *InstallationRepositoriesEvent:
+		return e.Action
 	default:
 		if m, ok := event.(map[string]interface{}); ok {
 			if action, ok := m["action"].(string); ok {

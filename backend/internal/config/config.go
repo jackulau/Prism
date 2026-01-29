@@ -83,19 +83,14 @@ type Config struct {
 	// Authentication - WorkOS
 	WorkOS WorkOSConfig
 
-	// LLM Providers - Server-side keys
-	LLM LLMConfig
+	// GitHub App
+	GitHubAppID            int64
+	GitHubAppPrivateKey    string
+	GitHubAppClientID      string
+	GitHubAppClientSecret  string
+	GitHubAppWebhookSecret string
 
-	// Analytics - PostHog
-	Analytics AnalyticsConfig
-
-	// Payments - Stripe
-	Stripe StripeConfig
-
-	// GitHub App and OAuth
-	GitHub GitHubAppConfig
-
-	// Ollama (local LLM)
+	// Ollama
 	OllamaHost string
 
 	// LM Studio
@@ -192,40 +187,14 @@ func Load() (*Config, error) {
 			WebhookSecret:  getEnv("WORKOS_WEBHOOK_SECRET", ""),
 		},
 
-		// LLM Providers - Server-side keys
-		LLM: LLMConfig{
-			OpenAIAPIKey:    getEnv("OPENAI_API_KEY", ""),
-			AnthropicAPIKey: getEnv("ANTHROPIC_API_KEY", ""),
-		},
+		// GitHub App
+		GitHubAppID:            getInt64Env("GITHUB_APP_ID", 0),
+		GitHubAppPrivateKey:    getEnv("GITHUB_APP_PRIVATE_KEY", ""),
+		GitHubAppClientID:      getEnv("GITHUB_APP_CLIENT_ID", ""),
+		GitHubAppClientSecret:  getEnv("GITHUB_APP_CLIENT_SECRET", ""),
+		GitHubAppWebhookSecret: getEnv("GITHUB_APP_WEBHOOK_SECRET", ""),
 
-		// Analytics - PostHog
-		Analytics: AnalyticsConfig{
-			Enabled:       getBoolEnv("POSTHOG_ENABLED", false),
-			APIKey:        getEnv("POSTHOG_API_KEY", ""),
-			Endpoint:      getEnv("POSTHOG_ENDPOINT", "https://app.posthog.com"),
-			BatchSize:     getIntEnv("POSTHOG_BATCH_SIZE", 10),
-			FlushInterval: getDurationEnv("POSTHOG_FLUSH_INTERVAL", 30*time.Second),
-		},
-
-		// Payments - Stripe
-		Stripe: StripeConfig{
-			SecretKey:      getEnv("STRIPE_SECRET_KEY", ""),
-			WebhookSecret:  getEnv("STRIPE_WEBHOOK_SECRET", ""),
-			PublishableKey: getEnv("STRIPE_PUBLISHABLE_KEY", ""),
-		},
-
-		// GitHub App and OAuth
-		GitHub: GitHubAppConfig{
-			AppID:          getEnv("GITHUB_APP_ID", ""),
-			PrivateKey:     getEnv("GITHUB_PRIVATE_KEY", ""),
-			WebhookSecret:  getEnv("GITHUB_WEBHOOK_SECRET", ""),
-			ClientID:       getEnv("GITHUB_CLIENT_ID", ""),
-			ClientSecret:   getEnv("GITHUB_CLIENT_SECRET", ""),
-			RedirectURL:    getEnv("GITHUB_REDIRECT_URL", "http://localhost:8080/api/v1/github/callback"),
-			WebhookEnabled: getBoolEnv("GITHUB_WEBHOOK_ENABLED", false),
-		},
-
-		// Ollama (local LLM)
+		// Ollama
 		OllamaHost: getEnv("OLLAMA_HOST", "http://localhost:11434"),
 
 		// LM Studio

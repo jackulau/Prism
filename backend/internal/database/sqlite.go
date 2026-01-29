@@ -335,17 +335,36 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
-		// Generic encrypted configuration storage
-		`CREATE TABLE IF NOT EXISTS data_configs (
+		// GitHub App installations
+		`CREATE TABLE IF NOT EXISTS github_app_installations (
 			id TEXT PRIMARY KEY,
-			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			config_type TEXT NOT NULL,
-			config_key TEXT NOT NULL,
-			encrypted_data BLOB NOT NULL,
-			data_nonce BLOB NOT NULL,
+			installation_id INTEGER UNIQUE NOT NULL,
+			account_id INTEGER NOT NULL,
+			account_login TEXT NOT NULL,
+			account_type TEXT NOT NULL,
+			account_avatar_url TEXT,
+			app_id INTEGER NOT NULL,
+			target_type TEXT NOT NULL,
+			permissions TEXT,
+			events TEXT,
+			repository_selection TEXT,
+			suspended_at DATETIME,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			UNIQUE(user_id, config_type, config_key)
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// GitHub App installation repositories
+		`CREATE TABLE IF NOT EXISTS github_installation_repositories (
+			id TEXT PRIMARY KEY,
+			installation_id INTEGER NOT NULL,
+			repository_id INTEGER NOT NULL,
+			full_name TEXT NOT NULL,
+			name TEXT NOT NULL,
+			private INTEGER DEFAULT 0,
+			html_url TEXT,
+			description TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(installation_id, repository_id)
 		)`,
 
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
@@ -376,7 +395,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
-		`CREATE INDEX IF NOT EXISTS idx_data_configs_user_type ON data_configs(user_id, config_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_github_app_installations_account ON github_app_installations(account_login)`,
+		`CREATE INDEX IF NOT EXISTS idx_github_installation_repos_installation ON github_installation_repositories(installation_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_github_installation_repos_fullname ON github_installation_repositories(full_name)`,
 	}
 
 	for _, migration := range migrations {
