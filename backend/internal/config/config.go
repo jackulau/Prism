@@ -33,6 +33,26 @@ type RemoteAccessConfig struct {
 	AllowedIPs []string
 }
 
+// DatabaseConfig contains database connection settings
+type DatabaseConfig struct {
+	URL      string
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Database string
+	SSLMode  string
+}
+
+// WorkOSConfig contains WorkOS authentication settings
+type WorkOSConfig struct {
+	APIKey         string
+	ClientID       string
+	RedirectURI    string
+	CookiePassword string
+	WebhookSecret  string
+}
+
 type Config struct {
 	// Server
 	Port        string
@@ -241,19 +261,6 @@ func Load() (*Config, error) {
 		WorkOSCookiePassword: getEnv("WORKOS_COOKIE_PASSWORD", ""),
 	}
 
-	// Set legacy fields for backward compatibility
-	cfg.DatabaseURL = cfg.Database.URL
-	cfg.GitHubClientID = cfg.GitHub.ClientID
-	cfg.GitHubClientSecret = cfg.GitHub.ClientSecret
-	cfg.GitHubRedirectURL = cfg.GitHub.RedirectURL
-	cfg.GitHubWebhookEnabled = cfg.GitHub.WebhookEnabled
-	cfg.GitHubWebhookSecret = cfg.GitHub.WebhookSecret
-	cfg.PostHogEnabled = cfg.Analytics.Enabled
-	cfg.PostHogAPIKey = cfg.Analytics.APIKey
-	cfg.PostHogEndpoint = cfg.Analytics.Endpoint
-	cfg.PostHogBatchSize = cfg.Analytics.BatchSize
-	cfg.PostHogFlushInterval = cfg.Analytics.FlushInterval
-
 	// Validate configuration
 	if err := cfg.validate(); err != nil {
 		return nil, err
@@ -387,4 +394,36 @@ func getStringSliceEnv(key string, defaultValue []string) []string {
 		}
 	}
 	return defaultValue
+}
+
+// validateDatabase validates database configuration
+func (cfg *Config) validateDatabase() error {
+	// Database URL is required
+	if cfg.Database.URL == "" && cfg.Database.Host == "" {
+		log.Println("WARNING: No database configured. Using default SQLite database.")
+	}
+	return nil
+}
+
+// validateWorkOS validates WorkOS SSO configuration
+func (cfg *Config) validateWorkOS() error {
+	// WorkOS is optional, just validate if partially configured
+	if cfg.WorkOS.APIKey != "" || cfg.WorkOS.ClientID != "" {
+		if cfg.WorkOS.APIKey == "" || cfg.WorkOS.ClientID == "" {
+			log.Println("WARNING: WorkOS is partially configured. Both WORKOS_API_KEY and WORKOS_CLIENT_ID are required.")
+		}
+	}
+	return nil
+}
+
+// validateStripe validates Stripe payment configuration
+func (cfg *Config) validateStripe() error {
+	// Stripe is optional
+	return nil
+}
+
+// validateRemoteAccess validates remote access configuration
+func (cfg *Config) validateRemoteAccess() error {
+	// Remote access is optional
+	return nil
 }
