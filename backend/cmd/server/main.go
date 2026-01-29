@@ -10,6 +10,7 @@ import (
 	"github.com/jacklau/prism/internal/api/routes"
 	"github.com/jacklau/prism/internal/api/sse"
 	"github.com/jacklau/prism/internal/api/websocket"
+	"github.com/jacklau/prism/internal/cloudprovider"
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database"
 	"github.com/jacklau/prism/internal/database/repository"
@@ -24,11 +25,10 @@ import (
 	"github.com/jacklau/prism/internal/llm/lmstudio"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
+	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
-	"github.com/jacklau/prism/internal/mcp"
-	"github.com/jacklau/prism/internal/remote"
 	"github.com/jacklau/prism/internal/tools"
 	"github.com/jacklau/prism/internal/tools/builtin"
 )
@@ -206,42 +206,11 @@ func main() {
 	}
 	log.Println("MCP server and clients initialized")
 
-	// Initialize tunnel server for remote access if enabled
-	var tunnelServer *remote.TunnelServer
-	if cfg.RemoteAccessEnabled {
-		// Create remote auth service
-		remoteAuthConfig := &remote.RemoteAuthConfig{
-			Enabled:           true,
-			PasswordHash:      cfg.RemoteAccessPasswordHash,
-			SessionDuration:   cfg.RemoteAccessSessionDuration,
-			MaxSessions:       cfg.RemoteAccessMaxConnections,
-			EncryptionService: encryptionService,
-		}
-		remoteAuthService := remote.NewRemoteAuthService(remoteAuthConfig)
-
-		// Create tunnel server config
-		tunnelConfig := &remote.TunnelServerConfig{
-			ListenAddr:          ":" + cfg.RemoteAccessPort,
-			TLSCertFile:         cfg.RemoteAccessTLSCertFile,
-			TLSKeyFile:          cfg.RemoteAccessTLSKeyFile,
-			TargetURL:           "http://" + cfg.Host + ":" + cfg.Port,
-			MaxConnections:      cfg.RemoteAccessMaxConnections,
-			MaxConnectionsPerIP: cfg.RemoteAccessMaxPerIP,
-			SessionTimeout:      cfg.RemoteAccessSessionDuration,
-		}
-
-		var err error
-		tunnelServer, err = remote.NewTunnelServer(tunnelConfig, remoteAuthService)
-		if err != nil {
-			log.Printf("Warning: Failed to create tunnel server: %v", err)
-		} else {
-			if err := tunnelServer.Start(); err != nil {
-				log.Printf("Warning: Failed to start tunnel server: %v", err)
-			} else {
-				log.Printf("Tunnel server started on port %s (TLS)", cfg.RemoteAccessPort)
-			}
-		}
-	}
+	// Initialize cloud provider manager
+	cloudProviderManager := cloudprovider.NewManager()
+	// Note: Cloud providers will be registered when their implementations are available
+	// (e.g., claude-cloud, openai-assistants)
+	log.Println("Cloud provider manager initialized")
 
 	// Setup routes
 	deps := &routes.Dependencies{
@@ -265,11 +234,12 @@ func main() {
 		CodeRunner:         codeRunner,
 		SandboxService:     sandboxService,
 		ToolRegistry:       toolRegistry,
-		MCPServer:          mcpServer,
-		MCPClient:          mcpClient,
-		MCPRepository:      mcpRepo,
-		StdioMCPClient:     stdioMCPClient,
-		StdioMCPRepository: stdioMCPRepo,
+		MCPServer:              mcpServer,
+		MCPClient:              mcpClient,
+		MCPRepository:          mcpRepo,
+		StdioMCPClient:         stdioMCPClient,
+		StdioMCPRepository:     stdioMCPRepo,
+		CloudProviderManager:   cloudProviderManager,
 	}
 
 	app := routes.Setup(deps)

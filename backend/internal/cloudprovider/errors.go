@@ -37,6 +37,12 @@ var (
 
 	// ErrNoCredentials is returned when credentials are required but not configured.
 	ErrNoCredentials = errors.New("no credentials configured")
+
+	// ErrProviderNotFound is returned when a provider is not registered with the manager.
+	ErrProviderNotFound = errors.New("provider not found")
+
+	// ErrProviderAlreadyRegistered is returned when trying to register a provider that already exists.
+	ErrProviderAlreadyRegistered = errors.New("provider already registered")
 )
 
 // ProviderError wraps an error with provider-specific context.

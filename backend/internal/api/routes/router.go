@@ -17,6 +17,7 @@ import (
 	"github.com/jacklau/prism/internal/api/middleware"
 	"github.com/jacklau/prism/internal/api/sse"
 	ws "github.com/jacklau/prism/internal/api/websocket"
+	"github.com/jacklau/prism/internal/cloudprovider"
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/integrations"
@@ -51,12 +52,12 @@ type Dependencies struct {
 	CodeRunner         *coderunner.Runner
 	SandboxService     *sandbox.Service
 	ToolRegistry       *tools.Registry
-	MCPServer          *mcp.Server
-	MCPClient          *mcp.Client
-	MCPRepository      *mcp.Repository
-	StdioMCPClient     *mcp.StdioClient
-	StdioMCPRepository *mcp.StdioRepository
-	WorkflowEngine     *workflow.Engine
+	MCPServer              *mcp.Server
+	MCPClient              *mcp.Client
+	MCPRepository          *mcp.Repository
+	StdioMCPClient         *mcp.StdioClient
+	StdioMCPRepository     *mcp.StdioRepository
+	CloudProviderManager   *cloudprovider.ProviderManager
 }
 
 // Setup sets up the Fiber app with all routes
