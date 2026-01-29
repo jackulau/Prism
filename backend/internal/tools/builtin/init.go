@@ -118,6 +118,11 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		return err
 	}
 
+	// Sandbox grep tool for raw grep command execution
+	if err := registry.Register(NewGrepSandboxTool(sandbox)); err != nil {
+		return err
+	}
+
 	// Edit tool for precise string replacement
 	if err := registry.Register(NewEditTool(sandbox, config.FileHistoryRepo)); err != nil {
 		return err
