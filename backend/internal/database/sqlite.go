@@ -335,6 +335,23 @@ func (db *DB) Migrate() error {
 			UNIQUE(user_id, type)
 		)`,
 
+		// Agents (AI execution instances)
+		`CREATE TABLE IF NOT EXISTS agents (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT REFERENCES user_workspaces(id) ON DELETE CASCADE,
+			status TEXT NOT NULL DEFAULT 'PENDING',
+			provider_type TEXT NOT NULL,
+			conversation_id TEXT,
+			url TEXT,
+			github_branch_name TEXT,
+			name TEXT NOT NULL,
+			model TEXT,
+			sandbox_id TEXT,
+			is_orchestrator_agent INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
 		`ALTER TABLE users ADD COLUMN github_token TEXT`,
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
@@ -363,6 +380,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_workspace_id ON agents(workspace_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_created_at ON agents(created_at DESC)`,
 	}
 
 	for _, migration := range migrations {
