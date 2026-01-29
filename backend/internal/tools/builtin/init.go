@@ -195,11 +195,9 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		}
 	}
 
-	// Spawn sub-agent tool for orchestrator workflows
-	if config.LLMManager != nil {
-		if err := registry.Register(NewSpawnSubAgentTool(config.LLMManager)); err != nil {
-			return err
-		}
+	// PostHog Documentation search (no API key required)
+	if err := registry.Register(NewPostHogDocsSearchTool()); err != nil {
+		return err
 	}
 
 	return nil
