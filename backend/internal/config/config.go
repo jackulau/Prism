@@ -121,8 +121,11 @@ type Config struct {
 	// Guest Mode
 	GuestModeEnabled bool
 
-	// Remote Access
-	RemoteAccess RemoteAccessConfig
+	// Vercel Integration
+	VercelEnabled       bool
+	VercelAPIToken      string
+	VercelTeamID        string
+	VercelDefaultRegion string
 }
 
 func Load() (*Config, error) {
@@ -231,18 +234,11 @@ func Load() (*Config, error) {
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
 
-		// Remote Access - disabled by default for security
-		RemoteAccess: RemoteAccessConfig{
-			Enabled:        getBoolEnv("REMOTE_ACCESS_ENABLED", false),
-			Port:           getIntEnv("REMOTE_ACCESS_PORT", 8443),
-			Host:           getEnv("REMOTE_ACCESS_HOST", "0.0.0.0"),
-			PasswordHash:   getEnv("REMOTE_ACCESS_PASSWORD_HASH", ""),
-			TLSCertPath:    getEnv("REMOTE_ACCESS_TLS_CERT", ""),
-			TLSKeyPath:     getEnv("REMOTE_ACCESS_TLS_KEY", ""),
-			MaxConnections: getIntEnv("REMOTE_ACCESS_MAX_CONNECTIONS", 10),
-			SessionTimeout: getDurationEnv("REMOTE_ACCESS_SESSION_TIMEOUT", 1*time.Hour),
-			AllowedIPs:     getStringSliceEnv("REMOTE_ACCESS_ALLOWED_IPS", nil),
-		},
+		// Vercel Integration
+		VercelEnabled:       getBoolEnv("VERCEL_ENABLED", false),
+		VercelAPIToken:      getEnv("VERCEL_API_TOKEN", ""),
+		VercelTeamID:        getEnv("VERCEL_TEAM_ID", ""),
+		VercelDefaultRegion: getEnv("VERCEL_DEFAULT_REGION", "iad1"),
 	}
 
 	// Set legacy fields for backward compatibility

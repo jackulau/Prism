@@ -50,6 +50,7 @@ type Dependencies struct {
 	AgentManager       *agent.Manager
 	CodeRunner         *coderunner.Runner
 	SandboxService     *sandbox.Service
+	SandboxManager     *sandbox.Manager
 	ToolRegistry       *tools.Registry
 	MCPServer          *mcp.Server
 	MCPClient          *mcp.Client
@@ -246,13 +247,13 @@ func Setup(deps *Dependencies) *fiber.App {
 	// Preview/Sandbox routes (auth required)
 	if deps.SandboxService != nil {
 		previewHandler := handlers.NewPreviewHandler(deps.SandboxService)
-		sandbox := v1.Group("/sandbox", middleware.AuthMiddleware(deps.JWTService))
-		sandbox.Get("/files", previewHandler.ListFiles)
-		sandbox.Get("/files/*", previewHandler.GetFile)
-		sandbox.Post("/files", previewHandler.WriteFile)
-		sandbox.Delete("/files/*", previewHandler.DeleteFile)
-		sandbox.Get("/builds/:id", previewHandler.GetBuild)
-		sandbox.Post("/builds/:id/stop", previewHandler.StopBuild)
+		sandboxGroup := v1.Group("/sandbox", middleware.AuthMiddleware(deps.JWTService))
+		sandboxGroup.Get("/files", previewHandler.ListFiles)
+		sandboxGroup.Get("/files/*", previewHandler.GetFile)
+		sandboxGroup.Post("/files", previewHandler.WriteFile)
+		sandboxGroup.Delete("/files/*", previewHandler.DeleteFile)
+		sandboxGroup.Get("/builds/:id", previewHandler.GetBuild)
+		sandboxGroup.Post("/builds/:id/stop", previewHandler.StopBuild)
 
 		// Preview server (serves static files from sandbox)
 		app.Get("/preview/:userID/*", previewHandler.ServePreview)
@@ -267,6 +268,19 @@ func Setup(deps *Dependencies) *fiber.App {
 		workspace.Get("/recent", workspaceHandler.ListRecentWorkspaces)
 		workspace.Post("/:id/current", workspaceHandler.SetCurrentWorkspace)
 		workspace.Delete("/:id", workspaceHandler.RemoveWorkspace)
+	}
+
+	// Sandbox provider routes (Vercel, etc.) - auth required
+	if deps.SandboxManager != nil {
+		sandboxHandler := handlers.NewSandboxHandler(deps.SandboxManager)
+		sandboxProviders := v1.Group("/sandbox/providers", middleware.AuthMiddleware(deps.JWTService))
+		sandboxProviders.Get("/", sandboxHandler.ListProviders)
+		sandboxProviders.Post("/", sandboxHandler.CreateSandbox)
+		sandboxProviders.Post("/:id/deploy", sandboxHandler.DeploySandbox)
+		sandboxProviders.Get("/:id", sandboxHandler.GetSandbox)
+		sandboxProviders.Get("/:id/logs", sandboxHandler.GetSandboxLogs)
+		sandboxProviders.Delete("/:id", sandboxHandler.DeleteSandbox)
+		sandboxProviders.Get("/:id/preview", sandboxHandler.GetPreviewURL)
 	}
 
 	// GitHub webhook routes

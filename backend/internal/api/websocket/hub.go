@@ -131,6 +131,18 @@ const (
 	TypeBuildCompleted  = "build.completed"
 	TypeBuildStop       = "build.stop"
 
+	// Sandbox lifecycle message types
+	TypeSandboxCreate    = "sandbox.create"
+	TypeSandboxCreated   = "sandbox.created"
+	TypeSandboxDeploy    = "sandbox.deploy"
+	TypeSandboxDeploying = "sandbox.deploying"
+	TypeSandboxDeployed  = "sandbox.deployed"
+	TypeSandboxFailed    = "sandbox.failed"
+	TypeSandboxLogs      = "sandbox.logs"
+	TypeSandboxDelete    = "sandbox.delete"
+	TypeSandboxDeleted   = "sandbox.deleted"
+	TypeSandboxStatus    = "sandbox.status"
+
 	// Shell execution message types
 	TypeShellStart     = "shell.start"
 	TypeShellOutput    = "shell.output"
@@ -853,177 +865,108 @@ func NewFileHistoryContent(historyID, filePath, content, operation, createdAt st
 	}
 }
 
-// WorkflowInfo represents information about a workflow
-type WorkflowInfo struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Status      string `json:"status"`
-	CurrentStep int    `json:"current_step"`
-	TotalSteps  int    `json:"total_steps"`
+// Sandbox lifecycle message constructors
+
+// SandboxInfo represents sandbox information in messages
+type SandboxInfo struct {
+	ID         string `json:"id"`
+	Provider   string `json:"provider"`
+	Status     string `json:"status"`
+	PreviewURL string `json:"preview_url,omitempty"`
+	Framework  string `json:"framework,omitempty"`
+	CreatedAt  int64  `json:"created_at,omitempty"`
+	UpdatedAt  int64  `json:"updated_at,omitempty"`
 }
 
-// WorkflowStepInfo represents information about a workflow step
-type WorkflowStepInfo struct {
-	ID          string      `json:"id"`
-	Name        string      `json:"name"`
-	Type        string      `json:"type"`
-	Status      string      `json:"status"`
-	Output      interface{} `json:"output,omitempty"`
-	Error       string      `json:"error,omitempty"`
-	Duration    int64       `json:"duration,omitempty"`
+// DeploymentInfo represents deployment information in messages
+type DeploymentInfo struct {
+	ID         string `json:"id"`
+	Status     string `json:"status"`
+	PreviewURL string `json:"preview_url,omitempty"`
+	Error      string `json:"error,omitempty"`
+	CreatedAt  int64  `json:"created_at,omitempty"`
+	ReadyAt    int64  `json:"ready_at,omitempty"`
 }
 
-// Workflow message constructors
-
-// NewWorkflowStarted creates a workflow started message
-func NewWorkflowStarted(workflowID, name string, totalSteps int) *OutgoingMessage {
+// NewSandboxCreated creates a new sandbox created message
+func NewSandboxCreated(sandbox SandboxInfo) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:       TypeWorkflowStarted,
-		WorkflowID: workflowID,
-		Status:     "running",
-		TotalSteps: totalSteps,
-		WorkflowInfo: &WorkflowInfo{
-			ID:         workflowID,
-			Name:       name,
-			Status:     "running",
-			TotalSteps: totalSteps,
+		Type:   TypeSandboxCreated,
+		Status: "created",
+		Metadata: map[string]interface{}{
+			"sandbox": sandbox,
 		},
 	}
 }
 
-// NewWorkflowPaused creates a workflow paused message
-func NewWorkflowPaused(workflowID string, currentStep int) *OutgoingMessage {
+// NewSandboxDeploying creates a new sandbox deploying message
+func NewSandboxDeploying(sandboxID string) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:        TypeWorkflowPaused,
-		WorkflowID:  workflowID,
-		Status:      "paused",
-		CurrentStep: currentStep,
+		Type:   TypeSandboxDeploying,
+		Status: "deploying",
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+		},
 	}
 }
 
-// NewWorkflowResumed creates a workflow resumed message
-func NewWorkflowResumed(workflowID string, currentStep int) *OutgoingMessage {
+// NewSandboxDeployed creates a new sandbox deployed message
+func NewSandboxDeployed(sandboxID string, deployment DeploymentInfo) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:        TypeWorkflowResumed,
-		WorkflowID:  workflowID,
-		Status:      "running",
-		CurrentStep: currentStep,
+		Type:       TypeSandboxDeployed,
+		Status:     "deployed",
+		PreviewURL: deployment.PreviewURL,
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+			"deployment": deployment,
+		},
 	}
 }
 
-// NewWorkflowCompleted creates a workflow completed message
-func NewWorkflowCompleted(workflowID string, state map[string]interface{}, durationMs int64) *OutgoingMessage {
+// NewSandboxFailed creates a new sandbox failed message
+func NewSandboxFailed(sandboxID, errorMsg string) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:       TypeWorkflowCompleted,
-		WorkflowID: workflowID,
-		Status:     "completed",
-		State:      state,
-		Duration:   durationMs,
+		Type:   TypeSandboxFailed,
+		Status: "failed",
+		Error:  errorMsg,
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+		},
 	}
 }
 
-// NewWorkflowFailed creates a workflow failed message
-func NewWorkflowFailed(workflowID, errorMsg string, currentStep int) *OutgoingMessage {
+// NewSandboxLogs creates a new sandbox logs message
+func NewSandboxLogs(sandboxID, message, level, source string, timestamp int64) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:        TypeWorkflowFailed,
-		WorkflowID:  workflowID,
-		Status:      "failed",
-		Error:       errorMsg,
-		CurrentStep: currentStep,
+		Type:    TypeSandboxLogs,
+		Content: message,
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+			"level":      level,
+			"source":     source,
+			"timestamp":  timestamp,
+		},
 	}
 }
 
-// NewWorkflowCancelled creates a workflow cancelled message
-func NewWorkflowCancelled(workflowID string) *OutgoingMessage {
+// NewSandboxDeleted creates a new sandbox deleted message
+func NewSandboxDeleted(sandboxID string) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:       TypeWorkflowCancelled,
-		WorkflowID: workflowID,
-		Status:     "cancelled",
+		Type:   TypeSandboxDeleted,
+		Status: "deleted",
+		Metadata: map[string]interface{}{
+			"sandbox_id": sandboxID,
+		},
 	}
 }
 
-// NewWorkflowProgress creates a workflow progress message
-func NewWorkflowProgress(workflowID string, currentStep, totalSteps int, state map[string]interface{}) *OutgoingMessage {
+// NewSandboxStatus creates a new sandbox status message
+func NewSandboxStatus(sandbox SandboxInfo) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:        TypeWorkflowProgress,
-		WorkflowID:  workflowID,
-		CurrentStep: currentStep,
-		TotalSteps:  totalSteps,
-		State:       state,
-	}
-}
-
-// NewWorkflowStepStarted creates a step started message
-func NewWorkflowStepStarted(workflowID, stepID, stepName, stepType string, stepIndex int) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:        TypeWorkflowStepStarted,
-		WorkflowID:  workflowID,
-		StepID:      stepID,
-		StepName:    stepName,
-		StepType:    stepType,
-		CurrentStep: stepIndex,
-		Status:      "running",
-	}
-}
-
-// NewWorkflowStepCompleted creates a step completed message
-func NewWorkflowStepCompleted(workflowID, stepID, stepName string, output interface{}, durationMs int64) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:       TypeWorkflowStepCompleted,
-		WorkflowID: workflowID,
-		StepID:     stepID,
-		StepName:   stepName,
-		Status:     "completed",
-		Result:     output,
-		Duration:   durationMs,
-	}
-}
-
-// NewWorkflowStepFailed creates a step failed message
-func NewWorkflowStepFailed(workflowID, stepID, stepName, errorMsg string) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:       TypeWorkflowStepFailed,
-		WorkflowID: workflowID,
-		StepID:     stepID,
-		StepName:   stepName,
-		Status:     "failed",
-		Error:      errorMsg,
-	}
-}
-
-// NewWorkflowStepSkipped creates a step skipped message
-func NewWorkflowStepSkipped(workflowID, stepID, stepName string) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:       TypeWorkflowStepSkipped,
-		WorkflowID: workflowID,
-		StepID:     stepID,
-		StepName:   stepName,
-		Status:     "skipped",
-	}
-}
-
-// NewWorkflowWaitingInput creates a waiting for input message
-func NewWorkflowWaitingInput(workflowID, stepID, stepName, promptText string) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:       TypeWorkflowWaitingInput,
-		WorkflowID: workflowID,
-		StepID:     stepID,
-		StepName:   stepName,
-		Status:     "waiting",
-		Message:    promptText,
-	}
-}
-
-// NewWorkflowStatus creates a workflow status message
-func NewWorkflowStatus(info *WorkflowInfo, state map[string]interface{}) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:         TypeWorkflowStatus,
-		WorkflowID:   info.ID,
-		Status:       info.Status,
-		CurrentStep:  info.CurrentStep,
-		TotalSteps:   info.TotalSteps,
-		State:        state,
-		WorkflowInfo: info,
+		Type:   TypeSandboxStatus,
+		Status: sandbox.Status,
+		Metadata: map[string]interface{}{
+			"sandbox": sandbox,
+		},
 	}
 }
