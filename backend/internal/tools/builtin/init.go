@@ -33,8 +33,8 @@ type Config struct {
 	// LLM provider for WebFetch AI analysis (optional)
 	LLMProvider llm.Provider
 
-	// LLM manager for agent-related tools (spawn_sub_agent)
-	LLMManager *llm.Manager
+	// PostHog tools configuration (for querying PostHog data)
+	PostHogToolConfig *PostHogToolConfig
 }
 
 // RegisterAll registers all built-in tools with the registry
@@ -195,9 +195,14 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		}
 	}
 
-	// PostHog Documentation search (no API key required)
-	if err := registry.Register(NewPostHogDocsSearchTool()); err != nil {
-		return err
+	// PostHog error tools (only if configured)
+	if config.PostHogToolConfig != nil && config.PostHogToolConfig.APIKey != "" && config.PostHogToolConfig.ProjectID != "" {
+		if err := registry.Register(NewPostHogListErrorsTool(*config.PostHogToolConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogErrorDetailsTool(*config.PostHogToolConfig)); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -124,6 +124,18 @@ type Config struct {
 	SlackBotToken   string
 	SlackChannelID  string
 
+	// PostHog Analytics
+	PostHogEnabled       bool
+	PostHogAPIKey        string
+	PostHogEndpoint      string
+	PostHogBatchSize     int
+	PostHogFlushInterval time.Duration
+	PostHogProjectID     string // Project ID for PostHog query tools
+
+	// GitHub Webhooks
+	GitHubWebhookEnabled bool
+	GitHubWebhookSecret  string
+
 	// Code Runner
 	CodeRunnerEnabled     bool
 	CodeRunnerDockerMode  bool
@@ -219,6 +231,18 @@ func Load() (*Config, error) {
 		SlackWebhookURL: getEnv("SLACK_WEBHOOK_URL", ""),
 		SlackBotToken:   getEnv("SLACK_BOT_TOKEN", ""),
 		SlackChannelID:  getEnv("SLACK_CHANNEL_ID", ""),
+
+		// PostHog Analytics
+		PostHogEnabled:       getBoolEnv("POSTHOG_ENABLED", false),
+		PostHogAPIKey:        getEnv("POSTHOG_API_KEY", ""),
+		PostHogEndpoint:      getEnv("POSTHOG_ENDPOINT", "https://app.posthog.com"),
+		PostHogBatchSize:     getIntEnv("POSTHOG_BATCH_SIZE", 10),
+		PostHogFlushInterval: getDurationEnv("POSTHOG_FLUSH_INTERVAL", 30*time.Second),
+		PostHogProjectID:     getEnv("POSTHOG_PROJECT_ID", ""),
+
+		// GitHub Webhooks
+		GitHubWebhookEnabled: getBoolEnv("GITHUB_WEBHOOK_ENABLED", false),
+		GitHubWebhookSecret:  getEnv("GITHUB_WEBHOOK_SECRET", ""),
 
 		// Code Runner
 		CodeRunnerEnabled:     getBoolEnv("CODE_RUNNER_ENABLED", true),
