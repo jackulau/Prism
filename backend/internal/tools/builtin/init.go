@@ -46,6 +46,9 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 	if err := registry.Register(NewFileReadTool(sandbox)); err != nil {
 		return err
 	}
+	if err := registry.Register(NewReadFileSandboxTool(sandbox)); err != nil {
+		return err
+	}
 	if err := registry.Register(NewFileWriteTool(sandbox, config.FileHistoryRepo)); err != nil {
 		return err
 	}
