@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jacklau/prism/internal/workflow"
+	"github.com/jacklau/prism/internal/workflowtypes"
 )
 
 // WorkflowRepository handles workflow persistence
@@ -21,7 +21,7 @@ func NewWorkflowRepository(db *sql.DB) *WorkflowRepository {
 }
 
 // Create creates a new workflow
-func (r *WorkflowRepository) Create(w *workflow.Workflow) error {
+func (r *WorkflowRepository) Create(w *workflowtypes.Workflow) error {
 	// Serialize steps
 	stepsJSON, err := json.Marshal(w.Steps)
 	if err != nil {
@@ -73,7 +73,7 @@ func (r *WorkflowRepository) Create(w *workflow.Workflow) error {
 }
 
 // createStep inserts a workflow step
-func (r *WorkflowRepository) createStep(workflowID string, index int, step *workflow.Step) error {
+func (r *WorkflowRepository) createStep(workflowID string, index int, step *workflowtypes.Step) error {
 	configJSON, err := json.Marshal(step.Config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal step config: %w", err)
@@ -91,20 +91,20 @@ func (r *WorkflowRepository) createStep(workflowID string, index int, step *work
 		step.Name,
 		string(step.Type),
 		string(configJSON),
-		string(workflow.StepStatusPending),
+		string(workflowtypes.StepStatusPending),
 	)
 	return err
 }
 
 // GetByID retrieves a workflow by ID
-func (r *WorkflowRepository) GetByID(id string) (*workflow.Workflow, error) {
+func (r *WorkflowRepository) GetByID(id string) (*workflowtypes.Workflow, error) {
 	query := `
 		SELECT id, user_id, name, description, definition, status, current_step, state, error, created_at, updated_at, started_at, completed_at
 		FROM workflows
 		WHERE id = ?
 	`
 
-	var w workflow.Workflow
+	var w workflowtypes.Workflow
 	var stepsJSON, stateJSON sql.NullString
 	var startedAt, completedAt sql.NullTime
 	var status string
@@ -131,7 +131,7 @@ func (r *WorkflowRepository) GetByID(id string) (*workflow.Workflow, error) {
 		return nil, fmt.Errorf("failed to get workflow: %w", err)
 	}
 
-	w.Status = workflow.WorkflowStatus(status)
+	w.Status = workflowtypes.WorkflowStatus(status)
 
 	if startedAt.Valid {
 		w.StartedAt = &startedAt.Time
@@ -158,7 +158,7 @@ func (r *WorkflowRepository) GetByID(id string) (*workflow.Workflow, error) {
 }
 
 // Update updates a workflow
-func (r *WorkflowRepository) Update(w *workflow.Workflow) error {
+func (r *WorkflowRepository) Update(w *workflowtypes.Workflow) error {
 	// Serialize steps
 	stepsJSON, err := json.Marshal(w.Steps)
 	if err != nil {
@@ -197,7 +197,7 @@ func (r *WorkflowRepository) Update(w *workflow.Workflow) error {
 }
 
 // UpdateState updates just the workflow state and current step
-func (r *WorkflowRepository) UpdateState(id string, state map[string]interface{}, currentStep int, status workflow.WorkflowStatus) error {
+func (r *WorkflowRepository) UpdateState(id string, state map[string]interface{}, currentStep int, status workflowtypes.WorkflowStatus) error {
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
@@ -214,7 +214,7 @@ func (r *WorkflowRepository) UpdateState(id string, state map[string]interface{}
 }
 
 // List returns workflows matching the filter
-func (r *WorkflowRepository) List(filter *workflow.WorkflowFilter) ([]*workflow.Workflow, error) {
+func (r *WorkflowRepository) List(filter *workflowtypes.WorkflowFilter) ([]*workflowtypes.Workflow, error) {
 	var conditions []string
 	var args []interface{}
 
@@ -256,10 +256,10 @@ func (r *WorkflowRepository) List(filter *workflow.WorkflowFilter) ([]*workflow.
 	}
 	defer rows.Close()
 
-	var workflows []*workflow.Workflow
+	var workflows []*workflowtypes.Workflow
 
 	for rows.Next() {
-		var w workflow.Workflow
+		var w workflowtypes.Workflow
 		var stepsJSON, stateJSON sql.NullString
 		var startedAt, completedAt sql.NullTime
 		var status string
@@ -283,7 +283,7 @@ func (r *WorkflowRepository) List(filter *workflow.WorkflowFilter) ([]*workflow.
 			return nil, fmt.Errorf("failed to scan workflow: %w", err)
 		}
 
-		w.Status = workflow.WorkflowStatus(status)
+		w.Status = workflowtypes.WorkflowStatus(status)
 
 		if startedAt.Valid {
 			w.StartedAt = &startedAt.Time
@@ -330,7 +330,7 @@ func (r *WorkflowRepository) Delete(id string) error {
 }
 
 // UpdateStepStatus updates the status of a specific step
-func (r *WorkflowRepository) UpdateStepStatus(stepID string, status workflow.StepStatus, result interface{}, errMsg string) error {
+func (r *WorkflowRepository) UpdateStepStatus(stepID string, status workflowtypes.StepStatus, result interface{}, errMsg string) error {
 	var resultJSON []byte
 	var err error
 
@@ -348,7 +348,7 @@ func (r *WorkflowRepository) UpdateStepStatus(stepID string, status workflow.Ste
 	`
 
 	var completedAt interface{}
-	if status == workflow.StepStatusCompleted || status == workflow.StepStatusFailed || status == workflow.StepStatusSkipped {
+	if status == workflowtypes.StepStatusCompleted || status == workflowtypes.StepStatusFailed || status == workflowtypes.StepStatusSkipped {
 		now := time.Now()
 		completedAt = now
 	}
@@ -358,7 +358,7 @@ func (r *WorkflowRepository) UpdateStepStatus(stepID string, status workflow.Ste
 }
 
 // GetWorkflowSteps retrieves all steps for a workflow
-func (r *WorkflowRepository) GetWorkflowSteps(workflowID string) ([]workflow.Step, error) {
+func (r *WorkflowRepository) GetWorkflowSteps(workflowID string) ([]workflowtypes.Step, error) {
 	query := `
 		SELECT id, name, type, config, status, result, started_at, completed_at, error
 		FROM workflow_steps
@@ -372,10 +372,10 @@ func (r *WorkflowRepository) GetWorkflowSteps(workflowID string) ([]workflow.Ste
 	}
 	defer rows.Close()
 
-	var steps []workflow.Step
+	var steps []workflowtypes.Step
 
 	for rows.Next() {
-		var step workflow.Step
+		var step workflowtypes.Step
 		var configJSON, resultJSON sql.NullString
 		var status string
 		var startedAt, completedAt sql.NullTime
@@ -396,7 +396,7 @@ func (r *WorkflowRepository) GetWorkflowSteps(workflowID string) ([]workflow.Ste
 			return nil, fmt.Errorf("failed to scan step: %w", err)
 		}
 
-		step.Type = workflow.StepType(status)
+		step.Type = workflowtypes.StepType(status)
 
 		// Parse config
 		if configJSON.Valid && configJSON.String != "" {
@@ -419,16 +419,16 @@ func (r *WorkflowRepository) CountByUserID(userID string) (int, error) {
 }
 
 // GetByUserIDAndStatus returns workflows for a user with specific status
-func (r *WorkflowRepository) GetByUserIDAndStatus(userID string, status workflow.WorkflowStatus) ([]*workflow.Workflow, error) {
-	return r.List(&workflow.WorkflowFilter{
+func (r *WorkflowRepository) GetByUserIDAndStatus(userID string, status workflowtypes.WorkflowStatus) ([]*workflowtypes.Workflow, error) {
+	return r.List(&workflowtypes.WorkflowFilter{
 		UserID: userID,
-		Status: []workflow.WorkflowStatus{status},
+		Status: []workflowtypes.WorkflowStatus{status},
 	})
 }
 
 // GetRunningWorkflows returns all running workflows
-func (r *WorkflowRepository) GetRunningWorkflows() ([]*workflow.Workflow, error) {
-	return r.List(&workflow.WorkflowFilter{
-		Status: []workflow.WorkflowStatus{workflow.StatusRunning, workflow.StatusPaused},
+func (r *WorkflowRepository) GetRunningWorkflows() ([]*workflowtypes.Workflow, error) {
+	return r.List(&workflowtypes.WorkflowFilter{
+		Status: []workflowtypes.WorkflowStatus{workflowtypes.StatusRunning, workflowtypes.StatusPaused},
 	})
 }
