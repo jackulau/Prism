@@ -166,11 +166,44 @@ export function SettingsPage() {
         </div>
         <div className="bg-editor-surface border border-editor-border rounded-lg p-4">
           <p className="text-editor-muted text-sm mb-4">
-            Configure your API keys for different LLM providers.
+            Configure your API keys for different LLM providers. Click on provider names to get API keys.
           </p>
-          <ProviderKeyInput provider="OpenAI" placeholder="sk-..." />
-          <ProviderKeyInput provider="Anthropic" placeholder="sk-ant-..." />
-          <ProviderKeyInput provider="Google AI" placeholder="AIza..." />
+          <ProviderKeyInput
+            provider="OpenAI"
+            placeholder="sk-..."
+            keyUrl="https://platform.openai.com/api-keys"
+            description="GPT-4.1, o3, o4-mini"
+          />
+          <ProviderKeyInput
+            provider="Anthropic"
+            placeholder="sk-ant-..."
+            keyUrl="https://console.anthropic.com/settings/keys"
+            description="Claude Opus/Sonnet/Haiku 4.5"
+          />
+          <ProviderKeyInput
+            provider="Google AI"
+            placeholder="AIza..."
+            keyUrl="https://aistudio.google.com/app/apikey"
+            description="Gemini 2.5 Flash/Pro (1M context)"
+          />
+          <ProviderKeyInput
+            provider="OpenRouter"
+            placeholder="sk-or-..."
+            keyUrl="https://openrouter.ai/keys"
+            description="200+ models (Llama, Mistral, etc.)"
+          />
+          <ProviderKeyInput
+            provider="Groq"
+            placeholder="gsk_..."
+            keyUrl="https://console.groq.com/keys"
+            description="Ultra-fast inference (Llama, Mixtral)"
+          />
+          <ProviderKeyInput
+            provider="DeepSeek"
+            placeholder="sk-..."
+            keyUrl="https://platform.deepseek.com/api_keys"
+            description="DeepSeek V3, R1, Coder"
+          />
         </div>
       </section>
 
@@ -319,7 +352,17 @@ export function SettingsPage() {
   );
 }
 
-function ProviderKeyInput({ provider, placeholder }: { provider: string; placeholder: string }) {
+function ProviderKeyInput({
+  provider,
+  placeholder,
+  keyUrl,
+  description,
+}: {
+  provider: string;
+  placeholder: string;
+  keyUrl?: string;
+  description?: string;
+}) {
   const [value, setValue] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -354,7 +397,25 @@ function ProviderKeyInput({ provider, placeholder }: { provider: string; placeho
   return (
     <div className="space-y-1 mb-3 last:mb-0">
       <div className="flex items-center gap-3">
-        <span className="w-24 text-sm font-medium">{provider}</span>
+        <div className="w-28 flex-shrink-0">
+          {keyUrl ? (
+            <a
+              href={keyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium text-editor-accent hover:underline flex items-center gap-1"
+              title={`Get ${provider} API key`}
+            >
+              {provider}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          ) : (
+            <span className="text-sm font-medium">{provider}</span>
+          )}
+          {description && (
+            <span className="text-xs text-editor-muted block">{description}</span>
+          )}
+        </div>
         <input
           type="password"
           value={value}
@@ -373,7 +434,7 @@ function ProviderKeyInput({ provider, placeholder }: { provider: string; placeho
         </button>
       </div>
       {error && (
-        <div className="ml-24 pl-3 text-xs text-red-400">{error}</div>
+        <div className="ml-28 pl-3 text-xs text-red-400">{error}</div>
       )}
     </div>
   );
