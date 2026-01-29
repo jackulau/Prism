@@ -96,8 +96,10 @@ func main() {
 	toolRegistry := tools.NewRegistry()
 	if sandboxService != nil {
 		toolConfig := builtin.Config{
-			FileHistoryRepo: fileHistoryRepo,
-			TodoRepo:        todoRepo,
+			FileHistoryRepo:   fileHistoryRepo,
+			TodoRepo:          todoRepo,
+			UserRepo:          userRepo,
+			EncryptionService: encryptionService,
 		}
 		if err := builtin.RegisterAll(toolRegistry, sandboxService, codeRunner, db.DB, toolConfig); err != nil {
 			log.Printf("Warning: Failed to register built-in tools: %v", err)

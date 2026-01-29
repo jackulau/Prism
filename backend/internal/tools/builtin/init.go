@@ -6,6 +6,7 @@ import (
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/sandbox"
+	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
 	"github.com/jacklau/prism/internal/tools"
 )
@@ -31,6 +32,12 @@ type Config struct {
 
 	// LLM provider for WebFetch AI analysis (optional)
 	LLMProvider llm.Provider
+
+	// User repository for accessing user data (e.g., GitHub tokens)
+	UserRepo *repository.UserRepository
+
+	// Encryption service for decrypting stored tokens
+	EncryptionService *security.EncryptionService
 }
 
 // RegisterAll registers all built-in tools with the registry
@@ -169,6 +176,13 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 	// Database query tool
 	if db != nil {
 		if err := registry.Register(NewDatabaseQueryTool(db)); err != nil {
+			return err
+		}
+	}
+
+	// GitHub commits tool (only if user repo and encryption service are configured)
+	if config.UserRepo != nil && config.EncryptionService != nil {
+		if err := registry.Register(NewGitHubCommitsTool(config.UserRepo, config.EncryptionService)); err != nil {
 			return err
 		}
 	}
