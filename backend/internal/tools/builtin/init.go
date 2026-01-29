@@ -33,8 +33,8 @@ type Config struct {
 	// LLM provider for WebFetch AI analysis (optional)
 	LLMProvider llm.Provider
 
-	// PostHog tools configuration (for querying PostHog data)
-	PostHogToolConfig *PostHogToolConfig
+	// PostHog tools configuration
+	PostHogConfig *PostHogConfig
 }
 
 // RegisterAll registers all built-in tools with the registry
@@ -195,12 +195,24 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		}
 	}
 
-	// PostHog error tools (only if configured)
-	if config.PostHogToolConfig != nil && config.PostHogToolConfig.APIKey != "" && config.PostHogToolConfig.ProjectID != "" {
-		if err := registry.Register(NewPostHogListErrorsTool(*config.PostHogToolConfig)); err != nil {
+	// PostHog Insights tools (require API key)
+	if config.PostHogConfig != nil && config.PostHogConfig.APIKey != "" {
+		if err := registry.Register(NewPostHogInsightsGetAllTool(*config.PostHogConfig)); err != nil {
 			return err
 		}
-		if err := registry.Register(NewPostHogErrorDetailsTool(*config.PostHogToolConfig)); err != nil {
+		if err := registry.Register(NewPostHogInsightGetTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightQueryTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightCreateTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightUpdateTool(*config.PostHogConfig)); err != nil {
+			return err
+		}
+		if err := registry.Register(NewPostHogInsightDeleteTool(*config.PostHogConfig)); err != nil {
 			return err
 		}
 	}
