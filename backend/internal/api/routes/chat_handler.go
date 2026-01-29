@@ -10,6 +10,7 @@ import (
 	"github.com/jacklau/prism/internal/api/websocket"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/llm"
+	"github.com/jacklau/prism/internal/llm/openaicompat"
 	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/tools"
 	"github.com/jacklau/prism/internal/tools/builtin"
@@ -59,6 +60,75 @@ func getDefaultAutoApprovalConfig() *tools.AutoApprovalConfig {
 	return tools.DefaultAutoApprovalConfig()
 }
 
+// loadedCustomProviders tracks which users have had their custom providers loaded
+var loadedCustomProviders = sync.Map{} // map[userID]bool
+
+// ensureCustomProvidersLoaded ensures custom providers for a user are registered with the LLM manager
+func ensureCustomProvidersLoaded(deps *Dependencies, userID string) {
+	// Skip if already loaded or no custom provider repo
+	if deps.CustomProviderRepo == nil {
+		return
+	}
+
+	// Check if already loaded for this user
+	if _, ok := loadedCustomProviders.Load(userID); ok {
+		return
+	}
+
+	// Get all custom providers for the user
+	providers, err := deps.CustomProviderRepo.ListAll(userID)
+	if err != nil {
+		log.Printf("Failed to load custom providers for user %s: %v", userID, err)
+		return
+	}
+
+	// Register each provider with the LLM manager
+	for _, p := range providers {
+		// Decrypt API key
+		apiKey, err := deps.CustomProviderRepo.DecryptAPIKey(&p)
+		if err != nil {
+			log.Printf("Failed to decrypt API key for custom provider %s: %v", p.Name, err)
+			continue
+		}
+
+		// Parse models from JSON
+		var modelIDs []string
+		if p.Models != "" {
+			json.Unmarshal([]byte(p.Models), &modelIDs)
+		}
+
+		// Convert to llm.Model
+		models := make([]llm.Model, len(modelIDs))
+		for i, id := range modelIDs {
+			models[i] = llm.Model{
+				ID:             id,
+				Name:           id,
+				ContextWindow:  4096,
+				SupportsTools:  p.SupportsTools,
+				SupportsVision: p.SupportsVision,
+			}
+		}
+
+		// Create and register the provider
+		cfg := openaicompat.Config{
+			ID:             p.ID,
+			Name:           p.Name,
+			BaseURL:        p.BaseURL,
+			APIKey:         apiKey,
+			SupportsTools:  p.SupportsTools,
+			SupportsVision: p.SupportsVision,
+			Models:         models,
+		}
+
+		client := openaicompat.NewClient(cfg)
+		deps.LLMManager.RegisterProvider(client)
+		log.Printf("Loaded custom provider '%s' for user %s", p.Name, userID)
+	}
+
+	// Mark as loaded
+	loadedCustomProviders.Store(userID, true)
+}
+
 // handleChatMessage handles incoming chat messages and streams LLM responses
 func handleChatMessage(deps *Dependencies, client *websocket.Client, msg *websocket.IncomingMessage) {
 	// Validate conversation ID
@@ -66,6 +136,9 @@ func handleChatMessage(deps *Dependencies, client *websocket.Client, msg *websoc
 		client.SendMessage(websocket.NewError("invalid_request", "conversation_id is required"))
 		return
 	}
+
+	// Ensure custom providers are loaded for this user
+	ensureCustomProvidersLoaded(deps, client.UserID)
 
 	// Get conversation from database
 	conversation, err := deps.ConversationRepo.GetByID(msg.ConversationID)

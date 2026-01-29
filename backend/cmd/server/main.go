@@ -68,6 +68,7 @@ func main() {
 	messageRepo := repository.NewMessageRepository(db.DB)
 	webhookRepo := repository.NewWebhookRepository(db.DB, encryptionService)
 	providerKeyRepo := repository.NewProviderKeyRepository(db.DB)
+	customProviderRepo := repository.NewCustomProviderRepository(db.DB, encryptionService)
 	integrationRepo := repository.NewIntegrationRepository(db.DB, encryptionService)
 	fileHistoryRepo := repository.NewFileHistoryRepository(db.DB)
 	workspaceRepo := repository.NewWorkspaceRepository(db.DB)
@@ -136,11 +137,11 @@ func main() {
 	googleClient := google.NewClient("")
 	llmManager.RegisterProvider(googleClient)
 
-	// DeepSeek (API key set via UI)
-	deepseekClient := deepseek.NewClient("")
-	llmManager.RegisterProvider(deepseekClient)
+	log.Printf("Registered %d built-in LLM providers", len(llmManager.ListProviders()))
 
-	log.Printf("Registered %d LLM providers", len(llmManager.ListProviders()))
+	// Note: Custom providers are loaded per-user on demand
+	// They are registered when the user makes a request or on first login
+	// This is handled by the custom provider handler
 
 	// Initialize WebSocket hub
 	wsHub := websocket.NewHub()
@@ -214,32 +215,30 @@ func main() {
 
 	// Setup routes
 	deps := &routes.Dependencies{
-		Config:             cfg,
-		JWTService:         jwtService,
-		EncryptionService:  encryptionService,
-		UserRepo:           userRepo,
-		SessionRepo:        sessionRepo,
-		ConversationRepo:   conversationRepo,
-		MessageRepo:        messageRepo,
-		WebhookRepo:        webhookRepo,
-		ProviderKeyRepo:    providerKeyRepo,
-		IntegrationRepo:    integrationRepo,
-		FileHistoryRepo:    fileHistoryRepo,
-		DataConfigRepo:     dataConfigRepo,
-		LLMManager:         llmManager,
-		WSHub:              wsHub,
-		SSEService:         sseService,
-		IntegrationManager: integrationManager,
-		AgentManager:       agentManager,
-		CodeRunner:         codeRunner,
-		SandboxService:     sandboxService,
-		ToolRegistry:       toolRegistry,
-		MCPServer:              mcpServer,
-		MCPClient:              mcpClient,
-		MCPRepository:          mcpRepo,
-		StdioMCPClient:         stdioMCPClient,
-		StdioMCPRepository:     stdioMCPRepo,
-		CloudProviderManager:   cloudProviderManager,
+		Config:               cfg,
+		JWTService:           jwtService,
+		EncryptionService:    encryptionService,
+		UserRepo:             userRepo,
+		SessionRepo:          sessionRepo,
+		ConversationRepo:     conversationRepo,
+		MessageRepo:          messageRepo,
+		WebhookRepo:          webhookRepo,
+		ProviderKeyRepo:      providerKeyRepo,
+		CustomProviderRepo:   customProviderRepo,
+		IntegrationRepo:      integrationRepo,
+		FileHistoryRepo:      fileHistoryRepo,
+		LLMManager:           llmManager,
+		WSHub:                wsHub,
+		IntegrationManager:   integrationManager,
+		AgentManager:         agentManager,
+		CodeRunner:           codeRunner,
+		SandboxService:       sandboxService,
+		ToolRegistry:         toolRegistry,
+		MCPServer:            mcpServer,
+		MCPClient:            mcpClient,
+		MCPRepository:        mcpRepo,
+		StdioMCPClient:       stdioMCPClient,
+		StdioMCPRepository:   stdioMCPRepo,
 	}
 
 	app := routes.Setup(deps)
