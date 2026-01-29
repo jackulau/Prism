@@ -17,9 +17,10 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@prism/trpc/*": ["../packages/trpc/src/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "../packages/trpc/src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
