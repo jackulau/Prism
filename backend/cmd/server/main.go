@@ -25,7 +25,7 @@ import (
 	"github.com/jacklau/prism/internal/llm/lmstudio"
 	"github.com/jacklau/prism/internal/llm/ollama"
 	"github.com/jacklau/prism/internal/llm/openai"
-	"github.com/jacklau/prism/internal/mcp"
+	"github.com/jacklau/prism/internal/llm/openrouter"
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
@@ -137,11 +137,11 @@ func main() {
 	googleClient := google.NewClient("")
 	llmManager.RegisterProvider(googleClient)
 
-	log.Printf("Registered %d built-in LLM providers", len(llmManager.ListProviders()))
+	// OpenRouter (API key set via UI) - access to 200+ models
+	openrouterClient := openrouter.NewClient("")
+	llmManager.RegisterProvider(openrouterClient)
 
-	// Note: Custom providers are loaded per-user on demand
-	// They are registered when the user makes a request or on first login
-	// This is handled by the custom provider handler
+	log.Printf("Registered %d LLM providers", len(llmManager.ListProviders()))
 
 	// Initialize WebSocket hub
 	wsHub := websocket.NewHub()
