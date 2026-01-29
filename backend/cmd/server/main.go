@@ -28,6 +28,7 @@ import (
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
 	"github.com/jacklau/prism/internal/mcp"
+	"github.com/jacklau/prism/internal/remote"
 	"github.com/jacklau/prism/internal/tools"
 	"github.com/jacklau/prism/internal/tools/builtin"
 )
@@ -205,6 +206,43 @@ func main() {
 	}
 	log.Println("MCP server and clients initialized")
 
+	// Initialize tunnel server for remote access if enabled
+	var tunnelServer *remote.TunnelServer
+	if cfg.RemoteAccessEnabled {
+		// Create remote auth service
+		remoteAuthConfig := &remote.RemoteAuthConfig{
+			Enabled:           true,
+			PasswordHash:      cfg.RemoteAccessPasswordHash,
+			SessionDuration:   cfg.RemoteAccessSessionDuration,
+			MaxSessions:       cfg.RemoteAccessMaxConnections,
+			EncryptionService: encryptionService,
+		}
+		remoteAuthService := remote.NewRemoteAuthService(remoteAuthConfig)
+
+		// Create tunnel server config
+		tunnelConfig := &remote.TunnelServerConfig{
+			ListenAddr:          ":" + cfg.RemoteAccessPort,
+			TLSCertFile:         cfg.RemoteAccessTLSCertFile,
+			TLSKeyFile:          cfg.RemoteAccessTLSKeyFile,
+			TargetURL:           "http://" + cfg.Host + ":" + cfg.Port,
+			MaxConnections:      cfg.RemoteAccessMaxConnections,
+			MaxConnectionsPerIP: cfg.RemoteAccessMaxPerIP,
+			SessionTimeout:      cfg.RemoteAccessSessionDuration,
+		}
+
+		var err error
+		tunnelServer, err = remote.NewTunnelServer(tunnelConfig, remoteAuthService)
+		if err != nil {
+			log.Printf("Warning: Failed to create tunnel server: %v", err)
+		} else {
+			if err := tunnelServer.Start(); err != nil {
+				log.Printf("Warning: Failed to start tunnel server: %v", err)
+			} else {
+				log.Printf("Tunnel server started on port %s (TLS)", cfg.RemoteAccessPort)
+			}
+		}
+	}
+
 	// Setup routes
 	deps := &routes.Dependencies{
 		Config:             cfg,
@@ -251,6 +289,14 @@ func main() {
 		// Stop all stdio MCP servers
 		stdioMCPClient.StopAll()
 		log.Println("Stdio MCP servers stopped")
+
+		// Stop tunnel server if running
+		if tunnelServer != nil {
+			if err := tunnelServer.Stop(); err != nil {
+				log.Printf("Error stopping tunnel server: %v", err)
+			}
+			log.Println("Tunnel server stopped")
+		}
 
 		// Close integrations manager
 		if err := integrationManager.Close(); err != nil {
