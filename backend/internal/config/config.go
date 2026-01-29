@@ -151,11 +151,11 @@ type Config struct {
 	// Guest Mode
 	GuestModeEnabled bool
 
-	// WorkOS Integration
-	WorkOSEnabled       bool
-	WorkOSAPIKey        string
-	WorkOSClientID      string
-	WorkOSWebhookSecret string
+	// PostHog Tools (for AI query runner)
+	PostHogToolsEnabled   bool
+	PostHogToolsAPIKey    string
+	PostHogToolsProjectID string
+	PostHogToolsHost      string
 }
 
 func Load() (*Config, error) {
@@ -264,11 +264,11 @@ func Load() (*Config, error) {
 		// Guest Mode - disabled by default for security
 		GuestModeEnabled: getBoolEnv("GUEST_MODE_ENABLED", false),
 
-		// WorkOS Integration - disabled by default
-		WorkOSEnabled:       getBoolEnv("WORKOS_ENABLED", false),
-		WorkOSAPIKey:        getEnv("WORKOS_API_KEY", ""),
-		WorkOSClientID:      getEnv("WORKOS_CLIENT_ID", ""),
-		WorkOSWebhookSecret: getEnv("WORKOS_WEBHOOK_SECRET", ""),
+		// PostHog Tools (for AI query runner)
+		PostHogToolsEnabled:   getBoolEnv("POSTHOG_TOOLS_ENABLED", false),
+		PostHogToolsAPIKey:    getEnv("POSTHOG_TOOLS_API_KEY", ""),
+		PostHogToolsProjectID: getEnv("POSTHOG_TOOLS_PROJECT_ID", ""),
+		PostHogToolsHost:      getEnv("POSTHOG_TOOLS_HOST", "https://app.posthog.com"),
 	}
 
 	// Set legacy fields for backward compatibility

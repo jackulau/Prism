@@ -33,7 +33,7 @@ type Config struct {
 	// LLM provider for WebFetch AI analysis (optional)
 	LLMProvider llm.Provider
 
-	// PostHog tools configuration
+	// PostHog tools configuration (for query runner)
 	PostHogConfig *PostHogConfig
 }
 
@@ -195,26 +195,18 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		}
 	}
 
-	// PostHog Insights tools (require API key)
+	// PostHog tools (query runner, query generator, docs search)
 	if config.PostHogConfig != nil && config.PostHogConfig.APIKey != "" {
-		if err := registry.Register(NewPostHogInsightsGetAllTool(*config.PostHogConfig)); err != nil {
+		if err := registry.Register(NewPostHogQueryRunTool(*config.PostHogConfig)); err != nil {
 			return err
 		}
-		if err := registry.Register(NewPostHogInsightGetTool(*config.PostHogConfig)); err != nil {
+		if err := registry.Register(NewPostHogGenerateQueryTool(*config.PostHogConfig)); err != nil {
 			return err
 		}
-		if err := registry.Register(NewPostHogInsightQueryTool(*config.PostHogConfig)); err != nil {
-			return err
-		}
-		if err := registry.Register(NewPostHogInsightCreateTool(*config.PostHogConfig)); err != nil {
-			return err
-		}
-		if err := registry.Register(NewPostHogInsightUpdateTool(*config.PostHogConfig)); err != nil {
-			return err
-		}
-		if err := registry.Register(NewPostHogInsightDeleteTool(*config.PostHogConfig)); err != nil {
-			return err
-		}
+	}
+	// Docs search doesn't require API key - always register it
+	if err := registry.Register(NewPostHogDocsSearchTool()); err != nil {
+		return err
 	}
 
 	return nil

@@ -107,25 +107,15 @@ func main() {
 			UserRepo:          userRepo,
 			EncryptionService: encryptionService,
 		}
-		// Add PostHog tool config if enabled
-		if cfg.PostHogAPIKey != "" && cfg.PostHogProjectID != "" {
-			toolConfig.PostHogToolConfig = &builtin.PostHogToolConfig{
-				APIKey:    cfg.PostHogAPIKey,
-				ProjectID: cfg.PostHogProjectID,
-				Host:      cfg.PostHogEndpoint,
-			}
-		}
-
-		// Configure PostHog tools if API key is set
-		if cfg.PostHogToolsAPIKey != "" && cfg.PostHogToolsProject != "" {
+		// Add PostHog tools configuration if enabled
+		if cfg.PostHogToolsEnabled && cfg.PostHogToolsAPIKey != "" && cfg.PostHogToolsProjectID != "" {
 			toolConfig.PostHogConfig = &builtin.PostHogConfig{
 				APIKey:    cfg.PostHogToolsAPIKey,
-				ProjectID: cfg.PostHogToolsProject,
+				ProjectID: cfg.PostHogToolsProjectID,
 				Host:      cfg.PostHogToolsHost,
 			}
 			log.Println("PostHog tools configured")
 		}
-
 		if err := builtin.RegisterAll(toolRegistry, sandboxService, codeRunner, db.DB, toolConfig); err != nil {
 			log.Printf("Warning: Failed to register built-in tools: %v", err)
 		} else {
