@@ -4,45 +4,47 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"strings"
+	"regexp"
 
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/sandbox"
 )
 
-// GitHubListCommitsTool lists recent commits from a git repository
-type GitHubListCommitsTool struct {
+// GitHubViewCommitTool displays the full diff and details of a specific commit
+type GitHubViewCommitTool struct {
 	sandbox *sandbox.Service
 }
 
-// NewGitHubListCommitsTool creates a new GitHub list commits tool
-func NewGitHubListCommitsTool(sandbox *sandbox.Service) *GitHubListCommitsTool {
-	return &GitHubListCommitsTool{sandbox: sandbox}
+// NewGitHubViewCommitTool creates a new GitHub view commit tool
+func NewGitHubViewCommitTool(sandbox *sandbox.Service) *GitHubViewCommitTool {
+	return &GitHubViewCommitTool{sandbox: sandbox}
 }
 
-func (t *GitHubListCommitsTool) Name() string {
-	return "github_list_commits"
+func (t *GitHubViewCommitTool) Name() string {
+	return "github_view_commit"
 }
 
-func (t *GitHubListCommitsTool) Description() string {
-	return "List recent commits from the git repository in the workspace. Returns commit SHA, author, date, and message."
+func (t *GitHubViewCommitTool) Description() string {
+	return "Show the full diff and details of a specific commit. Displays commit message, author, date, and all file changes."
 }
 
-func (t *GitHubListCommitsTool) Parameters() llm.JSONSchema {
+func (t *GitHubViewCommitTool) Parameters() llm.JSONSchema {
 	return llm.JSONSchema{
 		Type: "object",
 		Properties: map[string]llm.JSONProperty{
-			"commitLimit": {
-				Type:        "number",
-				Description: "Number of commits to list (1-10, default 5)",
+			"commitSha": {
+				Type:        "string",
+				Description: "The commit SHA (full or abbreviated) to view",
 			},
 		},
-		Required: []string{},
+		Required: []string{"commitSha"},
 	}
 }
 
-func (t *GitHubListCommitsTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
-	// Get user workspace
+// shaPattern validates commit SHA format (4-40 hex characters)
+var shaPattern = regexp.MustCompile(`^[0-9a-fA-F]{4,40}$`)
+
+func (t *GitHubViewCommitTool) Execute(ctx context.Context, params map[string]interface{}) (interface{}, error) {
 	userID, ok := ctx.Value(UserIDKey).(string)
 	if !ok || userID == "" {
 		return nil, fmt.Errorf("user ID not found in context")
@@ -53,53 +55,39 @@ func (t *GitHubListCommitsTool) Execute(ctx context.Context, params map[string]i
 		return nil, fmt.Errorf("failed to get workspace: %w", err)
 	}
 
-	// Parse limit parameter (default 5, max 10, min 1)
-	limit := 5
-	if limitVal, ok := params["commitLimit"].(float64); ok {
-		limit = int(limitVal)
-		if limit < 1 {
-			limit = 1
-		}
-		if limit > 10 {
-			limit = 10
-		}
+	// Get commit SHA parameter
+	commitSha, ok := params["commitSha"].(string)
+	if !ok || commitSha == "" {
+		return nil, fmt.Errorf("commitSha parameter is required")
 	}
 
-	// Execute git log command
-	cmd := exec.CommandContext(ctx, "git", "log",
-		fmt.Sprintf("-n%d", limit),
-		"--pretty=format:%H - %an, %ad : %s",
-		"--date=iso")
+	// Validate SHA format (4-40 hex characters)
+	if !shaPattern.MatchString(commitSha) {
+		return map[string]interface{}{
+			"success": false,
+			"error":   "invalid commit SHA format: must be 4-40 hexadecimal characters",
+		}, nil
+	}
+
+	// Execute git show command
+	cmd := exec.CommandContext(ctx, "git", "show", commitSha)
 	cmd.Dir = workDir
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return map[string]interface{}{
 			"success": false,
-			"error":   fmt.Sprintf("git log failed: %s - %s", err, string(output)),
+			"error":   fmt.Sprintf("git show failed: %s", string(output)),
 		}, nil
-	}
-
-	// Parse output into structured format
-	commits := []map[string]string{}
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		commits = append(commits, map[string]string{
-			"raw": line,
-		})
 	}
 
 	return map[string]interface{}{
 		"success": true,
-		"commits": commits,
-		"count":   len(commits),
-		"raw":     string(output),
+		"sha":     commitSha,
+		"diff":    string(output),
 	}, nil
 }
 
-func (t *GitHubListCommitsTool) RequiresConfirmation() bool {
+func (t *GitHubViewCommitTool) RequiresConfirmation() bool {
 	return false // Read-only operation
 }

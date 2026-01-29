@@ -33,16 +33,16 @@ func DefaultAutoApprovalConfig() *AutoApprovalConfig {
 // ReadOnlyTools is a list of built-in tools that are considered read-only
 // These don't modify any state and are safe to auto-approve
 var ReadOnlyTools = map[string]bool{
-	"read_file":           true,
-	"list_files":          true,
-	"search_code":         true,
-	"grep":                true,
-	"glob":                true,
-	"get_info":            true,
-	"web_fetch":           true,
-	"web_search":          true,
-	"database_query":      true, // SELECT queries only
-	"github_list_commits": true,
+	"read_file":          true,
+	"list_files":         true,
+	"search_code":        true,
+	"grep":               true,
+	"glob":               true,
+	"get_info":           true,
+	"web_fetch":          true,
+	"web_search":         true,
+	"database_query":     true, // SELECT queries only
+	"github_view_commit": true,
 }
 
 // ShouldAutoApprove determines if a tool should be automatically approved
