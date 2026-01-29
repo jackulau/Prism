@@ -4,6 +4,7 @@ import * as jose from 'jose';
 export interface Session {
   userId: string;
   email: string;
+  token: string;
 }
 
 export interface Context {
@@ -43,6 +44,7 @@ async function validateToken(token: string): Promise<Session | null> {
     return {
       userId: claims.user_id,
       email: claims.email,
+      token,
     };
   } catch {
     return null;
