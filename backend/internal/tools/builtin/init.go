@@ -198,11 +198,9 @@ func RegisterAll(registry *tools.Registry, sandbox *sandbox.Service, runner *cod
 		}
 	}
 
-	// GitHub commits tool (only if user repo and encryption service are configured)
-	if config.UserRepo != nil && config.EncryptionService != nil {
-		if err := registry.Register(NewGitHubCommitsTool(config.UserRepo, config.EncryptionService)); err != nil {
-			return err
-		}
+	// GitHub tools for repository operations
+	if err := registry.Register(NewGitHubListCommitsTool(sandbox)); err != nil {
+		return err
 	}
 
 	return nil
