@@ -1,0 +1,11 @@
+id: agent-workflow-executor
+status: completed
+branch: prism/agent-workflow-executor
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/agent-workflow-executor/worktree
+assigned_to: claude
+started_at: 2026-01-24T00:00:00Z
+completed_at: 2026-01-24T01:00:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 6771407143ea1c015180fefa425eb23065a3c287
+tests_passing: true

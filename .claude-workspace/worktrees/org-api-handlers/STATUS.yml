@@ -1,0 +1,11 @@
+id: org-api-handlers
+status: complete
+branch: prism/org-api-handlers
+worktree_path: .claude-workspace/worktrees/org-api-handlers/worktree
+assigned_to: claude
+started_at: 2026-01-28T01:30:00Z
+completed_at: 2026-01-28T07:39:34Z
+dependencies_met: true
+conflicts: []
+commit_sha: 090ff65d23d65d7fdeda2b8a5f2b29c7235a5672
+tests_passing: true

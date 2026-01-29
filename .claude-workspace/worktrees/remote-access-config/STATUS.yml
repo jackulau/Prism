@@ -1,0 +1,11 @@
+id: remote-access-config
+status: complete
+branch: prism/remote-access-config
+worktree_path: .claude-workspace/worktrees/remote-access-config/worktree
+assigned_to: claude
+started_at: 2026-01-28T07:43:13Z
+completed_at: 2026-01-28T07:43:13Z
+dependencies_met: true
+conflicts: []
+commit_sha: 73026db5f90fdb9f667312797faf9807476eff3b
+tests_passing: true

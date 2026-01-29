@@ -1,0 +1,11 @@
+id: openrouter-provider
+status: completed
+branch: prism/openrouter-provider
+worktree_path: .claude-workspace/worktrees/openrouter-provider/worktree
+assigned_to: null
+started_at: 2026-01-28T04:29:36Z
+completed_at: 2026-01-28T04:38:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 4b1bee8b4c169de2ef2b072f97d002b6f6b77ce5
+tests_passing: true

@@ -1,0 +1,11 @@
+id: lmstudio-provider
+status: completed
+branch: prism/lmstudio-provider
+worktree_path: .claude-workspace/worktrees/lmstudio-provider/worktree
+assigned_to: null
+started_at: 2026-01-25T00:24:00Z
+completed_at: 2026-01-25T00:30:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 4f8c72b051f2c7ae9250c1558abafc80040f7ccc
+tests_passing: true

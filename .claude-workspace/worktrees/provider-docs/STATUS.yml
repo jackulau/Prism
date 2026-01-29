@@ -1,0 +1,11 @@
+id: provider-docs
+status: complete
+branch: prism/provider-docs
+worktree_path: .claude-workspace/worktrees/provider-docs/worktree
+assigned_to: claude
+started_at: 2026-01-28T07:43:08Z
+completed_at: 2026-01-28T07:43:08Z
+dependencies_met: true
+conflicts: []
+commit_sha: 2e5674b89987cb8da96dca4da0c3d37e2c7bc197
+tests_passing: true

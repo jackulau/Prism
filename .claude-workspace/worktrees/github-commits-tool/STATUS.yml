@@ -1,0 +1,11 @@
+id: github-commits-tool
+status: completed
+branch: prism/github-commits-tool
+worktree_path: .claude-workspace/worktrees/github-commits-tool/worktree/
+assigned_to: claude
+started_at: 2026-01-25T00:00:00Z
+completed_at: 2026-01-25T00:15:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 37b60196901591c5b61ae57ebf9bfe0a0072df0f
+tests_passing: true

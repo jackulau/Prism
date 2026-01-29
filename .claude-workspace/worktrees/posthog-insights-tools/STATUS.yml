@@ -1,0 +1,11 @@
+id: posthog-insights-tools
+status: complete
+branch: prism/posthog-insights-tools
+worktree_path: .claude-workspace/worktrees/posthog-insights-tools/worktree
+assigned_to: claude
+started_at: 2026-01-28T05:16:15Z
+completed_at: 2026-01-28T05:25:00Z
+dependencies_met: false
+conflicts: []
+commit_sha: e796aea3897858ddbf2515e44a8be40e96c43bd9
+tests_passing: true

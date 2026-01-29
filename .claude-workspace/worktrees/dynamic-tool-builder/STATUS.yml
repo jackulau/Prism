@@ -1,0 +1,11 @@
+id: dynamic-tool-builder
+status: complete
+branch: prism/dynamic-tool-builder
+worktree_path: .claude-workspace/worktrees/dynamic-tool-builder/worktree
+assigned_to: null
+started_at: 2026-01-28T00:00:00Z
+completed_at: 2026-01-28T00:00:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 78cb22c0463ca048a7174992d32c34b043047660
+tests_passing: true

@@ -1,0 +1,11 @@
+id: workflow-step-functions
+status: complete
+branch: prism/workflow-step-functions
+worktree_path: .claude-workspace/worktrees/workflow-step-functions/worktree
+assigned_to: claude
+started_at: 2026-01-28T09:22:43Z
+completed_at: 2026-01-28T09:28:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: f2e0e0e863f490179d6a4fd6b33375474bd5485b
+tests_passing: true

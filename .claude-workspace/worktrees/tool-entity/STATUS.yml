@@ -1,0 +1,11 @@
+id: tool-entity
+status: complete
+branch: prism/tool-entity
+worktree_path: worktree
+assigned_to: claude
+started_at: 2026-01-28T08:56:33Z
+completed_at: 2026-01-28T08:56:33Z
+dependencies_met: true
+conflicts: []
+commit_sha: 226c5d74c505056d32d5f8c8446bb491374a158a
+tests_passing: true

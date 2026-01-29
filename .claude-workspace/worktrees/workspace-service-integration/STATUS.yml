@@ -1,0 +1,11 @@
+id: workspace-service-integration
+status: complete
+branch: prism/workspace-service-integration
+worktree_path: .claude-workspace/worktrees/workspace-service-integration/worktree
+assigned_to: claude
+started_at: 2026-01-28T04:00:00Z
+completed_at: 2026-01-28T04:15:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 5abc01327952c400db16f937fd35bc12dd8b19ee
+tests_passing: true

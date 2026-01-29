@@ -1,0 +1,11 @@
+id: remote-auth-service
+status: complete
+branch: prism/remote-auth-service
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/remote-auth-service/worktree
+assigned_to: claude
+started_at: 2026-01-28T09:39:00Z
+completed_at: 2026-01-28T07:43:41Z
+dependencies_met: true
+conflicts: []
+commit_sha: 3f77b504eaf1e9e1a8d450a8758af81480cb0814
+tests_passing: true

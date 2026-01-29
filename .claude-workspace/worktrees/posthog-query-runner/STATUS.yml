@@ -1,0 +1,11 @@
+id: posthog-query-runner
+status: complete
+branch: prism/posthog-query-runner
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/posthog-query-runner/worktree
+assigned_to: null
+started_at: 2026-01-28T07:37:47Z
+completed_at: 2026-01-28T07:37:47Z
+dependencies_met: true
+conflicts: []
+commit_sha: 46852c90ed75218201a1f1cb3adf4732ecf067c3
+tests_passing: true

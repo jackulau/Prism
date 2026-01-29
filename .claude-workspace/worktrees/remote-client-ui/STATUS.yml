@@ -1,0 +1,7 @@
+id: remote-client-ui
+status: complete
+branch: prism/remote-client-ui
+worktree_path: .claude-workspace/worktrees/remote-client-ui/worktree
+completed_at: 2026-01-28T07:55:53Z
+commit_sha: ba63c9d65160033265a896d7ad1b5e10f187aa86
+tests_passing: true

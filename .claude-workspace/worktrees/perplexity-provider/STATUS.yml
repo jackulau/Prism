@@ -1,0 +1,11 @@
+id: perplexity-provider
+status: complete
+branch: prism/perplexity-provider
+worktree_path: .claude-workspace/worktrees/perplexity-provider/worktree
+assigned_to: claude
+started_at: 2026-01-27T23:14:00Z
+completed_at: 2026-01-27T23:17:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: a933079f5706e69554031695bcc1e21a0ba1eabb
+tests_passing: true

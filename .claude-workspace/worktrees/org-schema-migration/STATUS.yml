@@ -1,0 +1,11 @@
+id: org-schema-migration
+status: complete
+branch: prism/org-schema-migration
+worktree_path: .claude-workspace/worktrees/org-schema-migration/worktree
+assigned_to: null
+started_at: 2026-01-27T23:12:00Z
+completed_at: 2026-01-27T23:15:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: e27ae5c14657f8ba3a094166c546b565dafc0a40
+tests_passing: true

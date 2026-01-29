@@ -1,0 +1,11 @@
+id: worker-persistence
+status: complete
+branch: prism/worker-persistence
+worktree_path: .claude-workspace/worktrees/worker-persistence/worktree
+assigned_to: null
+started_at: 2026-01-28T00:00:00Z
+completed_at: 2026-01-28T00:00:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 384d2b6aba301d9d250fbc4b7aa66965a9f9a032
+tests_passing: true

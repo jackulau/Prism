@@ -1,0 +1,11 @@
+id: data-encryption-api
+status: completed
+branch: prism/data-encryption-api
+worktree_path: .claude-workspace/worktrees/data-encryption-api/worktree
+assigned_to: null
+started_at: 2026-01-24T23:59:00Z
+completed_at: 2026-01-25T00:15:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: f8e279672c62e51b47186ff8a9d80cc1c60aa0e1
+tests_passing: true

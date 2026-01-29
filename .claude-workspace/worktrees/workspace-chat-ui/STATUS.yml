@@ -1,0 +1,11 @@
+id: workspace-chat-ui
+status: complete
+branch: prism/workspace-chat-ui
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/workspace-chat-ui/worktree
+assigned_to: null
+started_at: 2026-01-28T03:44:01-06:00
+completed_at: 2026-01-28T03:44:01-06:00
+dependencies_met: true
+conflicts: []
+commit_sha: f25a33a4de9f74936eb1f240a8976c1d70ae1ad0
+tests_passing: true

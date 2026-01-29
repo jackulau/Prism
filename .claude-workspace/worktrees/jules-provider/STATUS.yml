@@ -1,0 +1,11 @@
+id: jules-provider
+status: complete
+branch: prism/jules-provider
+worktree_path: .claude-workspace/worktrees/jules-provider/worktree
+assigned_to: claude
+started_at: "2026-01-27T12:00:00Z"
+completed_at: "2026-01-28T05:20:00Z"
+dependencies_met: true
+conflicts: []
+commit_sha: 6c09788fe2996f97ac641709b9846352f5e0967f
+tests_passing: true

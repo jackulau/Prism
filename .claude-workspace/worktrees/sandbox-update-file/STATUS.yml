@@ -1,0 +1,11 @@
+id: sandbox-update-file
+status: complete
+branch: prism/sandbox-update-file
+worktree_path: .claude-workspace/worktrees/sandbox-update-file/worktree
+assigned_to: null
+started_at: 2026-01-28T00:00:00Z
+completed_at: 2026-01-28T00:05:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 8e3c3acbfdb8530f2a8c5711b9ac15f9e3104dd0
+tests_passing: true

@@ -1,0 +1,11 @@
+id: workos-protected-middleware
+status: complete
+branch: prism/workos-protected-middleware
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/workos-protected-middleware/worktree
+assigned_to: null
+started_at: "2026-01-28T00:00:00Z"
+completed_at: "2026-01-28T00:00:00Z"
+dependencies_met: true
+conflicts: []
+commit_sha: 0128e9e315c9ab0d3fa4f7f48a5fed6f1e7f5402
+tests_passing: true

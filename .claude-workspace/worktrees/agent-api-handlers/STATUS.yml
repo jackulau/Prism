@@ -1,0 +1,11 @@
+id: agent-api-handlers
+status: completed
+branch: prism/agent-api-handlers
+worktree_path: .claude-workspace/worktrees/agent-api-handlers/worktree
+assigned_to: claude
+started_at: 2026-01-24T23:36:00Z
+completed_at: 2026-01-24T23:50:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 5fa7e5b97c6cc76736f5acc8adf2d5295b29391b
+tests_passing: true

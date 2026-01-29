@@ -1,0 +1,5 @@
+status: complete
+completed_at: 2026-01-28T09:31:00+00:00
+commit_sha: e4e505bf99ef955fa6c11d706011ded38c75be28
+branch: prism/workos-frontend-sso
+tests_passing: true

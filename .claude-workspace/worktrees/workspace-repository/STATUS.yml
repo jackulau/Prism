@@ -1,0 +1,11 @@
+id: workspace-repository
+status: complete
+branch: prism/workspace-repository
+worktree_path: .claude-workspace/worktrees/workspace-repository/worktree
+assigned_to: null
+started_at: 2026-01-28T03:55:00Z
+completed_at: 2026-01-28T04:00:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: ac5f8363c476481c752f994b4030b405934f70e1
+tests_passing: true

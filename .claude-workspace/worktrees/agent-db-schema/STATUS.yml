@@ -1,0 +1,11 @@
+id: agent-db-schema
+status: completed
+branch: prism/agent-db-schema
+worktree_path: .claude-workspace/worktrees/agent-db-schema/worktree
+assigned_to: null
+started_at: 2026-01-25T05:37:01Z
+completed_at: 2026-01-25T05:38:30Z
+dependencies_met: true
+conflicts: []
+commit_sha: 7532d2a9e843db1be17613c8f14896f524f4824a
+tests_passing: true

@@ -1,0 +1,11 @@
+id: fireworks-provider
+status: completed
+branch: prism/fireworks-provider
+worktree_path: .claude-workspace/worktrees/fireworks-provider/worktree
+assigned_to: null
+started_at: 2026-01-25T00:05:00-08:00
+completed_at: 2026-01-25T00:15:00-08:00
+dependencies_met: true
+conflicts: []
+commit_sha: 06d5d4c40c5b799f5fb8b4414647a525f7c3f546
+tests_passing: true

@@ -1,0 +1,11 @@
+id: sandbox-grep
+status: complete
+branch: prism/sandbox-grep
+worktree_path: worktree
+assigned_to: claude
+started_at: 2026-01-28T08:18:56Z
+completed_at: 2026-01-28T08:23:14Z
+dependencies_met: true
+conflicts: []
+commit_sha: f140b13a58a1a0c9e8d20faf757a9102cb89aa86
+tests_passing: true

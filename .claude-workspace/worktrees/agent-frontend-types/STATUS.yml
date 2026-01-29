@@ -1,0 +1,11 @@
+id: agent-frontend-types
+status: completed
+branch: prism/agent-frontend-types
+worktree_path: .claude-workspace/worktrees/agent-frontend-types/worktree
+assigned_to: null
+started_at: 2026-01-25T05:37:01Z
+completed_at: 2026-01-25T05:41:30Z
+dependencies_met: true
+conflicts: []
+commit_sha: 37fdf8782287859a148d66e0c48ec22904db669d
+tests_passing: true

@@ -1,0 +1,11 @@
+id: orchestrator-agent-workflow
+status: complete
+branch: prism/orchestrator-agent-workflow
+worktree_path: .claude-workspace/worktrees/orchestrator-agent-workflow/worktree
+assigned_to: claude
+started_at: 2026-01-28T05:13:45Z
+completed_at: 2026-01-28T05:45:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 8e73605c41a4c2c2d74d39d6f33a27e6c90ad2a0
+tests_passing: true

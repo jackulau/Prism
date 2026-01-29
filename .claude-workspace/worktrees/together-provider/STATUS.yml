@@ -1,0 +1,11 @@
+id: together-provider
+status: complete
+branch: prism/together-provider
+worktree_path: .claude-workspace/worktrees/together-provider/worktree
+assigned_to: null
+started_at: 2026-01-28T00:00:00Z
+completed_at: 2026-01-28T00:00:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 4bc48d2
+tests_passing: true

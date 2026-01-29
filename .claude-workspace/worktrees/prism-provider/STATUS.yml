@@ -1,0 +1,11 @@
+id: prism-provider
+status: complete
+branch: prism/prism-provider
+worktree_path: .claude-workspace/worktrees/prism-provider/worktree
+assigned_to: null
+started_at: 2026-01-28T00:00:00Z
+completed_at: 2026-01-28T00:00:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 7504c8f3565c0cff736a84d55d4ea01f03413347
+tests_passing: true

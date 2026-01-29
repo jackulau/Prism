@@ -1,0 +1,11 @@
+id: org-workos-integration
+status: complete
+branch: prism/org-workos-integration
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/org-workos-integration/worktree
+assigned_to: claude
+started_at: "2026-01-28T00:00:00Z"
+completed_at: "2026-01-28T00:00:00Z"
+dependencies_met: true
+conflicts: []
+commit_sha: 88b4a0b
+tests_passing: true

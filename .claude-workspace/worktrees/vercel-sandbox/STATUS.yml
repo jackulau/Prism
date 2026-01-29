@@ -1,0 +1,11 @@
+id: vercel-sandbox
+status: complete
+branch: prism/vercel-sandbox
+worktree_path: .claude-workspace/worktrees/vercel-sandbox/worktree
+assigned_to: claude
+started_at: 2026-01-28T09:28:18Z
+completed_at: 2026-01-28T09:28:18Z
+dependencies_met: true
+conflicts: []
+commit_sha: dc8ab6eb872ec4054f9423d9e5b2fc43ebfe3c45
+tests_passing: true

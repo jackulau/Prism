@@ -1,0 +1,11 @@
+id: openai-compatible-provider
+status: completed
+branch: prism/openai-compatible-provider
+worktree_path: .claude-workspace/worktrees/openai-compatible-provider/worktree
+assigned_to: null
+started_at: 2026-01-27T22:15:00-06:00
+completed_at: 2026-01-27T22:19:21-06:00
+dependencies_met: true
+conflicts: []
+commit_sha: 4c4640655b7be40de30bdfefbccf9be1e24b33c6
+tests_passing: true

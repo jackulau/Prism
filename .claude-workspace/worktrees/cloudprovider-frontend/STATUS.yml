@@ -1,0 +1,11 @@
+id: cloudprovider-frontend
+status: completed
+branch: prism/cloudprovider-frontend
+worktree_path: .claude-workspace/worktrees/cloudprovider-frontend/worktree
+assigned_to: null
+started_at: 2026-01-24T23:57:00Z
+completed_at: 2026-01-25T00:00:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 06a21c373fc808bccbe31928a0de4af66dadb08f
+tests_passing: true

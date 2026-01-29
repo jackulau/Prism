@@ -1,0 +1,11 @@
+id: deepseek-provider
+status: completed
+branch: prism/deepseek-provider
+worktree_path: .claude-workspace/worktrees/deepseek-provider/worktree
+assigned_to: claude
+started_at: 2026-01-25T00:00:00Z
+completed_at: 2026-01-25T00:15:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: d7623889c6aa3fd2e269936505733c9452f8a492
+tests_passing: true

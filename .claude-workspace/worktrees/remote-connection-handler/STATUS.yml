@@ -1,0 +1,8 @@
+status: complete
+completed_at: 2026-01-28T08:00:27Z
+branch: prism/remote-connection-handler
+worktree_path: .claude-workspace/worktrees/remote-connection-handler/worktree
+commit_sha: b8c041b982c741e365b8c12ba3adffb46cd79d96
+tests_passing: true
+dependencies_met: true
+conflicts: []

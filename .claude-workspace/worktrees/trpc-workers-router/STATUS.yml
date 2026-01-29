@@ -1,0 +1,5 @@
+status: complete
+completed_at: 2026-01-28T09:15:14Z
+branch: prism/trpc-workers-router
+commit_sha: 13786ae79e138b321f87c7073fd037927830cb3c
+tests_passing: true

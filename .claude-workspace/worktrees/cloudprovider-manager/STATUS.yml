@@ -1,0 +1,11 @@
+id: cloudprovider-manager
+status: completed
+branch: prism/cloudprovider-manager
+worktree_path: .claude-workspace/worktrees/cloudprovider-manager/worktree
+assigned_to: null
+started_at: 2026-01-25T00:00:00Z
+completed_at: 2026-01-25T00:05:00Z
+dependencies_met: false
+conflicts: []
+commit_sha: a7110ad502ca7623d09637491a6a9e6d97c959f1
+tests_passing: true

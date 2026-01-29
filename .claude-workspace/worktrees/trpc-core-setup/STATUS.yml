@@ -1,0 +1,11 @@
+id: trpc-core-setup
+status: complete
+branch: prism/trpc-core-setup
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/trpc-core-setup/worktree
+assigned_to: claude
+started_at: 2026-01-28T10:59:00Z
+completed_at: 2026-01-28T09:02:38Z
+dependencies_met: true
+conflicts: []
+commit_sha: 7c8c1d6a1cd447b85d7786179982eec15fc12ee3
+tests_passing: true

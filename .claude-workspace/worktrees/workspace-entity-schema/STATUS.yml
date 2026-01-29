@@ -1,0 +1,11 @@
+id: workspace-entity-schema
+status: complete
+branch: prism/workspace-entity-schema
+worktree_path: .claude-workspace/worktrees/workspace-entity-schema/worktree
+assigned_to: null
+started_at: 2026-01-28T03:37:00Z
+completed_at: 2026-01-28T03:40:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 1c46816fe387cf6aaa86b7c46ca9454d4eb98b63
+tests_passing: true

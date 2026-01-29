@@ -1,0 +1,11 @@
+id: workos-sdk-config
+status: complete
+branch: prism/workos-sdk-config
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/workos-sdk-config/worktree
+assigned_to: null
+started_at: 2026-01-28T03:33:00Z
+completed_at: 2026-01-28T09:35:26Z
+dependencies_met: true
+conflicts: []
+commit_sha: 5e830f30e20ac905e7d6f7c6a696811b1979ad7d
+tests_passing: true

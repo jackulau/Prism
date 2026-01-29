@@ -1,0 +1,11 @@
+id: groq-provider
+status: completed
+branch: prism/groq-provider
+worktree_path: .claude-workspace/worktrees/groq-provider/worktree
+assigned_to: claude-opus
+started_at: 2026-01-25T06:18:38Z
+completed_at: 2026-01-25T06:25:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: d69161498df67e1cd4b0544ca7cb57fb2f8c7ce4
+tests_passing: true

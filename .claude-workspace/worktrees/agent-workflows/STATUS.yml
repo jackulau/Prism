@@ -1,0 +1,11 @@
+id: agent-workflows
+status: completed
+branch: prism/agent-workflows
+worktree_path: .claude-workspace/worktrees/agent-workflows/worktree
+assigned_to: null
+started_at: 2026-01-24T23:44:00
+completed_at: 2026-01-25T00:15:00
+dependencies_met: true
+conflicts: []
+commit_sha: 354f3966637479de4e0a8133318b876e118ea077
+tests_passing: true

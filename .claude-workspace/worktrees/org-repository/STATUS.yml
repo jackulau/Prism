@@ -1,0 +1,11 @@
+id: org-repository
+status: complete
+branch: prism/org-repository
+worktree_path: .claude-workspace/worktrees/org-repository/worktree
+assigned_to: null
+started_at: "2025-01-28T01:30:00Z"
+completed_at: "2025-01-28T01:35:00Z"
+dependencies_met: true
+conflicts: []
+commit_sha: 4be0b75ebf7e008317adb116c3ae4810566f76ba
+tests_passing: true

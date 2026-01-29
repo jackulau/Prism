@@ -1,0 +1,6 @@
+id: remote-connection-tests
+status: complete
+branch: prism/remote-connection-tests
+completed_at: 2026-01-28T08:45:00Z
+commit_sha: fda20cb
+tests_passing: true

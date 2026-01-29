@@ -1,0 +1,11 @@
+id: cursor-provider
+status: completed
+branch: prism/cursor-provider
+worktree_path: .claude-workspace/worktrees/cursor-provider/worktree
+assigned_to: claude
+started_at: 2026-01-25T00:00:00Z
+completed_at: 2026-01-25T00:15:00Z
+dependencies_met: false
+conflicts: []
+commit_sha: 850d42d0748f69981cb5e6bd12dfab2fa73ba964
+tests_passing: true

@@ -1,0 +1,9 @@
+id: sandbox-list-files
+status: complete
+branch: prism/sandbox-list-files
+worktree_path: .claude-workspace/worktrees/sandbox-list-files/worktree
+completed_at: 2026-01-28T08:25:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 25a412296a9099c57b66f61ac96e52cd075d43a7
+tests_passing: true

@@ -1,0 +1,11 @@
+id: message-streaming
+status: completed
+branch: prism/message-streaming
+worktree_path: .claude-workspace/worktrees/message-streaming/worktree
+assigned_to: null
+started_at: 2026-01-25T06:28:16Z
+completed_at: 2026-01-25T06:42:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: b32358c8d7d9fdbd3660b0ef8bf8301203773fba
+tests_passing: true

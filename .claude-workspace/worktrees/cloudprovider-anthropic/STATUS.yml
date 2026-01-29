@@ -1,0 +1,15 @@
+id: cloudprovider-anthropic
+status: completed
+branch: prism/cloudprovider-anthropic
+worktree_path: .claude-workspace/worktrees/cloudprovider-anthropic/worktree
+assigned_to: claude
+started_at: 2026-01-25T05:50:00Z
+completed_at: 2026-01-25T05:56:46Z
+dependencies_met: false
+conflicts: []
+commit_sha: ab44a1f7234392f0743aff7712e3365f7cddab50
+tests_passing: true
+notes: |
+  Implemented cloudprovider interface and Anthropic implementation.
+  Note: Also created the base cloudprovider interface since the
+  cloudprovider-interface dependency was not yet complete.

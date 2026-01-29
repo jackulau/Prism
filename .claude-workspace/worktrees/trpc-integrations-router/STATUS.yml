@@ -1,0 +1,11 @@
+id: trpc-integrations-router
+status: complete
+branch: prism/trpc-integrations-router
+worktree_path: /Users/jacklau/Prism/.claude-workspace/worktrees/trpc-integrations-router/worktree
+assigned_to: claude
+started_at: 2026-01-28T09:08:43Z
+completed_at: 2026-01-28T09:08:43Z
+dependencies_met: true
+conflicts: []
+commit_sha: 26b9758e843f51a68c615883f21c476231c2c736
+tests_passing: true

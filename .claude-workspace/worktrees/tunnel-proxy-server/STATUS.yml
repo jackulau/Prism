@@ -1,0 +1,11 @@
+id: tunnel-proxy-server
+status: complete
+branch: prism/tunnel-proxy-server
+worktree_path: .claude-workspace/worktrees/tunnel-proxy-server/worktree
+assigned_to: claude
+started_at: 2026-01-28T09:15:58Z
+completed_at: 2026-01-28T09:21:28Z
+dependencies_met: true
+conflicts: []
+commit_sha: dabb68df2b66fe975dd12f5ad76e0569ff7241ef
+tests_passing: true

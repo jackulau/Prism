@@ -1,0 +1,11 @@
+id: openai-llm-setup
+status: completed
+branch: prism/openai-llm-setup
+worktree_path: .claude-workspace/worktrees/openai-llm-setup/worktree
+assigned_to: claude
+started_at: 2026-01-28T04:20:08Z
+completed_at: 2026-01-28T04:35:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 4d9e637fe28be92313c9e0ce01332392026f4709
+tests_passing: true

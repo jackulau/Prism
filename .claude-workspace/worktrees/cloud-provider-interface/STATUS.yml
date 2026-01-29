@@ -1,0 +1,11 @@
+id: cloud-provider-interface
+status: completed
+branch: prism/cloud-provider-interface
+worktree_path: .claude-workspace/worktrees/cloud-provider-interface/worktree
+assigned_to: claude
+started_at: 2026-01-24T23:50:00Z
+completed_at: 2026-01-25T00:15:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 19a511336e9c5d98aae0171d564d13dc98f0f1af
+tests_passing: true

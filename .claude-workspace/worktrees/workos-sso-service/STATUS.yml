@@ -1,0 +1,11 @@
+id: workos-sso-service
+status: complete
+branch: prism/workos-sso-service
+worktree_path: .claude-workspace/worktrees/workos-sso-service/worktree
+assigned_to: null
+started_at: 2026-01-28T00:00:00Z
+completed_at: 2026-01-28T00:00:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 35b12ce8446e3136d221f0f73fa66354180a99ad
+tests_passing: true

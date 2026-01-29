@@ -1,0 +1,11 @@
+id: agent-system-prompts
+status: completed
+branch: prism/agent-system-prompts
+worktree_path: .claude-workspace/worktrees/agent-system-prompts/worktree
+assigned_to: null
+started_at: 2026-01-24T23:43:00Z
+completed_at: 2026-01-24T23:47:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 80f42936c5513fa9fa72a9e00188b908f6e30951
+tests_passing: true

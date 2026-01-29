@@ -1,0 +1,11 @@
+id: posthog-documentation-tool
+status: complete
+branch: prism/posthog-documentation-tool
+worktree_path: .claude-workspace/worktrees/posthog-documentation-tool/worktree
+assigned_to: null
+started_at: 2026-01-27T23:13:00Z
+completed_at: 2026-01-27T23:25:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: 8a0f1f29493922d8890b68d679514c66714b7f9c
+tests_passing: true

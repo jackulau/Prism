@@ -1,0 +1,11 @@
+id: posthog-errors-tools
+status: complete
+branch: prism/posthog-errors-tools
+worktree_path: .claude-workspace/worktrees/posthog-errors-tools/worktree
+assigned_to: null
+started_at: null
+completed_at: "2026-01-28T02:20:00Z"
+dependencies_met: true
+conflicts: []
+commit_sha: 2e0c4f3
+tests_passing: true

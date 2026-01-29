@@ -1,0 +1,11 @@
+id: trpc-payment-router
+status: complete
+branch: prism/trpc-payment-router
+worktree_path: .claude-workspace/worktrees/trpc-payment-router/worktree
+assigned_to: null
+started_at: 2026-01-28T03:09:00Z
+completed_at: 2026-01-28T03:15:00Z
+dependencies_met: true
+conflicts: []
+commit_sha: e12211d2cea9c1f53e5f81b81d563be529baa94b
+tests_passing: true
