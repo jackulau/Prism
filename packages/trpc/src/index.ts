@@ -25,6 +25,11 @@ export type { DatabaseConnection } from './services/organization.js';
 export { integrationsRouter, type IntegrationsRouter } from './routers/integrations/index.js';
 export * from './routers/integrations/schemas.js';
 
+// Workers router exports
+export { workersRouter, type WorkersRouter } from './routers/workers/index.js';
+export * from './routers/workers/schemas.js';
+export { workerService } from './services/worker.js';
+
 export interface TRPCMiddlewareOptions {
   onError?: (opts: { error: Error; path: string | undefined }) => void;
 }
