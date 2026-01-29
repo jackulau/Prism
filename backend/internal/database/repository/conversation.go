@@ -23,14 +23,33 @@ type Conversation struct {
 
 // Message represents a chat message
 type Message struct {
-	ID             string
-	ConversationID string
-	Role           string
-	Content        string
-	ToolCalls      []ToolCall
-	ToolCallID     string
-	TokensUsed     int
-	CreatedAt      time.Time
+	ID              string
+	ConversationID  string
+	ParentID        *string // For threading conversations
+	Role            string
+	Content         string
+	ThinkingContent string // Extended thinking content
+	ToolCalls       []ToolCall
+	ToolCallID      string
+	Provider        string
+	Model           string
+	Status          string // streaming, complete, error
+	InputTokens     int
+	OutputTokens    int
+	FinishReason    string
+	MetadataJSON    string
+	TokensUsed      int // Deprecated: use InputTokens + OutputTokens
+	CreatedAt       time.Time
+}
+
+// MessageChunk represents a streaming chunk for reconstruction
+type MessageChunk struct {
+	ID         string
+	MessageID  string
+	ChunkIndex int
+	Content    string
+	ChunkType  string // content, thinking
+	CreatedAt  time.Time
 }
 
 // ToolCall represents a tool call in a message
@@ -200,8 +219,26 @@ func NewMessageRepository(db *sql.DB) *MessageRepository {
 	return &MessageRepository{db: db}
 }
 
+// MessageCreateOptions contains optional fields for message creation
+type MessageCreateOptions struct {
+	ParentID        *string
+	Provider        string
+	Model           string
+	Status          string
+	ThinkingContent string
+	InputTokens     int
+	OutputTokens    int
+	FinishReason    string
+	MetadataJSON    string
+}
+
 // Create creates a new message
 func (r *MessageRepository) Create(conversationID, role, content string, toolCalls []ToolCall, toolCallID string) (*Message, error) {
+	return r.CreateWithOptions(conversationID, role, content, toolCalls, toolCallID, nil)
+}
+
+// CreateWithOptions creates a new message with additional options
+func (r *MessageRepository) CreateWithOptions(conversationID, role, content string, toolCalls []ToolCall, toolCallID string, opts *MessageCreateOptions) (*Message, error) {
 	id := uuid.New().String()
 	now := time.Now()
 
@@ -219,10 +256,35 @@ func (r *MessageRepository) Create(conversationID, role, content string, toolCal
 		toolCallIDNull = sql.NullString{String: toolCallID, Valid: true}
 	}
 
+	// Set defaults for optional fields
+	status := "complete"
+	var parentID *string
+	var provider, model, thinkingContent, finishReason, metadataJSON string
+	var inputTokens, outputTokens int
+
+	if opts != nil {
+		if opts.Status != "" {
+			status = opts.Status
+		}
+		parentID = opts.ParentID
+		provider = opts.Provider
+		model = opts.Model
+		thinkingContent = opts.ThinkingContent
+		inputTokens = opts.InputTokens
+		outputTokens = opts.OutputTokens
+		finishReason = opts.FinishReason
+		metadataJSON = opts.MetadataJSON
+	}
+
+	var parentIDNull sql.NullString
+	if parentID != nil {
+		parentIDNull = sql.NullString{String: *parentID, Valid: true}
+	}
+
 	_, err := r.db.Exec(
-		`INSERT INTO messages (id, conversation_id, role, content, tool_calls, tool_call_id, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id, conversationID, role, content, toolCallsJSON, toolCallIDNull, now,
+		`INSERT INTO messages (id, conversation_id, parent_id, role, content, thinking_content, tool_calls, tool_call_id, provider, model, status, input_tokens, output_tokens, finish_reason, metadata_json, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, conversationID, parentIDNull, role, content, thinkingContent, toolCallsJSON, toolCallIDNull, provider, model, status, inputTokens, outputTokens, finishReason, metadataJSON, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create message: %w", err)
@@ -232,20 +294,30 @@ func (r *MessageRepository) Create(conversationID, role, content string, toolCal
 	_, _ = r.db.Exec(`UPDATE conversations SET updated_at = ? WHERE id = ?`, now, conversationID)
 
 	return &Message{
-		ID:             id,
-		ConversationID: conversationID,
-		Role:           role,
-		Content:        content,
-		ToolCalls:      toolCalls,
-		ToolCallID:     toolCallID,
-		CreatedAt:      now,
+		ID:              id,
+		ConversationID:  conversationID,
+		ParentID:        parentID,
+		Role:            role,
+		Content:         content,
+		ThinkingContent: thinkingContent,
+		ToolCalls:       toolCalls,
+		ToolCallID:      toolCallID,
+		Provider:        provider,
+		Model:           model,
+		Status:          status,
+		InputTokens:     inputTokens,
+		OutputTokens:    outputTokens,
+		FinishReason:    finishReason,
+		MetadataJSON:    metadataJSON,
+		CreatedAt:       now,
 	}, nil
 }
 
 // ListByConversationID retrieves all messages for a conversation
 func (r *MessageRepository) ListByConversationID(conversationID string) ([]*Message, error) {
 	rows, err := r.db.Query(
-		`SELECT id, conversation_id, role, content, tool_calls, tool_call_id, tokens_used, created_at
+		`SELECT id, conversation_id, parent_id, role, content, thinking_content, tool_calls, tool_call_id,
+		        provider, model, status, input_tokens, output_tokens, finish_reason, metadata_json, tokens_used, created_at
 		 FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
 		conversationID,
 	)
@@ -257,10 +329,11 @@ func (r *MessageRepository) ListByConversationID(conversationID string) ([]*Mess
 	var messages []*Message
 	for rows.Next() {
 		msg := &Message{}
-		var toolCallsJSON, toolCallID sql.NullString
-		var tokensUsed sql.NullInt64
+		var parentID, toolCallsJSON, toolCallID, thinkingContent, provider, model, status, finishReason, metadataJSON sql.NullString
+		var tokensUsed, inputTokens, outputTokens sql.NullInt64
 
-		err := rows.Scan(&msg.ID, &msg.ConversationID, &msg.Role, &msg.Content, &toolCallsJSON, &toolCallID, &tokensUsed, &msg.CreatedAt)
+		err := rows.Scan(&msg.ID, &msg.ConversationID, &parentID, &msg.Role, &msg.Content, &thinkingContent,
+			&toolCallsJSON, &toolCallID, &provider, &model, &status, &inputTokens, &outputTokens, &finishReason, &metadataJSON, &tokensUsed, &msg.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan message: %w", err)
 		}
@@ -271,7 +344,21 @@ func (r *MessageRepository) ListByConversationID(conversationID string) ([]*Mess
 			}
 		}
 
+		if parentID.Valid {
+			msg.ParentID = &parentID.String
+		}
 		msg.ToolCallID = toolCallID.String
+		msg.ThinkingContent = thinkingContent.String
+		msg.Provider = provider.String
+		msg.Model = model.String
+		msg.Status = status.String
+		if msg.Status == "" {
+			msg.Status = "complete" // Default for older messages
+		}
+		msg.InputTokens = int(inputTokens.Int64)
+		msg.OutputTokens = int(outputTokens.Int64)
+		msg.FinishReason = finishReason.String
+		msg.MetadataJSON = metadataJSON.String
 		msg.TokensUsed = int(tokensUsed.Int64)
 		messages = append(messages, msg)
 	}
@@ -282,14 +369,16 @@ func (r *MessageRepository) ListByConversationID(conversationID string) ([]*Mess
 // GetByID retrieves a message by ID
 func (r *MessageRepository) GetByID(id string) (*Message, error) {
 	msg := &Message{}
-	var toolCallsJSON, toolCallID sql.NullString
-	var tokensUsed sql.NullInt64
+	var parentID, toolCallsJSON, toolCallID, thinkingContent, provider, model, status, finishReason, metadataJSON sql.NullString
+	var tokensUsed, inputTokens, outputTokens sql.NullInt64
 
 	err := r.db.QueryRow(
-		`SELECT id, conversation_id, role, content, tool_calls, tool_call_id, tokens_used, created_at
+		`SELECT id, conversation_id, parent_id, role, content, thinking_content, tool_calls, tool_call_id,
+		        provider, model, status, input_tokens, output_tokens, finish_reason, metadata_json, tokens_used, created_at
 		 FROM messages WHERE id = ?`,
 		id,
-	).Scan(&msg.ID, &msg.ConversationID, &msg.Role, &msg.Content, &toolCallsJSON, &toolCallID, &tokensUsed, &msg.CreatedAt)
+	).Scan(&msg.ID, &msg.ConversationID, &parentID, &msg.Role, &msg.Content, &thinkingContent,
+		&toolCallsJSON, &toolCallID, &provider, &model, &status, &inputTokens, &outputTokens, &finishReason, &metadataJSON, &tokensUsed, &msg.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -304,8 +393,182 @@ func (r *MessageRepository) GetByID(id string) (*Message, error) {
 		}
 	}
 
+	if parentID.Valid {
+		msg.ParentID = &parentID.String
+	}
 	msg.ToolCallID = toolCallID.String
+	msg.ThinkingContent = thinkingContent.String
+	msg.Provider = provider.String
+	msg.Model = model.String
+	msg.Status = status.String
+	if msg.Status == "" {
+		msg.Status = "complete"
+	}
+	msg.InputTokens = int(inputTokens.Int64)
+	msg.OutputTokens = int(outputTokens.Int64)
+	msg.FinishReason = finishReason.String
+	msg.MetadataJSON = metadataJSON.String
 	msg.TokensUsed = int(tokensUsed.Int64)
 
 	return msg, nil
+}
+
+// UpdateStatus updates the status of a message
+func (r *MessageRepository) UpdateStatus(id, status string) error {
+	_, err := r.db.Exec(`UPDATE messages SET status = ? WHERE id = ?`, status, id)
+	if err != nil {
+		return fmt.Errorf("failed to update message status: %w", err)
+	}
+	return nil
+}
+
+// UpdateContent updates the content of a message
+func (r *MessageRepository) UpdateContent(id, content string) error {
+	_, err := r.db.Exec(`UPDATE messages SET content = ? WHERE id = ?`, content, id)
+	if err != nil {
+		return fmt.Errorf("failed to update message content: %w", err)
+	}
+	return nil
+}
+
+// AppendContent appends to the content of a message
+func (r *MessageRepository) AppendContent(id, delta string) error {
+	_, err := r.db.Exec(`UPDATE messages SET content = content || ? WHERE id = ?`, delta, id)
+	if err != nil {
+		return fmt.Errorf("failed to append message content: %w", err)
+	}
+	return nil
+}
+
+// SetThinkingContent sets the thinking content of a message
+func (r *MessageRepository) SetThinkingContent(id, thinking string) error {
+	_, err := r.db.Exec(`UPDATE messages SET thinking_content = ? WHERE id = ?`, thinking, id)
+	if err != nil {
+		return fmt.Errorf("failed to set thinking content: %w", err)
+	}
+	return nil
+}
+
+// SetFinishReason sets the finish reason and marks message as complete
+func (r *MessageRepository) SetFinishReason(id, finishReason string) error {
+	_, err := r.db.Exec(`UPDATE messages SET finish_reason = ?, status = 'complete' WHERE id = ?`, finishReason, id)
+	if err != nil {
+		return fmt.Errorf("failed to set finish reason: %w", err)
+	}
+	return nil
+}
+
+// SetTokenCounts updates the token counts for a message
+func (r *MessageRepository) SetTokenCounts(id string, inputTokens, outputTokens int) error {
+	_, err := r.db.Exec(`UPDATE messages SET input_tokens = ?, output_tokens = ?, tokens_used = ? WHERE id = ?`,
+		inputTokens, outputTokens, inputTokens+outputTokens, id)
+	if err != nil {
+		return fmt.Errorf("failed to set token counts: %w", err)
+	}
+	return nil
+}
+
+// GetThread retrieves all messages in a thread starting from a parent
+func (r *MessageRepository) GetThread(parentID string) ([]*Message, error) {
+	rows, err := r.db.Query(
+		`WITH RECURSIVE thread AS (
+			SELECT id FROM messages WHERE id = ?
+			UNION ALL
+			SELECT m.id FROM messages m INNER JOIN thread t ON m.parent_id = t.id
+		)
+		SELECT m.id, m.conversation_id, m.parent_id, m.role, m.content, m.thinking_content, m.tool_calls, m.tool_call_id,
+		       m.provider, m.model, m.status, m.input_tokens, m.output_tokens, m.finish_reason, m.metadata_json, m.tokens_used, m.created_at
+		FROM messages m INNER JOIN thread t ON m.id = t.id ORDER BY m.created_at ASC`,
+		parentID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get thread: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []*Message
+	for rows.Next() {
+		msg := &Message{}
+		var parentIDVal, toolCallsJSON, toolCallID, thinkingContent, provider, model, status, finishReason, metadataJSON sql.NullString
+		var tokensUsed, inputTokens, outputTokens sql.NullInt64
+
+		err := rows.Scan(&msg.ID, &msg.ConversationID, &parentIDVal, &msg.Role, &msg.Content, &thinkingContent,
+			&toolCallsJSON, &toolCallID, &provider, &model, &status, &inputTokens, &outputTokens, &finishReason, &metadataJSON, &tokensUsed, &msg.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan message: %w", err)
+		}
+
+		if toolCallsJSON.Valid {
+			if err := json.Unmarshal([]byte(toolCallsJSON.String), &msg.ToolCalls); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal tool calls: %w", err)
+			}
+		}
+
+		if parentIDVal.Valid {
+			msg.ParentID = &parentIDVal.String
+		}
+		msg.ToolCallID = toolCallID.String
+		msg.ThinkingContent = thinkingContent.String
+		msg.Provider = provider.String
+		msg.Model = model.String
+		msg.Status = status.String
+		if msg.Status == "" {
+			msg.Status = "complete"
+		}
+		msg.InputTokens = int(inputTokens.Int64)
+		msg.OutputTokens = int(outputTokens.Int64)
+		msg.FinishReason = finishReason.String
+		msg.MetadataJSON = metadataJSON.String
+		msg.TokensUsed = int(tokensUsed.Int64)
+		messages = append(messages, msg)
+	}
+
+	return messages, nil
+}
+
+// SaveChunk saves a streaming chunk for later reconstruction
+func (r *MessageRepository) SaveChunk(messageID string, index int, content, chunkType string) error {
+	id := uuid.New().String()
+	_, err := r.db.Exec(
+		`INSERT INTO message_chunks (id, message_id, chunk_index, content, chunk_type) VALUES (?, ?, ?, ?, ?)`,
+		id, messageID, index, content, chunkType,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save chunk: %w", err)
+	}
+	return nil
+}
+
+// GetChunks retrieves all chunks for a message
+func (r *MessageRepository) GetChunks(messageID string) ([]*MessageChunk, error) {
+	rows, err := r.db.Query(
+		`SELECT id, message_id, chunk_index, content, chunk_type, created_at
+		 FROM message_chunks WHERE message_id = ? ORDER BY chunk_index ASC`,
+		messageID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chunks: %w", err)
+	}
+	defer rows.Close()
+
+	var chunks []*MessageChunk
+	for rows.Next() {
+		chunk := &MessageChunk{}
+		err := rows.Scan(&chunk.ID, &chunk.MessageID, &chunk.ChunkIndex, &chunk.Content, &chunk.ChunkType, &chunk.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan chunk: %w", err)
+		}
+		chunks = append(chunks, chunk)
+	}
+
+	return chunks, nil
+}
+
+// DeleteChunks deletes all chunks for a message
+func (r *MessageRepository) DeleteChunks(messageID string) error {
+	_, err := r.db.Exec(`DELETE FROM message_chunks WHERE message_id = ?`, messageID)
+	if err != nil {
+		return fmt.Errorf("failed to delete chunks: %w", err)
+	}
+	return nil
 }

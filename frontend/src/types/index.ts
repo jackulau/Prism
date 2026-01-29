@@ -2,6 +2,7 @@
 export type MessageType =
   | 'chat.message'
   | 'chat.chunk'
+  | 'chat.thinking_chunk'
   | 'chat.complete'
   | 'tool.started'
   | 'tool.completed'
@@ -58,12 +59,18 @@ export interface OutgoingWSMessage {
   conversation_id: string;
   message_id?: string;
   delta?: string;
+  thinking_delta?: string;
   finish_reason?: string;
   execution_id?: string;
   tool_name?: string;
   parameters?: unknown;
   result?: unknown;
   error?: string;
+  // Enhanced message fields
+  provider?: string;
+  model?: string;
+  input_tokens?: number;
+  output_tokens?: number;
   // Sandbox/Preview fields
   build_id?: string;
   content?: string;
@@ -85,13 +92,25 @@ export interface OutgoingWSMessage {
   iteration_count?: number;
 }
 
+// Message status
+export type MessageStatus = 'streaming' | 'complete' | 'error';
+
 // Chat types
 export interface Message {
   id: string;
+  conversation_id?: string;
+  parent_id?: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
+  thinking_content?: string;
   timestamp: Date;
   toolCalls?: ToolCall[];
+  provider?: string;
+  model?: string;
+  status?: MessageStatus;
+  input_tokens?: number;
+  output_tokens?: number;
+  finish_reason?: string;
   isStreaming?: boolean;
   metrics?: MessageMetrics;
 }
