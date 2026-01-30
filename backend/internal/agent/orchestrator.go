@@ -342,8 +342,15 @@ func (o *Orchestrator) runParallelStrategy(swarm *Swarm, task string) error {
 	// Create agents for each role config
 	agents := o.createAgentsFromConfig(swarm)
 
+	// Create progress tracker
+	progressTracker := NewSwarmProgressTracker(swarm.ID, len(agents), swarm.events)
+	progressTracker.SetPhase("execution")
+
 	var wg sync.WaitGroup
 	resultsChan := make(chan SwarmResult, len(agents))
+
+	// Emit initial progress
+	progressTracker.UpdateProgress("Starting parallel execution")
 
 	// Run all agents in parallel
 	for _, sa := range agents {
@@ -361,12 +368,18 @@ func (o *Orchestrator) runParallelStrategy(swarm *Swarm, task string) error {
 		close(resultsChan)
 	}()
 
-	// Collect results
+	// Collect results and update progress
 	for result := range resultsChan {
 		swarm.mu.Lock()
 		swarm.Results = append(swarm.Results, result)
 		swarm.mu.Unlock()
+
+		progressTracker.IncrementCompleted()
 	}
+
+	// Update phase for synthesis
+	progressTracker.SetPhase("synthesis")
+	progressTracker.UpdateProgress("Synthesizing results")
 
 	// Synthesize results
 	return o.synthesizeResults(swarm)
@@ -376,14 +389,23 @@ func (o *Orchestrator) runParallelStrategy(swarm *Swarm, task string) error {
 func (o *Orchestrator) runPipelineStrategy(swarm *Swarm, task string) error {
 	agents := o.createAgentsFromConfig(swarm)
 
+	// Create progress tracker with step-based tracking
+	progressTracker := NewSwarmProgressTracker(swarm.ID, len(agents), swarm.events)
+	progressTracker.SetPhase("pipeline")
+	progressTracker.SetTotalSteps(len(agents))
+
 	currentInput := task
 
-	for _, sa := range agents {
+	for i, sa := range agents {
 		select {
 		case <-swarm.ctx.Done():
 			return swarm.ctx.Err()
 		default:
 		}
+
+		// Emit step progress
+		stepName := fmt.Sprintf("Agent %d (%s)", i+1, sa.Role)
+		progressTracker.StartStep(i+1, stepName)
 
 		sa.Input = currentInput
 		result := o.runAgent(swarm, sa, currentInput)
@@ -391,6 +413,8 @@ func (o *Orchestrator) runPipelineStrategy(swarm *Swarm, task string) error {
 		swarm.mu.Lock()
 		swarm.Results = append(swarm.Results, result)
 		swarm.mu.Unlock()
+
+		progressTracker.IncrementCompleted()
 
 		if !result.Success {
 			return fmt.Errorf("agent %s failed: %s", sa.ID, result.Error)
@@ -418,6 +442,8 @@ func (o *Orchestrator) runPipelineStrategy(swarm *Swarm, task string) error {
 	}
 	swarm.mu.Unlock()
 
+	progressTracker.UpdateProgress("Pipeline complete")
+
 	return nil
 }
 
@@ -427,6 +453,12 @@ func (o *Orchestrator) runDebateStrategy(swarm *Swarm, task string) error {
 	if len(agents) < 2 {
 		return fmt.Errorf("debate strategy requires at least 2 agents")
 	}
+
+	// Create progress tracker for debate (2 rounds + synthesis)
+	totalWork := len(agents) * 2 // Round 1 + Round 2
+	progressTracker := NewSwarmProgressTracker(swarm.ID, totalWork, swarm.events)
+	progressTracker.SetPhase("debate_round_1")
+	progressTracker.UpdateProgress("Starting initial responses")
 
 	// Round 1: All agents produce initial responses
 	var wg sync.WaitGroup
@@ -438,11 +470,15 @@ func (o *Orchestrator) runDebateStrategy(swarm *Swarm, task string) error {
 			swarm.mu.Lock()
 			swarm.Results = append(swarm.Results, result)
 			swarm.mu.Unlock()
+			progressTracker.IncrementCompleted()
 		}(sa)
 	}
 	wg.Wait()
 
 	// Round 2: Each agent critiques others and refines
+	progressTracker.SetPhase("debate_round_2")
+	progressTracker.UpdateProgress("Starting critique and refinement")
+
 	critiques := make([]string, 0)
 	for i, sa := range agents {
 		// Gather other agents' outputs for critique
@@ -467,14 +503,23 @@ Please:
 
 		result := o.runAgent(swarm, sa, critiquePrompt)
 		critiques = append(critiques, result.Output)
+		progressTracker.IncrementCompleted()
 	}
 
 	// Synthesize final answer
+	progressTracker.SetPhase("synthesis")
+	progressTracker.UpdateProgress("Synthesizing debate results")
 	return o.synthesizeResults(swarm)
 }
 
 // runMapReduceStrategy splits task, runs in parallel, then combines
 func (o *Orchestrator) runMapReduceStrategy(swarm *Swarm, task string) error {
+	// Create progress tracker (planning + workers + synthesis)
+	totalWork := 1 + len(swarm.Config.AgentConfigs) // planner + workers
+	progressTracker := NewSwarmProgressTracker(swarm.ID, totalWork, swarm.events)
+	progressTracker.SetPhase("planning")
+	progressTracker.UpdateProgress("Planning subtasks")
+
 	// First, use a planner agent to split the task
 	plannerConfig := AgentConfig{
 		Provider:     swarm.Config.AgentConfigs[0].Config.Provider,
@@ -501,12 +546,16 @@ Output a numbered list of subtasks, one per line.`, len(swarm.Config.AgentConfig
 			return fmt.Errorf("planning failed: %s", result.Error)
 		}
 		subtasks = result.Output
+		progressTracker.IncrementCompleted()
 	case <-swarm.ctx.Done():
 		return swarm.ctx.Err()
 	}
 
 	// Create agents and assign subtasks
 	agents := o.createAgentsFromConfig(swarm)
+
+	progressTracker.SetPhase("map")
+	progressTracker.UpdateProgress("Executing subtasks in parallel")
 
 	// Simple subtask distribution (in practice, would parse the planner output)
 	var wg sync.WaitGroup
@@ -521,16 +570,25 @@ Output a numbered list of subtasks, one per line.`, len(swarm.Config.AgentConfig
 			swarm.mu.Lock()
 			swarm.Results = append(swarm.Results, result)
 			swarm.mu.Unlock()
+			progressTracker.IncrementCompleted()
 		}(sa, agentTask)
 	}
 	wg.Wait()
 
 	// Reduce: Synthesize all results
+	progressTracker.SetPhase("reduce")
+	progressTracker.UpdateProgress("Reducing and synthesizing results")
 	return o.synthesizeResults(swarm)
 }
 
 // runSpecialistStrategy routes tasks to specialized agents
 func (o *Orchestrator) runSpecialistStrategy(swarm *Swarm, task string) error {
+	// Create progress tracker (analyzer + specialists)
+	totalWork := 1 + len(swarm.Config.AgentConfigs) // analyzer + specialists
+	progressTracker := NewSwarmProgressTracker(swarm.ID, totalWork, swarm.events)
+	progressTracker.SetPhase("analysis")
+	progressTracker.UpdateProgress("Analyzing task for specialist routing")
+
 	// First, analyze the task to determine which specialists to involve
 	analyzerConfig := AgentConfig{
 		Provider:     swarm.Config.AgentConfigs[0].Config.Provider,
@@ -564,12 +622,16 @@ For each specialist that should be involved, explain what aspect of the task the
 		if !result.Success {
 			return fmt.Errorf("analysis failed: %s", result.Error)
 		}
+		progressTracker.IncrementCompleted()
 	case <-swarm.ctx.Done():
 		return swarm.ctx.Err()
 	}
 
 	// Run all configured specialists in parallel
 	agents := o.createAgentsFromConfig(swarm)
+
+	progressTracker.SetPhase("specialist_execution")
+	progressTracker.UpdateProgress("Running specialist agents")
 
 	var wg sync.WaitGroup
 	for _, sa := range agents {
@@ -586,10 +648,13 @@ Apply your expertise to this task. Focus on the aspects most relevant to your sp
 			swarm.mu.Lock()
 			swarm.Results = append(swarm.Results, result)
 			swarm.mu.Unlock()
+			progressTracker.IncrementCompleted()
 		}(sa, specialistTask)
 	}
 	wg.Wait()
 
+	progressTracker.SetPhase("synthesis")
+	progressTracker.UpdateProgress("Synthesizing specialist outputs")
 	return o.synthesizeResults(swarm)
 }
 

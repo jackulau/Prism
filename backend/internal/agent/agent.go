@@ -161,6 +161,15 @@ func (a *Agent) run(task *Task) {
 		close(a.events)
 	}()
 
+	// Emit progress: starting message preparation
+	a.emitEvent(AgentEventProgress, map[string]interface{}{
+		"current_step":     1,
+		"total_steps":      3,
+		"percent_complete": 0.0,
+		"step_name":        "preparation",
+		"message":          "Preparing request",
+	})
+
 	// Build initial messages
 	messages := a.buildMessages(task)
 
@@ -174,9 +183,27 @@ func (a *Agent) run(task *Task) {
 		Stream:      true,
 	}
 
+	// Emit thinking start event
+	a.emitEvent(AgentEventThinkingStart, map[string]interface{}{
+		"phase":       "inference",
+		"description": "Processing request with LLM",
+	})
+
+	// Emit progress: starting LLM inference
+	a.emitEvent(AgentEventProgress, map[string]interface{}{
+		"current_step":     2,
+		"total_steps":      3,
+		"percent_complete": 33.0,
+		"step_name":        "inference",
+		"message":          "Generating response",
+	})
+
 	// Execute chat
 	stream, err := a.llmManager.Chat(a.ctx, a.Config.Provider, req)
 	if err != nil {
+		a.emitEvent(AgentEventThinkingEnd, map[string]interface{}{
+			"phase": "inference",
+		})
 		a.fail(err.Error())
 		a.results <- &AgentResult{
 			AgentID:     a.ID,
@@ -193,10 +220,27 @@ func (a *Agent) run(task *Task) {
 	var fullResponse string
 	var toolCalls []llm.ToolCall
 	var usage *llm.Usage
+	chunkCount := 0
 
 	for chunk := range stream {
+		chunkCount++
+
+		// Emit periodic progress updates during streaming
+		if chunkCount%10 == 0 {
+			a.emitEvent(AgentEventProgress, map[string]interface{}{
+				"current_step":     2,
+				"total_steps":      3,
+				"percent_complete": 33.0 + float64(chunkCount)/10.0, // Gradual increase
+				"step_name":        "inference",
+				"message":          "Streaming response",
+			})
+		}
 		select {
 		case <-a.ctx.Done():
+			// Emit thinking end when cancelled
+			a.emitEvent(AgentEventThinkingEnd, map[string]interface{}{
+				"phase": "inference",
+			})
 			a.cancel()
 			a.mu.Lock()
 			a.Status = AgentStatusCancelled
@@ -254,6 +298,20 @@ func (a *Agent) run(task *Task) {
 			usage = chunk.Usage
 		}
 	}
+
+	// Emit thinking end event
+	a.emitEvent(AgentEventThinkingEnd, map[string]interface{}{
+		"phase": "inference",
+	})
+
+	// Emit progress: completion
+	a.emitEvent(AgentEventProgress, map[string]interface{}{
+		"current_step":     3,
+		"total_steps":      3,
+		"percent_complete": 100.0,
+		"step_name":        "complete",
+		"message":          "Processing complete",
+	})
 
 	// Mark as completed
 	a.mu.Lock()
