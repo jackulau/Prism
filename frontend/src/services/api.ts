@@ -479,6 +479,60 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // MFA Authentication
+  async mfaGetStatus() {
+    return this.request<{ enabled: boolean }>('/auth/mfa/status');
+  }
+
+  async mfaStartSetup() {
+    return this.request<{ secret: string; qr_url: string }>('/auth/mfa/setup', {
+      method: 'POST',
+    });
+  }
+
+  async mfaVerifySetup(code: string) {
+    return this.request<{ backup_codes: string[] }>('/auth/mfa/verify-setup', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  async mfaValidate(sessionToken: string, code: string) {
+    return this.request<{
+      access_token: string;
+      refresh_token: string;
+      user: { id: string; email: string; created_at: string };
+    }>('/auth/mfa/validate', {
+      method: 'POST',
+      body: JSON.stringify({ session_token: sessionToken, code }),
+    });
+  }
+
+  async mfaDisable(password: string, code: string) {
+    return this.request<void>('/auth/mfa/disable', {
+      method: 'POST',
+      body: JSON.stringify({ password, code }),
+    });
+  }
+
+  async mfaRegenerateBackupCodes(code: string) {
+    return this.request<{ backup_codes: string[] }>('/auth/mfa/backup-codes', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  async mfaVerifyBackupCode(sessionToken: string, code: string) {
+    return this.request<{
+      access_token: string;
+      refresh_token: string;
+      user: { id: string; email: string; created_at: string };
+    }>('/auth/mfa/verify-backup', {
+      method: 'POST',
+      body: JSON.stringify({ session_token: sessionToken, code }),
+    });
+  }
 }
 
 export const apiService = new ApiService();

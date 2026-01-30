@@ -99,8 +99,13 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface MFARequiredResponse {
+  mfa_required: true;
+  session_token: string;
+}
+
 export const authApi = {
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
+  async login(credentials: LoginCredentials): Promise<AuthResponse | MFARequiredResponse> {
     const response = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -196,11 +201,22 @@ export const authApi = {
   },
 };
 
+// Helper to check if response is MFA required
+export function isMFARequired(response: AuthResponse | MFARequiredResponse): response is MFARequiredResponse {
+  return 'mfa_required' in response && response.mfa_required === true;
+}
+
 // Auth helper functions
-export const loginUser = async (credentials: LoginCredentials) => {
+export const loginUser = async (credentials: LoginCredentials): Promise<AuthResponse | MFARequiredResponse> => {
   const { setUser, setTokens } = useAuthStore.getState();
 
   const response = await authApi.login(credentials);
+
+  // Check if MFA is required
+  if (isMFARequired(response)) {
+    return response;
+  }
+
   setTokens(response.access_token, response.refresh_token);
   setUser(response.user);
 
@@ -209,6 +225,26 @@ export const loginUser = async (credentials: LoginCredentials) => {
   wsService.connect(response.access_token);
 
   return response;
+};
+
+// Complete login after MFA verification
+export const completeMFALogin = async (authData: {
+  access_token: string;
+  refresh_token: string;
+  user: { id: string; email: string; created_at: string };
+}) => {
+  const { setUser, setTokens } = useAuthStore.getState();
+
+  setTokens(authData.access_token, authData.refresh_token);
+  setUser({
+    id: authData.user.id,
+    email: authData.user.email,
+    createdAt: authData.user.created_at,
+  });
+
+  // Connect services with token
+  apiService.setToken(authData.access_token);
+  wsService.connect(authData.access_token);
 };
 
 export const registerUser = async (credentials: RegisterCredentials) => {

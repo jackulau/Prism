@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { loginUser } from '../../store/authStore';
+import { loginUser, isMFARequired, completeMFALogin } from '../../store/authStore';
 import { SSOLogin } from './SSOLogin';
+import { MFAChallenge } from './MFAChallenge';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -13,6 +14,7 @@ export function LoginForm({ onSuccess, onRegisterClick }: LoginFormProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSSO, setShowSSO] = useState(false);
+  const [mfaSessionToken, setMfaSessionToken] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,14 +22,42 @@ export function LoginForm({ onSuccess, onRegisterClick }: LoginFormProps) {
     setLoading(true);
 
     try {
-      await loginUser({ email, password });
-      onSuccess?.();
+      const response = await loginUser({ email, password });
+      if (isMFARequired(response)) {
+        setMfaSessionToken(response.session_token);
+      } else {
+        onSuccess?.();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setLoading(false);
     }
   };
+
+  const handleMFASuccess = async (authData: {
+    access_token: string;
+    refresh_token: string;
+    user: { id: string; email: string; created_at: string };
+  }) => {
+    await completeMFALogin(authData);
+    onSuccess?.();
+  };
+
+  const handleMFABack = () => {
+    setMfaSessionToken(null);
+    setPassword('');
+  };
+
+  if (mfaSessionToken) {
+    return (
+      <MFAChallenge
+        sessionToken={mfaSessionToken}
+        onSuccess={handleMFASuccess}
+        onBack={handleMFABack}
+      />
+    );
+  }
 
   if (showSSO) {
     return <SSOLogin onBack={() => setShowSSO(false)} />;
