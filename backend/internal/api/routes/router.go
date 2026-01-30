@@ -453,12 +453,12 @@ func Setup(deps *Dependencies) *fiber.App {
 
 	// Organization workspace routes
 	if deps.OrgWorkspaceRepo != nil {
-		orgWorkspaceHandler := handlers.NewOrgWorkspaceHandler(deps.OrgWorkspaceRepo)
-		orgWorkspaces := v1.Group("/org/workspaces", middleware.AuthMiddleware(deps.JWTService))
-		orgWorkspaces.Post("/", orgWorkspaceHandler.Create)
+		orgWorkspaceHandler := handlers.NewOrgWorkspaceHandler(deps.OrgWorkspaceRepo, deps.OrganizationRepo)
+		orgWorkspaces := v1.Group("/organizations/:orgId/workspaces", middleware.AuthMiddleware(deps.JWTService))
 		orgWorkspaces.Get("/", orgWorkspaceHandler.List)
+		orgWorkspaces.Post("/", orgWorkspaceHandler.Create)
 		orgWorkspaces.Get("/:id", orgWorkspaceHandler.Get)
-		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
+		orgWorkspaces.Put("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
 	}

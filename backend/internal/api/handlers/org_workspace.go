@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"strconv"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacklau/prism/internal/api/middleware"
 	"github.com/jacklau/prism/internal/database/repository"
@@ -8,18 +10,40 @@ import (
 
 // OrgWorkspaceHandler handles organization workspace endpoints
 type OrgWorkspaceHandler struct {
-	repo *repository.OrgWorkspaceRepository
+	repo    *repository.OrgWorkspaceRepository
+	orgRepo *repository.OrganizationRepository
 }
 
 // NewOrgWorkspaceHandler creates a new organization workspace handler
-func NewOrgWorkspaceHandler(repo *repository.OrgWorkspaceRepository) *OrgWorkspaceHandler {
-	return &OrgWorkspaceHandler{repo: repo}
+func NewOrgWorkspaceHandler(repo *repository.OrgWorkspaceRepository, orgRepo *repository.OrganizationRepository) *OrgWorkspaceHandler {
+	return &OrgWorkspaceHandler{repo: repo, orgRepo: orgRepo}
+}
+
+// checkMembership verifies the user is a member of the organization
+func (h *OrgWorkspaceHandler) checkMembership(c *fiber.Ctx, orgID, userID string) (bool, error) {
+	if h.orgRepo == nil {
+		// Skip membership check if org repo not provided
+		return true, nil
+	}
+	return h.orgRepo.IsMember(orgID, userID)
+}
+
+// checkAdminRole verifies the user has admin or owner role in the organization
+func (h *OrgWorkspaceHandler) checkAdminRole(c *fiber.Ctx, orgID, userID string) (bool, error) {
+	if h.orgRepo == nil {
+		// Skip role check if org repo not provided
+		return true, nil
+	}
+	role, err := h.orgRepo.GetMemberRole(orgID, userID)
+	if err != nil {
+		return false, err
+	}
+	return role == "admin" || role == "owner", nil
 }
 
 // CreateWorkspaceRequest represents a request to create a workspace
 type CreateWorkspaceRequest struct {
 	Name                 string `json:"name"`
-	OrganizationID       string `json:"organization_id"`
 	GitHubRepositoryName string `json:"github_repository_name,omitempty"`
 	WorkerID             string `json:"worker_id,omitempty"`
 	CurrentBranch        string `json:"current_branch,omitempty"`
@@ -78,6 +102,26 @@ func (h *OrgWorkspaceHandler) Create(c *fiber.Ctx) error {
 		})
 	}
 
+	orgID := c.Params("orgId")
+	if orgID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "organization_id is required",
+		})
+	}
+
+	// Check admin role for create operations
+	isAdmin, err := h.checkAdminRole(c, orgID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check permissions",
+		})
+	}
+	if !isAdmin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "admin or owner role required",
+		})
+	}
+
 	var req CreateWorkspaceRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -90,15 +134,23 @@ func (h *OrgWorkspaceHandler) Create(c *fiber.Ctx) error {
 			"error": "name is required",
 		})
 	}
-	if req.OrganizationID == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "organization_id is required",
+
+	// Check name uniqueness within organization
+	existing, err := h.repo.GetByName(orgID, req.Name)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check workspace name",
+		})
+	}
+	if existing != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": "workspace with this name already exists in the organization",
 		})
 	}
 
 	ws := &repository.OrgWorkspace{
 		Name:                 req.Name,
-		OrganizationID:       req.OrganizationID,
+		OrganizationID:       orgID,
 		GitHubRepositoryName: req.GitHubRepositoryName,
 		WorkerID:             req.WorkerID,
 		CurrentBranch:        req.CurrentBranch,
@@ -124,6 +176,26 @@ func (h *OrgWorkspaceHandler) Get(c *fiber.Ctx) error {
 		})
 	}
 
+	orgID := c.Params("orgId")
+	if orgID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "organization_id is required",
+		})
+	}
+
+	// Check membership for read operations
+	isMember, err := h.checkMembership(c, orgID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check permissions",
+		})
+	}
+	if !isMember {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "organization membership required",
+		})
+	}
+
 	id := c.Params("id")
 	if id == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -143,10 +215,17 @@ func (h *OrgWorkspaceHandler) Get(c *fiber.Ctx) error {
 		})
 	}
 
+	// Verify workspace belongs to the organization
+	if ws.OrganizationID != orgID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "workspace not found",
+		})
+	}
+
 	return c.JSON(toResponse(ws))
 }
 
-// List retrieves all workspaces for an organization
+// List retrieves all workspaces for an organization with pagination
 func (h *OrgWorkspaceHandler) List(c *fiber.Ctx) error {
 	userID := middleware.GetUserID(c)
 	if userID == "" {
@@ -155,17 +234,51 @@ func (h *OrgWorkspaceHandler) List(c *fiber.Ctx) error {
 		})
 	}
 
-	orgID := c.Query("organization_id")
+	orgID := c.Params("orgId")
 	if orgID == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "organization_id query parameter is required",
+			"error": "organization_id is required",
 		})
 	}
 
-	workspaces, err := h.repo.ListByOrganizationID(orgID)
+	// Check membership for read operations
+	isMember, err := h.checkMembership(c, orgID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check permissions",
+		})
+	}
+	if !isMember {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "organization membership required",
+		})
+	}
+
+	// Parse pagination parameters
+	limit := 20 // default
+	offset := 0
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil && o >= 0 {
+			offset = o
+		}
+	}
+
+	workspaces, err := h.repo.ListByOrganizationIDWithPagination(orgID, limit, offset)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to list workspaces",
+		})
+	}
+
+	total, err := h.repo.CountByOrganizationID(orgID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to count workspaces",
 		})
 	}
 
@@ -176,6 +289,9 @@ func (h *OrgWorkspaceHandler) List(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"workspaces": responses,
+		"total":      total,
+		"limit":      limit,
+		"offset":     offset,
 	})
 }
 
@@ -185,6 +301,26 @@ func (h *OrgWorkspaceHandler) Update(c *fiber.Ctx) error {
 	if userID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "unauthorized",
+		})
+	}
+
+	orgID := c.Params("orgId")
+	if orgID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "organization_id is required",
+		})
+	}
+
+	// Check admin role for update operations
+	isAdmin, err := h.checkAdminRole(c, orgID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check permissions",
+		})
+	}
+	if !isAdmin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "admin or owner role required",
 		})
 	}
 
@@ -212,6 +348,28 @@ func (h *OrgWorkspaceHandler) Update(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "workspace not found",
 		})
+	}
+
+	// Verify workspace belongs to the organization
+	if ws.OrganizationID != orgID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "workspace not found",
+		})
+	}
+
+	// If updating name, check uniqueness
+	if req.Name != "" && req.Name != ws.Name {
+		existing, err := h.repo.GetByName(orgID, req.Name)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to check workspace name",
+			})
+		}
+		if existing != nil {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error": "workspace with this name already exists in the organization",
+			})
+		}
 	}
 
 	// Apply partial updates
@@ -252,6 +410,26 @@ func (h *OrgWorkspaceHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 
+	orgID := c.Params("orgId")
+	if orgID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "organization_id is required",
+		})
+	}
+
+	// Check admin role for delete operations
+	isAdmin, err := h.checkAdminRole(c, orgID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check permissions",
+		})
+	}
+	if !isAdmin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "admin or owner role required",
+		})
+	}
+
 	id := c.Params("id")
 	if id == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -266,6 +444,13 @@ func (h *OrgWorkspaceHandler) Delete(c *fiber.Ctx) error {
 		})
 	}
 	if ws == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "workspace not found",
+		})
+	}
+
+	// Verify workspace belongs to the organization
+	if ws.OrganizationID != orgID {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "workspace not found",
 		})
@@ -286,6 +471,26 @@ func (h *OrgWorkspaceHandler) UpdateBranch(c *fiber.Ctx) error {
 	if userID == "" {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "unauthorized",
+		})
+	}
+
+	orgID := c.Params("orgId")
+	if orgID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "organization_id is required",
+		})
+	}
+
+	// Check admin role for update operations
+	isAdmin, err := h.checkAdminRole(c, orgID, userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check permissions",
+		})
+	}
+	if !isAdmin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "admin or owner role required",
 		})
 	}
 
@@ -310,6 +515,13 @@ func (h *OrgWorkspaceHandler) UpdateBranch(c *fiber.Ctx) error {
 		})
 	}
 	if ws == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "workspace not found",
+		})
+	}
+
+	// Verify workspace belongs to the organization
+	if ws.OrganizationID != orgID {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "workspace not found",
 		})
