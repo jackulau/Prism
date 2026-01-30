@@ -1,7 +1,9 @@
 import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
+import { useMonitoringStore } from '../store/monitoringStore';
 import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext } from '../types';
 import type { FileNode } from '../store/sandboxStore';
+import type { ActiveAgent, AgentStatus } from '../types/monitoring';
 
 interface PendingFileRequest {
   resolve: (content: string) => void;
@@ -47,6 +49,7 @@ class WebSocketService {
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/ws`;
 
     useAppStore.getState().setConnectionStatus('connecting');
+    useMonitoringStore.getState().updateWsStatus('connecting');
 
     // If token provided, pass via Sec-WebSocket-Protocol header for auth
     // Otherwise connect without auth for anonymous/development mode
@@ -55,6 +58,8 @@ class WebSocketService {
     this.ws.onopen = () => {
       this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('connected');
+      useMonitoringStore.getState().updateWsStatus('connected');
+      useMonitoringStore.getState().recordHeartbeat();
       this.reconnectAttempts = 0;
 
       // Send queued messages
@@ -76,6 +81,7 @@ class WebSocketService {
     this.ws.onclose = () => {
       this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('disconnected');
+      useMonitoringStore.getState().updateWsStatus('disconnected');
 
       // Only attempt reconnect if this wasn't an intentional disconnect
       if (!this.intentionalDisconnect) {
@@ -86,6 +92,7 @@ class WebSocketService {
     this.ws.onerror = () => {
       this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('error');
+      useMonitoringStore.getState().updateWsStatus('error');
     };
   }
 
@@ -253,6 +260,50 @@ class WebSocketService {
       case 'file.history_content':
         this.handleFileHistoryContent(message);
         break;
+
+      // Agent lifecycle handlers
+      case 'agent.started':
+        this.handleAgentStarted(message);
+        break;
+
+      case 'agent.completed':
+        this.handleAgentCompleted(message);
+        break;
+
+      case 'agent.failed':
+        this.handleAgentFailed(message);
+        break;
+
+      case 'agent.cancelled':
+        this.handleAgentCancelled(message);
+        break;
+
+      // Swarm handlers
+      case 'swarm.started':
+        this.handleSwarmStarted(message);
+        break;
+
+      case 'swarm.agent_started':
+        this.handleSwarmAgentStarted(message);
+        break;
+
+      case 'swarm.agent_completed':
+        this.handleSwarmAgentCompleted(message);
+        break;
+
+      case 'swarm.completed':
+        this.handleSwarmCompleted(message);
+        break;
+
+      case 'swarm.failed':
+        this.handleSwarmFailed(message);
+        break;
+
+      // Heartbeat handlers
+      case 'heartbeat':
+      case 'heartbeat.ack':
+        this.handleHeartbeat();
+        break;
     }
   }
 
@@ -359,6 +410,163 @@ class WebSocketService {
     sandboxStore.setIsLoadingHistory(false);
   }
 
+  // Agent lifecycle handlers
+  private handleAgentStarted(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as {
+      agent_id?: string;
+      agent_name?: string;
+      workspace_id?: string;
+      task_description?: string;
+    } | undefined;
+
+    if (metadata?.agent_id) {
+      const agent: ActiveAgent = {
+        id: metadata.agent_id,
+        name: metadata.agent_name || 'Unknown Agent',
+        status: 'running',
+        startedAt: Date.now(),
+        updatedAt: Date.now(),
+        workspaceId: metadata.workspace_id,
+        taskDescription: metadata.task_description,
+      };
+      monitoringStore.addAgent(agent);
+    }
+  }
+
+  private handleAgentCompleted(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as { agent_id?: string } | undefined;
+
+    if (metadata?.agent_id) {
+      monitoringStore.updateAgent(metadata.agent_id, { status: 'completed' as AgentStatus });
+      monitoringStore.removeAgent(metadata.agent_id);
+    }
+  }
+
+  private handleAgentFailed(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as { agent_id?: string; error?: string } | undefined;
+
+    if (metadata?.agent_id) {
+      monitoringStore.updateAgent(metadata.agent_id, {
+        status: 'failed' as AgentStatus,
+        metadata: { error: metadata.error },
+      });
+      monitoringStore.removeAgent(metadata.agent_id);
+    }
+  }
+
+  private handleAgentCancelled(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as { agent_id?: string } | undefined;
+
+    if (metadata?.agent_id) {
+      monitoringStore.updateAgent(metadata.agent_id, { status: 'cancelled' as AgentStatus });
+      monitoringStore.removeAgent(metadata.agent_id);
+    }
+  }
+
+  // Swarm handlers
+  private handleSwarmStarted(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as {
+      swarm_id?: string;
+      swarm_name?: string;
+      workspace_id?: string;
+      agent_count?: number;
+    } | undefined;
+
+    monitoringStore.addActivityEvent({
+      type: 'swarm.started',
+      title: `Swarm Started: ${metadata?.swarm_name || 'Unknown'}`,
+      description: `${metadata?.agent_count || 0} agents initialized`,
+      severity: 'info',
+      workspaceId: metadata?.workspace_id,
+      metadata: { swarm_id: metadata?.swarm_id },
+    });
+  }
+
+  private handleSwarmAgentStarted(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as {
+      agent_id?: string;
+      agent_name?: string;
+      swarm_id?: string;
+      workspace_id?: string;
+      task_description?: string;
+    } | undefined;
+
+    if (metadata?.agent_id) {
+      const agent: ActiveAgent = {
+        id: metadata.agent_id,
+        name: metadata.agent_name || 'Swarm Agent',
+        status: 'running',
+        startedAt: Date.now(),
+        updatedAt: Date.now(),
+        workspaceId: metadata.workspace_id,
+        taskDescription: metadata.task_description,
+        metadata: { swarm_id: metadata.swarm_id },
+      };
+      monitoringStore.addAgent(agent);
+    }
+  }
+
+  private handleSwarmAgentCompleted(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as { agent_id?: string } | undefined;
+
+    if (metadata?.agent_id) {
+      monitoringStore.updateAgent(metadata.agent_id, { status: 'completed' as AgentStatus });
+      monitoringStore.removeAgent(metadata.agent_id);
+    }
+  }
+
+  private handleSwarmCompleted(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as {
+      swarm_id?: string;
+      swarm_name?: string;
+      workspace_id?: string;
+      total_agents?: number;
+      completed_agents?: number;
+    } | undefined;
+
+    monitoringStore.addActivityEvent({
+      type: 'swarm.completed',
+      title: `Swarm Completed: ${metadata?.swarm_name || 'Unknown'}`,
+      description: `${metadata?.completed_agents || 0}/${metadata?.total_agents || 0} agents completed`,
+      severity: 'success',
+      workspaceId: metadata?.workspace_id,
+      metadata: { swarm_id: metadata?.swarm_id },
+    });
+  }
+
+  private handleSwarmFailed(message: OutgoingWSMessage) {
+    const monitoringStore = useMonitoringStore.getState();
+    const metadata = message.metadata as {
+      swarm_id?: string;
+      swarm_name?: string;
+      workspace_id?: string;
+      error?: string;
+    } | undefined;
+
+    monitoringStore.addActivityEvent({
+      type: 'swarm.failed',
+      title: `Swarm Failed: ${metadata?.swarm_name || 'Unknown'}`,
+      description: metadata?.error || 'Swarm execution failed',
+      severity: 'error',
+      workspaceId: metadata?.workspace_id,
+      metadata: { swarm_id: metadata?.swarm_id },
+    });
+  }
+
+  // Heartbeat handler
+  private handleHeartbeat() {
+    const monitoringStore = useMonitoringStore.getState();
+    monitoringStore.recordHeartbeat();
+  }
+
   // Helper to convert SandboxFile[] to FileNode[]
   private convertSandboxFilesToNodes(files: SandboxFile[]): FileNode[] {
     return files.map(f => ({
@@ -374,12 +582,14 @@ class WebSocketService {
       this.reconnectAttempts++;
       const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
       useAppStore.getState().setConnectionStatus('connecting');
+      useMonitoringStore.getState().updateWsStatus('connecting');
       setTimeout(() => {
         this.connect(this.token || undefined);
       }, delay);
     } else {
       // Max reconnection attempts reached - set failed status for UI feedback
       useAppStore.getState().setConnectionStatus('error');
+      useMonitoringStore.getState().updateWsStatus('error');
     }
   }
 

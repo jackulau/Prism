@@ -526,3 +526,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 // Alias for convenience
 export const useStore = useAppStore;
+
+// Re-export monitoring store
+export {
+  useMonitoringStore,
+  useUnreadNotificationCount,
+  useActiveAgentCount,
+  useRecentActivity,
+  useSystemHealthStatus,
+  useActiveAgents,
+  useUnreadNotifications,
+  useNotifications,
+  useConnectionStatus,
+  useMonitoringMetrics,
+  createNotification,
+} from './monitoringStore';

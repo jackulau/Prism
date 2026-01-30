@@ -11,6 +11,20 @@ export type MessageType =
   | 'error'
   | 'agent.check_in'
   | 'agent.continue'
+  // Agent lifecycle message types
+  | 'agent.started'
+  | 'agent.completed'
+  | 'agent.failed'
+  | 'agent.cancelled'
+  // Swarm message types
+  | 'swarm.started'
+  | 'swarm.agent_started'
+  | 'swarm.agent_completed'
+  | 'swarm.completed'
+  | 'swarm.failed'
+  // Heartbeat message types
+  | 'heartbeat'
+  | 'heartbeat.ack'
   // Preview/Sandbox message types
   | 'preview.ready'
   | 'preview.content'
@@ -325,3 +339,6 @@ export interface CloudMessageChunk {
   finishReason?: string;
   error?: string;
 }
+
+// Re-export monitoring types
+export * from './monitoring';
