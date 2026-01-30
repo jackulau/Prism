@@ -378,7 +378,11 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN sso_connection_id TEXT`,
 		`ALTER TABLE users ADD COLUMN sso_provider TEXT`,
 
+		// Add RBAC role field to users table
+		`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`,
+
 		// Indexes
+		`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)`,

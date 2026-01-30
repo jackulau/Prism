@@ -463,6 +463,21 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
 	}
 
+	// Admin routes (requires admin role)
+	if deps.UserRepo != nil {
+		adminHandler := handlers.NewAdminHandler(deps.UserRepo)
+		admin := v1.Group("/admin",
+			middleware.AuthMiddlewareWithRole(deps.JWTService, deps.UserRepo),
+			middleware.RequireRole(security.RoleAdmin),
+		)
+		admin.Get("/users", adminHandler.ListUsers)
+		admin.Get("/users/:id", adminHandler.GetUser)
+		admin.Patch("/users/:id/role", adminHandler.UpdateUserRole)
+		admin.Get("/stats", adminHandler.GetStats)
+
+		log.Println("Admin routes registered")
+	}
+
 	return app
 }
 

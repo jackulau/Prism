@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { wsService } from '../services/websocket';
 import { apiService } from '../services/api';
+import { Role, Permission, hasPermission as checkPermission } from '../types/rbac';
 
 // SSO callback state interface
 export interface SSOCallbackState {
@@ -12,6 +13,7 @@ export interface SSOCallbackState {
 export interface User {
   id: string;
   email: string;
+  role: Role;
   createdAt: string;
   githubUsername?: string;
   githubConnectedAt?: string;
@@ -36,6 +38,7 @@ const DEV_BYPASS = true;
 const MOCK_USER: User = {
   id: 'dev-user-123',
   email: 'dev@prism.local',
+  role: 'admin', // Dev user has admin role for testing
   createdAt: new Date().toISOString(),
 };
 
@@ -442,4 +445,54 @@ export const initAuth = async () => {
   })();
 
   return initAuthPromise;
+};
+
+// Role and Permission helpers
+
+/**
+ * Check if the current user is an admin
+ */
+export const isAdmin = (): boolean => {
+  const { user } = useAuthStore.getState();
+  return user?.role === 'admin';
+};
+
+/**
+ * Check if the current user has a specific permission
+ */
+export const hasPermission = (permission: Permission): boolean => {
+  const { user } = useAuthStore.getState();
+  return checkPermission(user?.role, permission);
+};
+
+/**
+ * Get the current user's role
+ */
+export const getUserRole = (): Role | undefined => {
+  const { user } = useAuthStore.getState();
+  return user?.role;
+};
+
+/**
+ * Hook to check if user is admin (for use in components)
+ */
+export const useIsAdmin = (): boolean => {
+  const user = useAuthStore((state) => state.user);
+  return user?.role === 'admin';
+};
+
+/**
+ * Hook to check if user has permission (for use in components)
+ */
+export const useHasPermission = (permission: Permission): boolean => {
+  const user = useAuthStore((state) => state.user);
+  return checkPermission(user?.role, permission);
+};
+
+/**
+ * Hook to get user role (for use in components)
+ */
+export const useUserRole = (): Role | undefined => {
+  const user = useAuthStore((state) => state.user);
+  return user?.role;
 };
