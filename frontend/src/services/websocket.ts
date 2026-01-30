@@ -1,5 +1,6 @@
 import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
+import { useEmergencyStopStore } from '../store/emergencyStopStore';
 import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext } from '../types';
 import type { FileNode } from '../store/sandboxStore';
 
@@ -127,6 +128,11 @@ class WebSocketService {
           store.setStreamingMessageId(null);
           store.endGeneration();
 
+          // Unregister from emergency stop store
+          if (message.conversation_id) {
+            useEmergencyStopStore.getState().unregisterOperation(message.conversation_id);
+          }
+
           // Process next queued message if any - use queueMicrotask for immediate processing
           // after current state updates are complete, avoiding race conditions
           queueMicrotask(() => {
@@ -198,6 +204,11 @@ class WebSocketService {
           });
           store.setStreamingMessageId(null);
           store.endGeneration();
+
+          // Unregister from emergency stop store
+          if (message.conversation_id) {
+            useEmergencyStopStore.getState().unregisterOperation(message.conversation_id);
+          }
         }
         break;
 
@@ -263,6 +274,12 @@ class WebSocketService {
     sandboxStore.setIsRunning(true);
     if (message.build_id) {
       sandboxStore.setCurrentBuildId(message.build_id);
+      // Register with emergency stop store
+      useEmergencyStopStore.getState().registerOperation({
+        id: message.build_id,
+        type: 'build',
+        description: 'Sandbox build',
+      });
     }
     sandboxStore.addTerminalLine('Build started...', 'info');
   }
@@ -277,6 +294,11 @@ class WebSocketService {
   private handleBuildCompleted(message: OutgoingWSMessage) {
     const sandboxStore = useSandboxStore.getState();
     const success = message.success ?? false;
+
+    // Unregister from emergency stop store
+    if (message.build_id) {
+      useEmergencyStopStore.getState().unregisterOperation(message.build_id);
+    }
 
     sandboxStore.setBuildStatus(success ? 'success' : 'error');
     sandboxStore.setIsRunning(false);
@@ -459,6 +481,13 @@ class WebSocketService {
     // Start tracking metrics
     store.startGeneration();
 
+    // Register with emergency stop store
+    useEmergencyStopStore.getState().registerOperation({
+      id: conversationId,
+      type: 'chat',
+      description: 'AI response generation',
+    });
+
     // Send message with attachments and options
     this.send({
       type: 'chat.message',
@@ -484,6 +513,9 @@ class WebSocketService {
       store.setStreamingMessageId(null);
       store.endGeneration();
     }
+
+    // Unregister from emergency stop store
+    useEmergencyStopStore.getState().unregisterOperation(conversationId);
   }
 
   // Sandbox methods

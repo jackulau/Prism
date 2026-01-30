@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../components/sidebar/Sidebar';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { ToastContainer } from '../components/Toast';
+import { FloatingEmergencyStop } from '../components/FloatingEmergencyStop';
 import { AuthGuard } from '../components/auth/AuthGuard';
 import { AuthPage } from '../components/auth/AuthPage';
 import { TRPCProvider } from '../providers/TRPCProvider';
@@ -43,6 +44,9 @@ export function AppLayout() {
 
           {/* Toast Notifications */}
           <ToastContainer />
+
+          {/* Emergency Stop Button (floating) */}
+          <FloatingEmergencyStop />
         </div>
       </AuthGuard>
     </TRPCProvider>
