@@ -479,6 +479,93 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // API Key Management
+  async listAPIKeys() {
+    return this.request<{
+      api_keys: Array<{
+        id: string;
+        name: string;
+        prefix: string;
+        scopes: string[];
+        created_at: string;
+        expires_at: string | null;
+        last_used_at: string | null;
+      }>;
+    }>('/api-keys');
+  }
+
+  async createAPIKey(name: string, expiresInDays?: number, scopes?: string[]) {
+    return this.request<{
+      key: string;
+      id: string;
+      name: string;
+      prefix: string;
+      scopes: string[];
+      created_at: string;
+      expires_at: string | null;
+      last_used_at: string | null;
+    }>('/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        expires_in_days: expiresInDays,
+        scopes,
+      }),
+    });
+  }
+
+  async getAPIKey(id: string) {
+    return this.request<{
+      id: string;
+      name: string;
+      prefix: string;
+      scopes: string[];
+      created_at: string;
+      expires_at: string | null;
+      last_used_at: string | null;
+    }>(`/api-keys/${id}`);
+  }
+
+  async deleteAPIKey(id: string) {
+    return this.request<{ success: boolean; message: string }>(`/api-keys/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateAPIKeyName(id: string, name: string) {
+    return this.request<{ success: boolean; message: string }>(`/api-keys/${id}/name`, {
+      method: 'PUT',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async rotateAPIKey(id: string) {
+    return this.request<{
+      key: string;
+      id: string;
+      name: string;
+      prefix: string;
+      scopes: string[];
+      created_at: string;
+      expires_at: string | null;
+      last_used_at: string | null;
+    }>(`/api-keys/${id}/rotate`, {
+      method: 'POST',
+    });
+  }
+
+  async listProviderKeyMetadata() {
+    return this.request<{
+      provider_keys: Array<{
+        provider: string;
+        is_active: boolean;
+        created_at: string;
+        last_used_at: string | null;
+        use_count: number;
+      }>;
+    }>('/providers/keys/metadata');
+  }
 }
 
 export const apiService = new ApiService();
