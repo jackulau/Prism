@@ -9,7 +9,7 @@ import {
   Loader2,
   XCircle,
 } from 'lucide-react';
-import type { AgentStatus } from './AgentDetail';
+import type { AgentStatus } from './types';
 
 interface AgentResultsProps {
   result?: unknown;

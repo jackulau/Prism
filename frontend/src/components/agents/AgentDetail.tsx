@@ -16,37 +16,7 @@ import { AgentMessages } from './AgentMessages';
 import { AgentToolCalls } from './AgentToolCalls';
 import { AgentMetrics } from './AgentMetrics';
 import { AgentResults } from './AgentResults';
-import type { Message, ToolCall } from '../../types';
-
-export type AgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-export interface AgentExecution {
-  id: string;
-  name: string;
-  status: AgentStatus;
-  model: string;
-  provider: string;
-  systemPrompt?: string;
-  createdAt: Date;
-  startedAt?: Date;
-  completedAt?: Date;
-  messages: Message[];
-  toolCalls: ToolCall[];
-  result?: unknown;
-  error?: string;
-  metrics?: AgentExecutionMetrics;
-}
-
-export interface AgentExecutionMetrics {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-  inputCost?: number;
-  outputCost?: number;
-  totalCost?: number;
-  duration?: number;
-  iterationCount?: number;
-}
+import type { AgentExecution, AgentStatus } from './types';
 
 interface AgentDetailProps {
   agent: AgentExecution;
@@ -114,19 +84,24 @@ export function AgentDetail({
   };
 
   const renderTabContent = () => {
+    const messages = agent.messages || [];
+    const toolCalls = agent.toolCalls || [];
+    const startedAt = agent.started_at ? new Date(agent.started_at) : undefined;
+    const completedAt = agent.completed_at ? new Date(agent.completed_at) : undefined;
+
     switch (activeTab) {
       case 'messages':
-        return <AgentMessages messages={agent.messages} />;
+        return <AgentMessages messages={messages} />;
       case 'tools':
-        return <AgentToolCalls toolCalls={agent.toolCalls} />;
+        return <AgentToolCalls toolCalls={toolCalls} />;
       case 'metrics':
         return (
           <AgentMetrics
             metrics={agent.metrics}
-            model={agent.model}
-            provider={agent.provider}
-            startedAt={agent.startedAt}
-            completedAt={agent.completedAt}
+            model={agent.model || ''}
+            provider={agent.provider || ''}
+            startedAt={startedAt}
+            completedAt={completedAt}
           />
         );
       case 'results':
@@ -173,7 +148,7 @@ export function AgentDetail({
                 </span>
               </div>
               <p className="text-xs text-editor-muted mt-0.5">
-                {agent.provider} / {agent.model}
+                {agent.provider || 'Unknown'} / {agent.model || 'Unknown'}
               </p>
             </div>
           </div>
@@ -246,9 +221,9 @@ export function AgentDetail({
             >
               {tab.icon}
               {tab.label}
-              {tab.id === 'tools' && agent.toolCalls.length > 0 && (
+              {tab.id === 'tools' && (agent.toolCalls?.length ?? 0) > 0 && (
                 <span className="px-1.5 py-0.5 text-xs bg-editor-surface rounded-full">
-                  {agent.toolCalls.length}
+                  {agent.toolCalls?.length ?? 0}
                 </span>
               )}
             </button>

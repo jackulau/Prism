@@ -9,7 +9,7 @@ import {
   Activity,
   BarChart3,
 } from 'lucide-react';
-import type { AgentExecutionMetrics } from './AgentDetail';
+import type { AgentExecutionMetrics } from './types';
 
 interface AgentMetricsProps {
   metrics?: AgentExecutionMetrics;

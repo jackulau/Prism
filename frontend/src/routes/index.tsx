@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '../layouts/AppLayout';
 import Dashboard from '../pages/Dashboard';
 import Workers from '../pages/Workers';
+import Agents from '../pages/Agents';
 import Integrations from '../pages/Integrations';
 import Usage from '../pages/Usage';
 import Organization from '../pages/Organization';
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
       {
         path: 'workers',
         element: <Workers />,
+      },
+      {
+        path: 'agents/:id?',
+        element: <Agents />,
       },
       {
         path: 'integrations',
