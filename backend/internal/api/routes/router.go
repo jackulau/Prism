@@ -17,6 +17,7 @@ import (
 	"github.com/jacklau/prism/internal/api/middleware"
 	"github.com/jacklau/prism/internal/api/sse"
 	ws "github.com/jacklau/prism/internal/api/websocket"
+	"github.com/jacklau/prism/internal/audit"
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/integrations"
@@ -67,6 +68,7 @@ type Dependencies struct {
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
 	WorkflowEngine     *workflow.Engine
+	AuditService       *audit.Service
 }
 
 // Setup sets up the Fiber app with all routes
@@ -461,6 +463,21 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
+	}
+
+	// Audit log routes
+	if deps.AuditService != nil {
+		auditHandler := handlers.NewAuditHandler(deps.AuditService)
+		audit := v1.Group("/audit", middleware.AuthMiddleware(deps.JWTService))
+		audit.Get("/logs", auditHandler.GetLogs)
+		audit.Get("/logs/me", auditHandler.GetMyLogs)
+		audit.Get("/stats", auditHandler.GetStats)
+
+		// Add audit middleware to track security events
+		app.Use(middleware.SetAuditService(deps.AuditService))
+		app.Use(middleware.AuditMiddleware(deps.AuditService))
+
+		log.Println("Audit logging enabled")
 	}
 
 	return app

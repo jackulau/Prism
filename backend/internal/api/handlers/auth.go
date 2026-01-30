@@ -9,15 +9,17 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jacklau/prism/internal/api/middleware"
+	"github.com/jacklau/prism/internal/audit"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/security"
 )
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	userRepo    *repository.UserRepository
-	sessionRepo *repository.SessionRepository
-	jwtService  *security.JWTService
+	userRepo     *repository.UserRepository
+	sessionRepo  *repository.SessionRepository
+	jwtService   *security.JWTService
+	auditService *audit.Service
 }
 
 // NewAuthHandler creates a new auth handler
@@ -26,6 +28,18 @@ func NewAuthHandler(userRepo *repository.UserRepository, sessionRepo *repository
 		userRepo:    userRepo,
 		sessionRepo: sessionRepo,
 		jwtService:  jwtService,
+	}
+}
+
+// SetAuditService sets the audit service for the auth handler
+func (h *AuthHandler) SetAuditService(auditService *audit.Service) {
+	h.auditService = auditService
+}
+
+// logAuditEvent logs an audit event if the audit service is configured
+func (h *AuthHandler) logAuditEvent(c *fiber.Ctx, entry audit.Entry) {
+	if h.auditService != nil {
+		h.auditService.LogFromRequestAsync(c, entry)
 	}
 }
 
@@ -131,6 +145,18 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
+	// Log successful registration
+	h.logAuditEvent(c, audit.Entry{
+		UserID:    &user.ID,
+		EventType: audit.EventRegister,
+		Category:  audit.CategoryAuth,
+		Action:    "user_registered",
+		Details: map[string]interface{}{
+			"email": user.Email,
+		},
+		Success: true,
+	})
+
 	return c.Status(fiber.StatusCreated).JSON(AuthResponse{
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
@@ -162,6 +188,17 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 	}
 	if user == nil {
+		// Log failed login attempt (user not found)
+		h.logAuditEvent(c, audit.Entry{
+			EventType: audit.EventLoginFailed,
+			Category:  audit.CategoryAuth,
+			Action:    "login_failed",
+			Details: map[string]interface{}{
+				"email":  req.Email,
+				"reason": "user_not_found",
+			},
+			Success: false,
+		})
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "invalid email or password",
 		})
@@ -169,6 +206,18 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 
 	// Verify password
 	if !security.VerifyPassword(req.Password, user.PasswordHash) {
+		// Log failed login attempt (wrong password)
+		h.logAuditEvent(c, audit.Entry{
+			UserID:    &user.ID,
+			EventType: audit.EventLoginFailed,
+			Category:  audit.CategoryAuth,
+			Action:    "login_failed",
+			Details: map[string]interface{}{
+				"email":  req.Email,
+				"reason": "invalid_password",
+			},
+			Success: false,
+		})
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "invalid email or password",
 		})
@@ -190,6 +239,18 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 			"error": "failed to create session",
 		})
 	}
+
+	// Log successful login
+	h.logAuditEvent(c, audit.Entry{
+		UserID:    &user.ID,
+		EventType: audit.EventLogin,
+		Category:  audit.CategoryAuth,
+		Action:    "user_logged_in",
+		Details: map[string]interface{}{
+			"email": user.Email,
+		},
+		Success: true,
+	})
 
 	return c.JSON(AuthResponse{
 		AccessToken:  tokens.AccessToken,
@@ -218,6 +279,15 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 			"error": "failed to logout",
 		})
 	}
+
+	// Log successful logout
+	h.logAuditEvent(c, audit.Entry{
+		UserID:    &userID,
+		EventType: audit.EventLogout,
+		Category:  audit.CategoryAuth,
+		Action:    "user_logged_out",
+		Success:   true,
+	})
 
 	return c.JSON(fiber.Map{
 		"message": "logged out successfully",
@@ -286,6 +356,15 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 			"error": "failed to get user",
 		})
 	}
+
+	// Log token refresh
+	h.logAuditEvent(c, audit.Entry{
+		UserID:    &claims.UserID,
+		EventType: audit.EventTokenRefresh,
+		Category:  audit.CategoryAuth,
+		Action:    "token_refreshed",
+		Success:   true,
+	})
 
 	return c.JSON(AuthResponse{
 		AccessToken:  tokens.AccessToken,
@@ -372,6 +451,19 @@ func (h *AuthHandler) GuestLogin(c *fiber.Ctx) error {
 			"error": "failed to create session",
 		})
 	}
+
+	// Log guest login
+	h.logAuditEvent(c, audit.Entry{
+		UserID:    &user.ID,
+		EventType: audit.EventLogin,
+		Category:  audit.CategoryAuth,
+		Action:    "guest_login",
+		Details: map[string]interface{}{
+			"guest": true,
+			"email": user.Email,
+		},
+		Success: true,
+	})
 
 	return c.JSON(AuthResponse{
 		AccessToken:  tokens.AccessToken,

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacklau/prism/internal/api/middleware"
+	"github.com/jacklau/prism/internal/audit"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/security"
@@ -19,6 +20,7 @@ type ProviderHandler struct {
 	providerKeyRepo   *repository.ProviderKeyRepository
 	encryptionService *security.EncryptionService
 	llmManager        *llm.Manager
+	auditService      *audit.Service
 }
 
 // NewProviderHandler creates a new provider handler
@@ -31,6 +33,18 @@ func NewProviderHandler(
 		providerKeyRepo:   providerKeyRepo,
 		encryptionService: encryptionService,
 		llmManager:        llmManager,
+	}
+}
+
+// SetAuditService sets the audit service for the provider handler
+func (h *ProviderHandler) SetAuditService(auditService *audit.Service) {
+	h.auditService = auditService
+}
+
+// logAuditEvent logs an audit event if the audit service is configured
+func (h *ProviderHandler) logAuditEvent(c *fiber.Ctx, entry audit.Entry) {
+	if h.auditService != nil {
+		h.auditService.LogFromRequestAsync(c, entry)
 	}
 }
 
@@ -93,6 +107,17 @@ func (h *ProviderHandler) SetKey(c *fiber.Ctx) error {
 	// Also set the key on the provider instance for immediate use
 	h.llmManager.SetAPIKey(provider, req.APIKey)
 
+	// Log the API key set event
+	h.logAuditEvent(c, audit.Entry{
+		UserID:       &userID,
+		EventType:    audit.EventProviderKeySet,
+		Category:     audit.CategoryProvider,
+		Action:       "provider_key_set",
+		ResourceType: "provider",
+		ResourceID:   provider,
+		Success:      true,
+	})
+
 	return c.JSON(fiber.Map{
 		"success": true,
 		"message": "API key saved successfully",
@@ -120,6 +145,17 @@ func (h *ProviderHandler) DeleteKey(c *fiber.Ctx) error {
 			"error": "failed to delete API key",
 		})
 	}
+
+	// Log the API key deletion event
+	h.logAuditEvent(c, audit.Entry{
+		UserID:       &userID,
+		EventType:    audit.EventProviderKeyDeleted,
+		Category:     audit.CategoryProvider,
+		Action:       "provider_key_deleted",
+		ResourceType: "provider",
+		ResourceID:   provider,
+		Success:      true,
+	})
 
 	return c.JSON(fiber.Map{
 		"success": true,
