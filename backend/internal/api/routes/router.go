@@ -67,6 +67,7 @@ type Dependencies struct {
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
 	WorkflowEngine     *workflow.Engine
+	BuildConfigRepo    *repository.BuildConfigRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -461,6 +462,31 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
+	}
+
+	// Build configuration routes
+	if deps.BuildConfigRepo != nil {
+		buildConfigHandler := handlers.NewBuildConfigHandler(deps.BuildConfigRepo)
+		buildConfigs := v1.Group("/build-configs", middleware.AuthMiddleware(deps.JWTService))
+
+		// Config CRUD
+		buildConfigs.Get("/", buildConfigHandler.List)
+		buildConfigs.Post("/", buildConfigHandler.Create)
+		buildConfigs.Get("/:id", buildConfigHandler.Get)
+		buildConfigs.Put("/:id", buildConfigHandler.Update)
+		buildConfigs.Delete("/:id", buildConfigHandler.Delete)
+		buildConfigs.Post("/:id/default", buildConfigHandler.SetDefault)
+
+		// Command operations
+		buildConfigs.Post("/:id/commands", buildConfigHandler.AddCommand)
+		buildConfigs.Put("/:id/commands/:cmdId", buildConfigHandler.UpdateCommand)
+		buildConfigs.Delete("/:id/commands/:cmdId", buildConfigHandler.DeleteCommand)
+		buildConfigs.Put("/:id/commands/order", buildConfigHandler.ReorderCommands)
+
+		// Environment variable operations
+		buildConfigs.Post("/:id/env", buildConfigHandler.SetEnvVar)
+		buildConfigs.Get("/:id/env", buildConfigHandler.GetEnvVars)
+		buildConfigs.Delete("/:id/env/:key", buildConfigHandler.DeleteEnvVar)
 	}
 
 	return app

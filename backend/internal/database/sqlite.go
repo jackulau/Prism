@@ -406,6 +406,51 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_current_branch ON org_workspaces(current_branch)`,
+
+		// Build configuration tables
+		`CREATE TABLE IF NOT EXISTS build_configs (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT,
+			org_workspace_id TEXT,
+			user_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			description TEXT,
+			is_default INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS build_commands (
+			id TEXT PRIMARY KEY,
+			config_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			command TEXT NOT NULL,
+			working_directory TEXT,
+			run_order INTEGER DEFAULT 0,
+			is_enabled INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (config_id) REFERENCES build_configs(id) ON DELETE CASCADE
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS build_env_vars (
+			id TEXT PRIMARY KEY,
+			config_id TEXT NOT NULL,
+			key TEXT NOT NULL,
+			value_encrypted BLOB NOT NULL,
+			value_nonce BLOB NOT NULL,
+			is_secret INTEGER DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (config_id) REFERENCES build_configs(id) ON DELETE CASCADE,
+			UNIQUE(config_id, key)
+		)`,
+
+		// Build config indexes
+		`CREATE INDEX IF NOT EXISTS idx_build_configs_workspace ON build_configs(workspace_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_configs_org_workspace ON build_configs(org_workspace_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_configs_user ON build_configs(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_commands_config ON build_commands(config_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_env_vars_config ON build_env_vars(config_id)`,
 	}
 
 	for _, migration := range migrations {
