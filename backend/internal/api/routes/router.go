@@ -20,6 +20,8 @@ import (
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/integrations"
+	"github.com/jacklau/prism/internal/audit"
+	"github.com/jacklau/prism/internal/export"
 	"github.com/jacklau/prism/internal/integrations/github"
 	"github.com/jacklau/prism/internal/integrations/workos"
 	"github.com/jacklau/prism/internal/llm"
@@ -67,6 +69,12 @@ type Dependencies struct {
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
 	WorkflowEngine     *workflow.Engine
+
+	// Compliance and audit dependencies
+	AuditLogger        *audit.Logger
+	ExportService      *export.Service
+	GDPRExporter       *export.GDPRExporter
+	ComplianceReporter *export.ComplianceReporter
 }
 
 // Setup sets up the Fiber app with all routes
@@ -461,6 +469,43 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
+	}
+
+	// Export and compliance routes
+	if deps.ExportService != nil {
+		exportHandler := handlers.NewExportHandler(
+			deps.ExportService,
+			deps.AuditLogger,
+			deps.GDPRExporter,
+			deps.ComplianceReporter,
+		)
+		exports := v1.Group("/exports", middleware.AuthMiddleware(deps.JWTService))
+		exports.Get("/types", exportHandler.ListExportTypes)
+		exports.Post("/", exportHandler.CreateExport)
+		exports.Get("/", exportHandler.ListExports)
+		exports.Get("/:id", exportHandler.GetExport)
+		exports.Delete("/:id", exportHandler.CancelExport)
+		// Download endpoint - can use key param for auth
+		exports.Get("/:id/download", exportHandler.DownloadExport)
+
+		log.Println("Export and compliance routes registered")
+	}
+
+	// Audit log routes
+	if deps.AuditLogger != nil {
+		auditHandler := handlers.NewAuditLogHandler(deps.AuditLogger)
+		auditLogs := v1.Group("/audit", middleware.AuthMiddleware(deps.JWTService))
+		auditLogs.Get("/logs", auditHandler.ListAuditLogs)
+		auditLogs.Get("/logs/:id", auditHandler.GetAuditLog)
+
+		log.Println("Audit log routes registered")
+	}
+
+	// Optionally add audit middleware for all API requests
+	if deps.AuditLogger != nil && deps.Config.AuditAllRequests {
+		auditConfig := middleware.DefaultAuditConfig(deps.AuditLogger)
+		app.Use(middleware.AuditMiddleware(auditConfig))
+		log.Println("Audit middleware enabled for all API requests")
 	}
 
 	return app
