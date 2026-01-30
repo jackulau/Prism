@@ -120,6 +120,12 @@ const (
 	TypeAgentBatchCompleted  = "agent.batch_completed"
 	TypeAgentCheckIn         = "agent.check_in"      // Pause point for user confirmation after max iterations
 	TypeAgentContinue        = "agent.continue"      // User confirms to continue the agentic loop
+	TypeAgentProgress        = "agent.progress"      // Agent progress update with step info
+	TypeAgentStepStarted     = "agent.step_started"  // Agent workflow step started
+	TypeAgentStepCompleted   = "agent.step_completed" // Agent workflow step completed
+	TypeAgentThinkingStart   = "agent.thinking_start" // Agent started thinking/reasoning
+	TypeAgentThinkingEnd     = "agent.thinking_end"   // Agent finished thinking/reasoning
+	TypeAgentEstimate        = "agent.estimate"       // Agent time/work estimate update
 
 	// Preview/Sandbox message types
 	TypePreviewReady    = "preview.ready"
@@ -419,6 +425,47 @@ type BatchProgressInfo struct {
 	PendingTasks   int `json:"pending_tasks"`
 }
 
+// AgentProgressInfo represents detailed progress information for an agent
+type AgentProgressInfo struct {
+	CurrentStep     int     `json:"current_step"`
+	TotalSteps      int     `json:"total_steps"`
+	PercentComplete float64 `json:"percent_complete"`
+	StepName        string  `json:"step_name,omitempty"`
+	Message         string  `json:"message,omitempty"`
+	Timestamp       int64   `json:"timestamp"`
+}
+
+// AgentStepInfo represents information about a workflow step
+type AgentStepInfo struct {
+	StepID      string                 `json:"step_id"`
+	StepName    string                 `json:"step_name"`
+	StepType    string                 `json:"step_type,omitempty"`
+	Status      string                 `json:"status"`
+	Input       interface{}            `json:"input,omitempty"`
+	Output      interface{}            `json:"output,omitempty"`
+	Error       string                 `json:"error,omitempty"`
+	Duration    int64                  `json:"duration,omitempty"` // Duration in milliseconds
+	StartedAt   int64                  `json:"started_at,omitempty"`
+	CompletedAt int64                  `json:"completed_at,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// AgentThinkingInfo represents information about agent thinking/reasoning state
+type AgentThinkingInfo struct {
+	IsThinking bool   `json:"is_thinking"`
+	Context    string `json:"context,omitempty"` // What the agent is thinking about
+	Timestamp  int64  `json:"timestamp"`
+}
+
+// AgentEstimateInfo represents time/work estimates from an agent
+type AgentEstimateInfo struct {
+	EstimatedSteps     int    `json:"estimated_steps,omitempty"`
+	EstimatedDurationMs int64 `json:"estimated_duration_ms,omitempty"`
+	Confidence         float64 `json:"confidence,omitempty"` // 0-1 confidence in estimate
+	Message            string `json:"message,omitempty"`
+	Timestamp          int64  `json:"timestamp"`
+}
+
 // WorkflowInfo represents information about a workflow execution
 type WorkflowInfo struct {
 	ID          string                 `json:"id"`
@@ -593,6 +640,98 @@ func NewAgentBatchCompleted(executionID string, results []AgentResultInfo, durat
 		Results:     results,
 		Status:      "completed",
 		Duration:    durationMs,
+	}
+}
+
+// Agent progress message constructors
+
+// NewAgentProgress creates a new agent progress message
+func NewAgentProgress(agentID string, progress *AgentProgressInfo) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:        TypeAgentProgress,
+		AgentID:     agentID,
+		CurrentStep: progress.CurrentStep,
+		TotalSteps:  progress.TotalSteps,
+		StepName:    progress.StepName,
+		Message:     progress.Message,
+		Metadata: map[string]interface{}{
+			"percent_complete": progress.PercentComplete,
+			"timestamp":        progress.Timestamp,
+		},
+	}
+}
+
+// NewAgentStepStarted creates a new agent step started message
+func NewAgentStepStarted(agentID string, step *AgentStepInfo) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:     TypeAgentStepStarted,
+		AgentID:  agentID,
+		StepID:   step.StepID,
+		StepName: step.StepName,
+		StepType: step.StepType,
+		Status:   "running",
+		Metadata: map[string]interface{}{
+			"started_at": step.StartedAt,
+			"input":      step.Input,
+		},
+	}
+}
+
+// NewAgentStepCompleted creates a new agent step completed message
+func NewAgentStepCompleted(agentID string, step *AgentStepInfo) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:     TypeAgentStepCompleted,
+		AgentID:  agentID,
+		StepID:   step.StepID,
+		StepName: step.StepName,
+		Result:   step.Output,
+		Duration: step.Duration,
+		Status:   step.Status,
+		Error:    step.Error,
+		Metadata: map[string]interface{}{
+			"started_at":   step.StartedAt,
+			"completed_at": step.CompletedAt,
+		},
+	}
+}
+
+// NewAgentThinkingStart creates a new agent thinking start message
+func NewAgentThinkingStart(agentID, context string, timestamp int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeAgentThinkingStart,
+		AgentID: agentID,
+		Message: context,
+		Metadata: map[string]interface{}{
+			"is_thinking": true,
+			"timestamp":   timestamp,
+		},
+	}
+}
+
+// NewAgentThinkingEnd creates a new agent thinking end message
+func NewAgentThinkingEnd(agentID string, timestamp int64) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeAgentThinkingEnd,
+		AgentID: agentID,
+		Metadata: map[string]interface{}{
+			"is_thinking": false,
+			"timestamp":   timestamp,
+		},
+	}
+}
+
+// NewAgentEstimate creates a new agent estimate message
+func NewAgentEstimate(agentID string, estimate *AgentEstimateInfo) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeAgentEstimate,
+		AgentID:    agentID,
+		TotalSteps: estimate.EstimatedSteps,
+		Message:    estimate.Message,
+		Metadata: map[string]interface{}{
+			"estimated_duration_ms": estimate.EstimatedDurationMs,
+			"confidence":            estimate.Confidence,
+			"timestamp":             estimate.Timestamp,
+		},
 	}
 }
 
