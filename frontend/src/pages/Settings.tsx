@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useAppStore } from '../store';
 import { apiService } from '../services/api';
-import { Github, Key, Bell, Server, CheckCircle, XCircle, ExternalLink, X, Palette, Check, Cpu, Wifi } from 'lucide-react';
+import { Github, Key, Bell, Server, CheckCircle, XCircle, ExternalLink, X, Palette, Check, Cpu, Wifi, Hammer } from 'lucide-react';
 import { themes, type ThemeConfig } from '../config/themes';
 import { RemoteAccessSettings } from '../components/settings/RemoteAccessSettings';
 import { ConnectionInfo } from '../components/settings/ConnectionInfo';
 import { RemoteSessions } from '../components/settings/RemoteSessions';
+import { BuildConfigPanel } from '../components/builds';
 
 interface GitHubStatus {
   connected: boolean;
@@ -37,6 +38,7 @@ export function SettingsPage() {
   const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(null);
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showBuildConfig, setShowBuildConfig] = useState(false);
 
   useEffect(() => {
     fetchStatuses();
@@ -130,6 +132,15 @@ export function SettingsPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Build Config Modal
+  if (showBuildConfig) {
+    return (
+      <div className="fixed inset-0 z-50 bg-editor-bg">
+        <BuildConfigPanel onClose={() => setShowBuildConfig(false)} />
       </div>
     );
   }
@@ -262,6 +273,31 @@ export function SettingsPage() {
               </p>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Build Configurations */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Hammer className="w-5 h-5" />
+          <h2 className="text-xl font-semibold">Build Configurations</h2>
+        </div>
+        <div className="bg-editor-surface border border-editor-border rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Manage Build Commands & Environment</p>
+              <p className="text-sm text-editor-muted">
+                Configure build commands, environment variables, and secrets for your workspaces.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowBuildConfig(true)}
+              className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-2"
+            >
+              <Hammer className="w-4 h-4" />
+              Configure
+            </button>
+          </div>
         </div>
       </section>
 
