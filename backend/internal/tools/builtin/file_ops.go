@@ -9,10 +9,17 @@ import (
 	"github.com/jacklau/prism/internal/sandbox"
 )
 
-// userIDKey is the context key for user ID
+// contextKey is the type for context keys
 type contextKey string
 
-const UserIDKey contextKey = "userID"
+// Context keys for user and attribution metadata
+const (
+	UserIDKey    contextKey = "userID"
+	AgentIDKey   contextKey = "agentID"
+	AgentNameKey contextKey = "agentName"
+	ToolNameKey  contextKey = "toolName"
+	MessageIDKey contextKey = "messageID"
+)
 
 // FileReadTool reads file content from the user's sandbox
 type FileReadTool struct {
@@ -126,13 +133,36 @@ func (t *FileWriteTool) Execute(ctx context.Context, params map[string]interface
 	// Save file history before writing (for existing files)
 	if t.historyRepo != nil {
 		existingContent, err := t.sandbox.GetFileContent(userID, path)
+		operation := "create"
+		historyContent := ""
 		if err == nil && existingContent != "" {
 			// File exists, save its current content to history
-			_, _ = t.historyRepo.Create(userID, path, existingContent, "update")
-		} else {
-			// New file, record creation
-			_, _ = t.historyRepo.Create(userID, path, "", "create")
+			operation = "update"
+			historyContent = existingContent
 		}
+
+		// Build history entry with attribution
+		entry := repository.FileHistory{
+			UserID:    userID,
+			FilePath:  path,
+			Content:   historyContent,
+			Operation: operation,
+		}
+
+		// Extract attribution from context
+		if agentID, ok := ctx.Value(AgentIDKey).(string); ok {
+			entry.AgentID = &agentID
+		}
+		if agentName, ok := ctx.Value(AgentNameKey).(string); ok {
+			entry.AgentName = &agentName
+		}
+		if messageID, ok := ctx.Value(MessageIDKey).(string); ok {
+			entry.MessageID = &messageID
+		}
+		toolName := "file_write"
+		entry.ToolName = &toolName
+
+		_ = t.historyRepo.CreateWithAttribution(entry)
 	}
 
 	if err := t.sandbox.WriteFile(userID, path, content); err != nil {
@@ -243,8 +273,28 @@ func (t *FileDeleteTool) Execute(ctx context.Context, params map[string]interfac
 	if t.historyRepo != nil {
 		existingContent, err := t.sandbox.GetFileContent(userID, path)
 		if err == nil {
-			// Save the file content before deletion
-			_, _ = t.historyRepo.Create(userID, path, existingContent, "delete")
+			// Build history entry with attribution
+			entry := repository.FileHistory{
+				UserID:    userID,
+				FilePath:  path,
+				Content:   existingContent,
+				Operation: "delete",
+			}
+
+			// Extract attribution from context
+			if agentID, ok := ctx.Value(AgentIDKey).(string); ok {
+				entry.AgentID = &agentID
+			}
+			if agentName, ok := ctx.Value(AgentNameKey).(string); ok {
+				entry.AgentName = &agentName
+			}
+			if messageID, ok := ctx.Value(MessageIDKey).(string); ok {
+				entry.MessageID = &messageID
+			}
+			toolName := "file_delete"
+			entry.ToolName = &toolName
+
+			_ = t.historyRepo.CreateWithAttribution(entry)
 		}
 	}
 
@@ -427,10 +477,32 @@ func (t *FileHistoryRestoreTool) Execute(ctx context.Context, params map[string]
 		return nil, fmt.Errorf("history entry not found")
 	}
 
-	// Save current file content to history before restoring
+	// Save current file content to history before restoring with attribution
 	existingContent, err := t.sandbox.GetFileContent(userID, historyEntry.FilePath)
 	if err == nil && existingContent != "" {
-		_, _ = t.historyRepo.Create(userID, historyEntry.FilePath, existingContent, "update")
+		description := fmt.Sprintf("Restored from version %s", historyID)
+		entry := repository.FileHistory{
+			UserID:      userID,
+			FilePath:    historyEntry.FilePath,
+			Content:     existingContent,
+			Operation:   "update",
+			Description: &description,
+		}
+
+		// Extract attribution from context
+		if agentID, ok := ctx.Value(AgentIDKey).(string); ok {
+			entry.AgentID = &agentID
+		}
+		if agentName, ok := ctx.Value(AgentNameKey).(string); ok {
+			entry.AgentName = &agentName
+		}
+		if messageID, ok := ctx.Value(MessageIDKey).(string); ok {
+			entry.MessageID = &messageID
+		}
+		toolName := "file_history_restore"
+		entry.ToolName = &toolName
+
+		_ = t.historyRepo.CreateWithAttribution(entry)
 	}
 
 	// Restore the file content
@@ -576,9 +648,32 @@ func (t *FileRenameTool) Execute(ctx context.Context, params map[string]interfac
 		return nil, fmt.Errorf("dest_path parameter is required")
 	}
 
-	// Record in history before rename
+	// Record in history before rename with attribution
 	if t.historyRepo != nil {
-		_, _ = t.historyRepo.Create(userID, sourcePath, "", "rename")
+		// Build history entry with attribution
+		description := fmt.Sprintf("Renamed to %s", destPath)
+		entry := repository.FileHistory{
+			UserID:      userID,
+			FilePath:    sourcePath,
+			Content:     "",
+			Operation:   "rename",
+			Description: &description,
+		}
+
+		// Extract attribution from context
+		if agentID, ok := ctx.Value(AgentIDKey).(string); ok {
+			entry.AgentID = &agentID
+		}
+		if agentName, ok := ctx.Value(AgentNameKey).(string); ok {
+			entry.AgentName = &agentName
+		}
+		if messageID, ok := ctx.Value(MessageIDKey).(string); ok {
+			entry.MessageID = &messageID
+		}
+		toolName := "file_rename"
+		entry.ToolName = &toolName
+
+		_ = t.historyRepo.CreateWithAttribution(entry)
 	}
 
 	if err := t.sandbox.RenameFile(userID, sourcePath, destPath); err != nil {

@@ -32,41 +32,41 @@ import (
 
 // Dependencies holds all the dependencies for the router
 type Dependencies struct {
-	Config             *config.Config
-	JWTService         *security.JWTService
-	EncryptionService  *security.EncryptionService
-	WorkOSService      *security.WorkOSService
-	UserRepo           *repository.UserRepository
-	SessionRepo        *repository.SessionRepository
-	ConversationRepo   *repository.ConversationRepository
-	MessageRepo        *repository.MessageRepository
-	WebhookRepo        *repository.WebhookRepository
-	ProviderKeyRepo    *repository.ProviderKeyRepository
-	IntegrationRepo    *repository.IntegrationRepository
-	FileHistoryRepo    *repository.FileHistoryRepository
-	OrgWorkspaceRepo   *repository.OrgWorkspaceRepository
-	CustomProviderRepo *repository.CustomProviderRepository
-	LLMManager         *llm.Manager
-	WSHub              *ws.Hub
-	SSEService         *sse.Service
-	IntegrationManager *integrations.Manager
-	AgentManager       *agent.Manager
-	AgentTaskRepo      *repository.AgentTaskRepository
-	CodeRunner         *coderunner.Runner
-	SandboxService     *sandbox.Service
-	SandboxManager     *sandbox.Manager
-	ToolRegistry       *tools.Registry
-	ToolRepo           *repository.ToolRepository
-	MCPServer          *mcp.Server
-	MCPClient          *mcp.Client
-	MCPRepository      *mcp.Repository
-	StdioMCPClient     *mcp.StdioClient
-	StdioMCPRepository *mcp.StdioRepository
-	OrganizationRepo   *repository.OrganizationRepository
-	WorkOSClient       *workos.Client
-	GitHubApp          *github.GitHubApp
+	Config                 *config.Config
+	JWTService             *security.JWTService
+	EncryptionService      *security.EncryptionService
+	WorkOSService          *security.WorkOSService
+	UserRepo               *repository.UserRepository
+	SessionRepo            *repository.SessionRepository
+	ConversationRepo       *repository.ConversationRepository
+	MessageRepo            *repository.MessageRepository
+	WebhookRepo            *repository.WebhookRepository
+	ProviderKeyRepo        *repository.ProviderKeyRepository
+	IntegrationRepo        *repository.IntegrationRepository
+	FileHistoryRepo        *repository.FileHistoryRepository
+	OrgWorkspaceRepo       *repository.OrgWorkspaceRepository
+	CustomProviderRepo     *repository.CustomProviderRepository
+	LLMManager             *llm.Manager
+	WSHub                  *ws.Hub
+	SSEService             *sse.Service
+	IntegrationManager     *integrations.Manager
+	AgentManager           *agent.Manager
+	AgentTaskRepo          *repository.AgentTaskRepository
+	CodeRunner             *coderunner.Runner
+	SandboxService         *sandbox.Service
+	SandboxManager         *sandbox.Manager
+	ToolRegistry           *tools.Registry
+	ToolRepo               *repository.ToolRepository
+	MCPServer              *mcp.Server
+	MCPClient              *mcp.Client
+	MCPRepository          *mcp.Repository
+	StdioMCPClient         *mcp.StdioClient
+	StdioMCPRepository     *mcp.StdioRepository
+	OrganizationRepo       *repository.OrganizationRepository
+	WorkOSClient           *workos.Client
+	GitHubApp              *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
-	WorkflowEngine     *workflow.Engine
+	WorkflowEngine         *workflow.Engine
 }
 
 // Setup sets up the Fiber app with all routes
@@ -553,6 +553,15 @@ func handleWebSocketMessage(deps *Dependencies, client *ws.Client, msg *ws.Incom
 
 	case ws.TypeFileHistoryRequest:
 		handleFileHistoryRequest(deps, client, msg)
+
+	case ws.TypeFileHistoryTimeline:
+		handleFileHistoryTimeline(deps, client, msg)
+
+	case ws.TypeFileHistoryDiff:
+		handleFileHistoryDiff(deps, client, msg)
+
+	case ws.TypeFileHistoryStats:
+		handleFileHistoryStats(deps, client, msg)
 
 	// Workflow message handlers
 	case ws.TypeWorkflowRun:
@@ -1497,6 +1506,161 @@ func handleFileHistoryRequest(deps *Dependencies, client *ws.Client, msg *ws.Inc
 
 		client.SendMessage(ws.NewFileHistoryList(filePath, entries))
 	}
+}
+
+// handleFileHistoryTimeline handles file history timeline requests via WebSocket
+func handleFileHistoryTimeline(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.FileHistoryRepo == nil {
+		client.SendMessage(ws.NewError("history_unavailable", "file history not available"))
+		return
+	}
+
+	// Parse parameters
+	limit := 50
+	offset := 0
+	var startTime, endTime time.Time
+	hasTimeRange := false
+
+	if msg.Params != nil {
+		if l, ok := msg.Params["limit"].(float64); ok {
+			limit = int(l)
+		}
+		if o, ok := msg.Params["offset"].(float64); ok {
+			offset = int(o)
+		}
+		if st, ok := msg.Params["start_time"].(string); ok && st != "" {
+			if t, err := time.Parse(time.RFC3339, st); err == nil {
+				startTime = t
+				hasTimeRange = true
+			}
+		}
+		if et, ok := msg.Params["end_time"].(string); ok && et != "" {
+			if t, err := time.Parse(time.RFC3339, et); err == nil {
+				endTime = t
+				hasTimeRange = true
+			}
+		}
+	}
+
+	var history []*repository.FileHistory
+	var err error
+
+	if hasTimeRange {
+		if startTime.IsZero() {
+			startTime = time.Now().AddDate(-1, 0, 0) // Default to 1 year ago
+		}
+		if endTime.IsZero() {
+			endTime = time.Now()
+		}
+		history, err = deps.FileHistoryRepo.ListByTimeRange(client.UserID, startTime, endTime, limit, offset)
+	} else {
+		history, err = deps.FileHistoryRepo.ListByUserID(client.UserID, limit, offset)
+	}
+
+	if err != nil {
+		client.SendMessage(ws.NewError("history_error", err.Error()))
+		return
+	}
+
+	entries := make([]ws.FileHistoryEntry, len(history))
+	for i, h := range history {
+		entries[i] = ws.FileHistoryEntry{
+			ID:          h.ID,
+			FilePath:    h.FilePath,
+			Operation:   h.Operation,
+			Size:        len(h.Content),
+			CreatedAt:   h.CreatedAt.Format(time.RFC3339),
+			AgentID:     h.AgentID,
+			AgentName:   h.AgentName,
+			ToolName:    h.ToolName,
+			MessageID:   h.MessageID,
+			Description: h.Description,
+		}
+	}
+
+	startTimeStr := ""
+	endTimeStr := ""
+	if hasTimeRange {
+		startTimeStr = startTime.Format(time.RFC3339)
+		endTimeStr = endTime.Format(time.RFC3339)
+	}
+
+	client.SendMessage(ws.NewFileHistoryTimeline(entries, startTimeStr, endTimeStr, len(entries)))
+}
+
+// handleFileHistoryDiff handles file history diff requests via WebSocket
+func handleFileHistoryDiff(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.FileHistoryRepo == nil {
+		client.SendMessage(ws.NewError("history_unavailable", "file history not available"))
+		return
+	}
+
+	var historyID1, historyID2 string
+	if msg.Params != nil {
+		if id, ok := msg.Params["history_id_1"].(string); ok {
+			historyID1 = id
+		}
+		if id, ok := msg.Params["history_id_2"].(string); ok {
+			historyID2 = id
+		}
+	}
+
+	if historyID1 == "" || historyID2 == "" {
+		client.SendMessage(ws.NewError("invalid_request", "history_id_1 and history_id_2 are required"))
+		return
+	}
+
+	diff, err := deps.FileHistoryRepo.GetVersionDiff(client.UserID, historyID1, historyID2)
+	if err != nil {
+		client.SendMessage(ws.NewError("history_error", err.Error()))
+		return
+	}
+
+	// Convert to WebSocket diff format
+	changes := make([]ws.DiffLineInfo, len(diff.Changes))
+	for i, c := range diff.Changes {
+		changes[i] = ws.DiffLineInfo{
+			Type:    c.Type,
+			Content: c.Content,
+			OldLine: c.OldLine,
+			NewLine: c.NewLine,
+		}
+	}
+
+	wsDiff := &ws.VersionDiffInfo{
+		HistoryID1: diff.HistoryID1,
+		HistoryID2: diff.HistoryID2,
+		FilePath:   diff.FilePath,
+		Additions:  diff.Additions,
+		Deletions:  diff.Deletions,
+		Changes:    changes,
+	}
+
+	client.SendMessage(ws.NewFileHistoryDiff(wsDiff))
+}
+
+// handleFileHistoryStats handles file history stats requests via WebSocket
+func handleFileHistoryStats(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.FileHistoryRepo == nil {
+		client.SendMessage(ws.NewError("history_unavailable", "file history not available"))
+		return
+	}
+
+	stats, err := deps.FileHistoryRepo.GetStats(client.UserID)
+	if err != nil {
+		client.SendMessage(ws.NewError("history_error", err.Error()))
+		return
+	}
+
+	wsStats := &ws.FileHistoryStatsInfo{
+		TotalEntries:   stats.TotalEntries,
+		TotalFiles:     stats.TotalFiles,
+		TotalSizeBytes: stats.TotalSizeBytes,
+		OldestEntry:    stats.OldestEntry,
+		NewestEntry:    stats.NewestEntry,
+	}
+
+	client.SendMessage(ws.NewFileHistoryStats(wsStats))
 }
 
 // ==================== Workflow Handlers ====================
