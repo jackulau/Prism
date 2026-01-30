@@ -325,3 +325,35 @@ export interface CloudMessageChunk {
   finishReason?: string;
   error?: string;
 }
+
+// File History types
+export type FileHistoryOperation = 'create' | 'update' | 'delete';
+
+export interface FileHistoryEntry {
+  id: string;
+  file_path: string;
+  operation: FileHistoryOperation;
+  size: number;
+  created_at: string;
+  // Attribution fields
+  agent_id?: string;
+  agent_name?: string;
+  tool_name?: string;
+  message_id?: string;
+  description?: string;
+}
+
+export interface FileHistoryStats {
+  total_entries: number;
+  total_files: number;
+  total_size_bytes: number;
+  oldest_entry: string;
+  newest_entry: string;
+}
+
+export interface HistoryFilters {
+  filePath?: string;
+  operations?: FileHistoryOperation[];
+  dateRange?: { start: Date; end: Date };
+  searchQuery?: string;
+}

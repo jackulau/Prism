@@ -4,3 +4,7 @@ export { WorkspaceMessage } from './WorkspaceMessage';
 export { ContextBar } from './ContextBar';
 export { CodeDiff, InlineCodeDiff } from './CodeDiff';
 export { FilePreview } from './FilePreview';
+export { FileHistoryPanel } from './FileHistoryPanel';
+export { HistoryFilters } from './HistoryFilters';
+export { HistoryEntryCard } from './HistoryEntryCard';
+export { HistoryTimeline } from './HistoryTimeline';
