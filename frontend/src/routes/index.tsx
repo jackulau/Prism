@@ -8,11 +8,16 @@ import Organization from '../pages/Organization';
 import { SettingsPage } from '../pages/Settings';
 import { AuthPage } from '../components/auth/AuthPage';
 import Workspace from '../pages/Workspace';
+import Onboarding from '../pages/Onboarding';
 
 export const router = createBrowserRouter([
   {
     path: '/login',
     element: <AuthPage />,
+  },
+  {
+    path: '/onboarding',
+    element: <Onboarding />,
   },
   {
     path: '/',
