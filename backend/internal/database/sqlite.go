@@ -378,6 +378,29 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN sso_connection_id TEXT`,
 		`ALTER TABLE users ADD COLUMN sso_provider TEXT`,
 
+		// MFA tables
+		`CREATE TABLE IF NOT EXISTS user_mfa (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id TEXT NOT NULL UNIQUE,
+			secret_encrypted BLOB NOT NULL,
+			secret_nonce BLOB NOT NULL,
+			is_enabled INTEGER NOT NULL DEFAULT 0,
+			backup_codes_encrypted BLOB,
+			backup_codes_nonce BLOB,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			verified_at DATETIME,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS mfa_verification_attempts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id TEXT NOT NULL,
+			success INTEGER NOT NULL,
+			ip_address TEXT,
+			attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
@@ -406,6 +429,8 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_current_branch ON org_workspaces(current_branch)`,
+		`CREATE INDEX IF NOT EXISTS idx_mfa_verification_user_id ON mfa_verification_attempts(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_mfa_verification_attempted_at ON mfa_verification_attempts(user_id, attempted_at)`,
 	}
 
 	for _, migration := range migrations {

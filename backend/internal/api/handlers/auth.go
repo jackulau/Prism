@@ -18,6 +18,7 @@ type AuthHandler struct {
 	userRepo    *repository.UserRepository
 	sessionRepo *repository.SessionRepository
 	jwtService  *security.JWTService
+	mfaRepo     *repository.MFARepository
 }
 
 // NewAuthHandler creates a new auth handler
@@ -27,6 +28,11 @@ func NewAuthHandler(userRepo *repository.UserRepository, sessionRepo *repository
 		sessionRepo: sessionRepo,
 		jwtService:  jwtService,
 	}
+}
+
+// SetMFARepository sets the MFA repository for MFA-aware login
+func (h *AuthHandler) SetMFARepository(mfaRepo *repository.MFARepository) {
+	h.mfaRepo = mfaRepo
 }
 
 // RegisterRequest represents a registration request
@@ -52,6 +58,12 @@ type AuthResponse struct {
 	RefreshToken string    `json:"refresh_token"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	User         UserDTO   `json:"user"`
+}
+
+// MFARequiredResponse is returned when MFA verification is needed
+type MFARequiredResponse struct {
+	MFARequired bool   `json:"mfa_required"`
+	MFAToken    string `json:"mfa_token"`
 }
 
 // UserDTO represents a user data transfer object
@@ -174,7 +186,32 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 	}
 
-	// Generate tokens
+	// Check if MFA is enabled for this user
+	if h.mfaRepo != nil {
+		mfaEnabled, err := h.mfaRepo.IsMFAEnabled(user.ID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to check MFA status",
+			})
+		}
+
+		if mfaEnabled {
+			// Generate short-lived MFA token for the verification step
+			mfaToken, err := h.jwtService.GenerateMFAToken(user.ID, user.Email)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+					"error": "failed to generate MFA token",
+				})
+			}
+
+			return c.JSON(MFARequiredResponse{
+				MFARequired: true,
+				MFAToken:    mfaToken,
+			})
+		}
+	}
+
+	// Generate tokens (no MFA required)
 	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{

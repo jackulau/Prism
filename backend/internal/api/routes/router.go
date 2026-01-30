@@ -32,41 +32,43 @@ import (
 
 // Dependencies holds all the dependencies for the router
 type Dependencies struct {
-	Config             *config.Config
-	JWTService         *security.JWTService
-	EncryptionService  *security.EncryptionService
-	WorkOSService      *security.WorkOSService
-	UserRepo           *repository.UserRepository
-	SessionRepo        *repository.SessionRepository
-	ConversationRepo   *repository.ConversationRepository
-	MessageRepo        *repository.MessageRepository
-	WebhookRepo        *repository.WebhookRepository
-	ProviderKeyRepo    *repository.ProviderKeyRepository
-	IntegrationRepo    *repository.IntegrationRepository
-	FileHistoryRepo    *repository.FileHistoryRepository
-	OrgWorkspaceRepo   *repository.OrgWorkspaceRepository
-	CustomProviderRepo *repository.CustomProviderRepository
-	LLMManager         *llm.Manager
-	WSHub              *ws.Hub
-	SSEService         *sse.Service
-	IntegrationManager *integrations.Manager
-	AgentManager       *agent.Manager
-	AgentTaskRepo      *repository.AgentTaskRepository
-	CodeRunner         *coderunner.Runner
-	SandboxService     *sandbox.Service
-	SandboxManager     *sandbox.Manager
-	ToolRegistry       *tools.Registry
-	ToolRepo           *repository.ToolRepository
-	MCPServer          *mcp.Server
-	MCPClient          *mcp.Client
-	MCPRepository      *mcp.Repository
-	StdioMCPClient     *mcp.StdioClient
-	StdioMCPRepository *mcp.StdioRepository
-	OrganizationRepo   *repository.OrganizationRepository
-	WorkOSClient       *workos.Client
-	GitHubApp          *github.GitHubApp
+	Config                 *config.Config
+	JWTService             *security.JWTService
+	EncryptionService      *security.EncryptionService
+	WorkOSService          *security.WorkOSService
+	MFAService             *security.MFAService
+	UserRepo               *repository.UserRepository
+	SessionRepo            *repository.SessionRepository
+	MFARepo                *repository.MFARepository
+	ConversationRepo       *repository.ConversationRepository
+	MessageRepo            *repository.MessageRepository
+	WebhookRepo            *repository.WebhookRepository
+	ProviderKeyRepo        *repository.ProviderKeyRepository
+	IntegrationRepo        *repository.IntegrationRepository
+	FileHistoryRepo        *repository.FileHistoryRepository
+	OrgWorkspaceRepo       *repository.OrgWorkspaceRepository
+	CustomProviderRepo     *repository.CustomProviderRepository
+	LLMManager             *llm.Manager
+	WSHub                  *ws.Hub
+	SSEService             *sse.Service
+	IntegrationManager     *integrations.Manager
+	AgentManager           *agent.Manager
+	AgentTaskRepo          *repository.AgentTaskRepository
+	CodeRunner             *coderunner.Runner
+	SandboxService         *sandbox.Service
+	SandboxManager         *sandbox.Manager
+	ToolRegistry           *tools.Registry
+	ToolRepo               *repository.ToolRepository
+	MCPServer              *mcp.Server
+	MCPClient              *mcp.Client
+	MCPRepository          *mcp.Repository
+	StdioMCPClient         *mcp.StdioClient
+	StdioMCPRepository     *mcp.StdioRepository
+	OrganizationRepo       *repository.OrganizationRepository
+	WorkOSClient           *workos.Client
+	GitHubApp              *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
-	WorkflowEngine     *workflow.Engine
+	WorkflowEngine         *workflow.Engine
 }
 
 // Setup sets up the Fiber app with all routes
@@ -103,6 +105,10 @@ func Setup(deps *Dependencies) *fiber.App {
 
 	// Auth routes (no auth required)
 	authHandler := handlers.NewAuthHandler(deps.UserRepo, deps.SessionRepo, deps.JWTService)
+	// Set MFA repository for MFA-aware login
+	if deps.MFARepo != nil {
+		authHandler.SetMFARepository(deps.MFARepo)
+	}
 	auth := v1.Group("/auth")
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)
@@ -125,6 +131,25 @@ func Setup(deps *Dependencies) *fiber.App {
 	authProtected := auth.Group("", middleware.AuthMiddleware(deps.JWTService))
 	authProtected.Post("/logout", authHandler.Logout)
 	authProtected.Get("/me", authHandler.Me)
+
+	// MFA routes
+	if deps.MFARepo != nil && deps.MFAService != nil {
+		mfaHandler := handlers.NewMFAHandler(deps.MFARepo, deps.UserRepo, deps.MFAService, deps.JWTService)
+
+		// MFA routes that don't require auth (used during login flow)
+		auth.Post("/mfa/validate", mfaHandler.Validate)
+		auth.Post("/mfa/backup-codes/verify", mfaHandler.VerifyBackupCode)
+
+		// MFA routes that require auth (for setup and management)
+		mfa := auth.Group("/mfa", middleware.AuthMiddleware(deps.JWTService))
+		mfa.Post("/setup", mfaHandler.Setup)
+		mfa.Post("/verify", mfaHandler.Verify)
+		mfa.Get("/status", mfaHandler.Status)
+		mfa.Post("/disable", mfaHandler.Disable)
+		mfa.Post("/backup-codes", mfaHandler.RegenerateBackupCodes)
+
+		log.Println("MFA routes registered")
+	}
 
 	// SSO routes (WorkOS)
 	if deps.WorkOSService != nil && deps.WorkOSService.IsConfigured() {
