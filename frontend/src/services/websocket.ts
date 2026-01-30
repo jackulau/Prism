@@ -1,5 +1,6 @@
 import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
+import { toast } from '../store/toastStore';
 import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext } from '../types';
 import type { FileNode } from '../store/sandboxStore';
 
@@ -18,10 +19,23 @@ class WebSocketService {
   private messageQueue: IncomingWSMessage[] = [];
   private isConnecting = false;
   private intentionalDisconnect = false;
+  private wasConnected = false;
 
   // Track pending file requests with timeouts
   private pendingFileRequests: Map<string, PendingFileRequest> = new Map();
   private readonly FILE_REQUEST_TIMEOUT = 5000; // 5 seconds
+
+  // Reconnect attempt listeners
+  private reconnectListeners: Set<(attempts: number) => void> = new Set();
+
+  onReconnectAttempt(callback: (attempts: number) => void): () => void {
+    this.reconnectListeners.add(callback);
+    return () => this.reconnectListeners.delete(callback);
+  }
+
+  private notifyReconnectAttempt() {
+    this.reconnectListeners.forEach(cb => cb(this.reconnectAttempts));
+  }
 
   connect(token?: string) {
     // Prevent multiple simultaneous connections
@@ -55,7 +69,14 @@ class WebSocketService {
     this.ws.onopen = () => {
       this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('connected');
+
+      // Show toast if this was a reconnection
+      if (this.reconnectAttempts > 0 || this.wasConnected) {
+        toast.success('Connection restored');
+      }
+
       this.reconnectAttempts = 0;
+      this.wasConnected = true;
 
       // Send queued messages
       while (this.messageQueue.length > 0) {
@@ -79,6 +100,10 @@ class WebSocketService {
 
       // Only attempt reconnect if this wasn't an intentional disconnect
       if (!this.intentionalDisconnect) {
+        // Show toast only if we were previously connected
+        if (this.wasConnected && this.reconnectAttempts === 0) {
+          toast.warning('Connection lost - attempting to reconnect');
+        }
         this.attemptReconnect();
       }
     };
@@ -372,6 +397,7 @@ class WebSocketService {
   private attemptReconnect() {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
+      this.notifyReconnectAttempt();
       const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
       useAppStore.getState().setConnectionStatus('connecting');
       setTimeout(() => {
@@ -380,6 +406,7 @@ class WebSocketService {
     } else {
       // Max reconnection attempts reached - set failed status for UI feedback
       useAppStore.getState().setConnectionStatus('error');
+      toast.error('Unable to connect. Please check your network.');
     }
   }
 
