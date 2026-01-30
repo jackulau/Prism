@@ -479,6 +479,80 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // Audit Logs
+  async getMyAuditLogs(params: { limit?: number; offset?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params.limit) queryParams.set('limit', params.limit.toString());
+    if (params.offset) queryParams.set('offset', params.offset.toString());
+
+    return this.request<{
+      logs: Array<{
+        id: number;
+        user_id: string | null;
+        event_type: string;
+        event_category: string;
+        action: string;
+        resource_type: string | null;
+        resource_id: string | null;
+        ip_address: string | null;
+        user_agent: string | null;
+        details: Record<string, unknown> | null;
+        success: boolean;
+        created_at: string;
+      }>;
+      limit: number;
+      offset: number;
+    }>(`/audit/logs/me?${queryParams.toString()}`);
+  }
+
+  async getAllAuditLogs(params: {
+    category?: string;
+    event_type?: string;
+    start_date?: string;
+    end_date?: string;
+    success?: boolean;
+    limit?: number;
+    offset?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params.category) queryParams.set('category', params.category);
+    if (params.event_type) queryParams.set('event_type', params.event_type);
+    if (params.start_date) queryParams.set('start_date', params.start_date);
+    if (params.end_date) queryParams.set('end_date', params.end_date);
+    if (params.success !== undefined) queryParams.set('success', params.success.toString());
+    if (params.limit) queryParams.set('limit', params.limit.toString());
+    if (params.offset) queryParams.set('offset', params.offset.toString());
+
+    return this.request<{
+      logs: Array<{
+        id: number;
+        user_id: string | null;
+        event_type: string;
+        event_category: string;
+        action: string;
+        resource_type: string | null;
+        resource_id: string | null;
+        ip_address: string | null;
+        user_agent: string | null;
+        details: Record<string, unknown> | null;
+        success: boolean;
+        created_at: string;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/audit/logs?${queryParams.toString()}`);
+  }
+
+  async getAuditStats(period = '24h') {
+    return this.request<{
+      since: string;
+      category_counts: Record<string, number>;
+      auth_counts: Record<string, number>;
+      provider_counts: Record<string, number>;
+    }>(`/audit/stats?period=${period}`);
+  }
 }
 
 export const apiService = new ApiService();

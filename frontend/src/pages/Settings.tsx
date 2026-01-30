@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useAppStore } from '../store';
 import { apiService } from '../services/api';
-import { Github, Key, Bell, Server, CheckCircle, XCircle, ExternalLink, X, Palette, Check, Cpu, Wifi } from 'lucide-react';
+import { Github, Key, Bell, Server, CheckCircle, XCircle, ExternalLink, X, Palette, Check, Cpu, Wifi, ClipboardList } from 'lucide-react';
 import { themes, type ThemeConfig } from '../config/themes';
 import { RemoteAccessSettings } from '../components/settings/RemoteAccessSettings';
 import { ConnectionInfo } from '../components/settings/ConnectionInfo';
 import { RemoteSessions } from '../components/settings/RemoteSessions';
+import { SecurityActivity } from '../components/settings/SecurityActivity';
 
 interface GitHubStatus {
   connected: boolean;
@@ -275,6 +276,17 @@ export function SettingsPage() {
           <RemoteAccessSettings />
           <ConnectionInfo />
           <RemoteSessions />
+        </div>
+      </section>
+
+      {/* Security Activity */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="w-5 h-5" />
+          <h2 className="text-xl font-semibold">Security Activity</h2>
+        </div>
+        <div className="bg-editor-surface border border-editor-border rounded-lg p-4">
+          <SecurityActivity />
         </div>
       </section>
 
