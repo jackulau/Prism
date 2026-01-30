@@ -406,6 +406,25 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_current_branch ON org_workspaces(current_branch)`,
+
+		// Attribution columns for file_history
+		`ALTER TABLE file_history ADD COLUMN agent_id TEXT`,
+		`ALTER TABLE file_history ADD COLUMN agent_name TEXT`,
+		`ALTER TABLE file_history ADD COLUMN agent_type TEXT`,
+		`ALTER TABLE file_history ADD COLUMN tool_name TEXT`,
+		`ALTER TABLE file_history ADD COLUMN tool_slug TEXT`,
+		`ALTER TABLE file_history ADD COLUMN message_id TEXT`,
+		`ALTER TABLE file_history ADD COLUMN conversation_id TEXT`,
+		`ALTER TABLE file_history ADD COLUMN workflow_id TEXT`,
+		`ALTER TABLE file_history ADD COLUMN step_id TEXT`,
+		`ALTER TABLE file_history ADD COLUMN description TEXT`,
+		`ALTER TABLE file_history ADD COLUMN metadata TEXT`,
+
+		// Attribution indexes
+		`CREATE INDEX IF NOT EXISTS idx_file_history_agent_id ON file_history(user_id, agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_history_conversation_id ON file_history(user_id, conversation_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_history_workflow_id ON file_history(user_id, workflow_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_history_tool_name ON file_history(user_id, tool_name)`,
 	}
 
 	for _, migration := range migrations {
