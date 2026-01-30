@@ -87,6 +87,7 @@ func main() {
 	orgWorkspaceRepo := repository.NewOrgWorkspaceRepository(db.DB)
 	agentTaskRepo := repository.NewAgentTaskRepository(db.DB)
 	organizationRepo := repository.NewOrganizationRepository(db.DB)
+	dataConfigRepo := repository.NewDataConfigRepository(db.DB, encryptionService)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -272,6 +273,7 @@ func main() {
 		StdioMCPRepository: stdioMCPRepo,
 		OrganizationRepo:   organizationRepo,
 		WorkOSClient:       workosClient,
+		DataConfigRepo:     dataConfigRepo,
 	}
 
 	app := routes.Setup(deps)

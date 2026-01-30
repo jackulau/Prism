@@ -67,6 +67,7 @@ type Dependencies struct {
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
 	WorkflowEngine     *workflow.Engine
+	DataConfigRepo     *repository.DataConfigRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -461,6 +462,18 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
+	}
+
+	// Data configuration routes (encrypted config storage)
+	if deps.DataConfigRepo != nil {
+		dataConfigHandler := handlers.NewDataConfigHandler(deps.DataConfigRepo)
+		configRoutes := v1.Group("/config", middleware.AuthMiddleware(deps.JWTService))
+		configRoutes.Get("/", dataConfigHandler.ListConfigTypes)
+		configRoutes.Get("/:type", dataConfigHandler.ListConfigs)
+		configRoutes.Get("/:type/:key", dataConfigHandler.GetConfig)
+		configRoutes.Get("/:type/:key/exists", dataConfigHandler.HasConfig)
+		configRoutes.Post("/:type/:key", dataConfigHandler.SetConfig)
+		configRoutes.Delete("/:type/:key", dataConfigHandler.DeleteConfig)
 	}
 
 	return app

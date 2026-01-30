@@ -163,3 +163,28 @@ func (r *DataConfigRepository) HasDataConfig(userID, configType, configKey strin
 	}
 	return true, nil
 }
+
+// ListConfigTypes returns all distinct config types for a user
+func (r *DataConfigRepository) ListConfigTypes(userID string) ([]string, error) {
+	rows, err := r.db.Query(`
+		SELECT DISTINCT config_type
+		FROM data_configs
+		WHERE user_id = ?
+		ORDER BY config_type
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list config types: %w", err)
+	}
+	defer rows.Close()
+
+	var types []string
+	for rows.Next() {
+		var configType string
+		if err := rows.Scan(&configType); err != nil {
+			return nil, fmt.Errorf("failed to scan config type: %w", err)
+		}
+		types = append(types, configType)
+	}
+
+	return types, nil
+}

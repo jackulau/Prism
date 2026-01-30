@@ -479,6 +479,44 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // Data Configuration API methods
+  async listDataConfigTypes() {
+    return this.request<{ types: string[] }>('/config');
+  }
+
+  async listDataConfigs(configType: string) {
+    return this.request<{ keys: string[] }>(`/config/${encodeURIComponent(configType)}`);
+  }
+
+  async getDataConfig(configType: string, configKey: string) {
+    return this.request<{ data: Record<string, unknown>; updated_at: string }>(
+      `/config/${encodeURIComponent(configType)}/${encodeURIComponent(configKey)}`
+    );
+  }
+
+  async setDataConfig(configType: string, configKey: string, value: Record<string, unknown>) {
+    return this.request<{ success: boolean; message: string }>(
+      `/config/${encodeURIComponent(configType)}/${encodeURIComponent(configKey)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(value),
+      }
+    );
+  }
+
+  async deleteDataConfig(configType: string, configKey: string) {
+    return this.request<{ success: boolean; message: string }>(
+      `/config/${encodeURIComponent(configType)}/${encodeURIComponent(configKey)}`,
+      { method: 'DELETE' }
+    );
+  }
+
+  async checkDataConfigExists(configType: string, configKey: string) {
+    return this.request<{ exists: boolean }>(
+      `/config/${encodeURIComponent(configType)}/${encodeURIComponent(configKey)}/exists`
+    );
+  }
 }
 
 export const apiService = new ApiService();
