@@ -378,6 +378,32 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN sso_connection_id TEXT`,
 		`ALTER TABLE users ADD COLUMN sso_provider TEXT`,
 
+		// Build history for tracking build/sandbox executions
+		`CREATE TABLE IF NOT EXISTS build_history (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT,
+			org_workspace_id TEXT,
+			user_id TEXT NOT NULL,
+			command TEXT NOT NULL,
+			status TEXT NOT NULL,
+			exit_code INTEGER,
+			started_at DATETIME NOT NULL,
+			completed_at DATETIME,
+			duration_ms INTEGER,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
+
+		// Build logs for storing stdout/stderr output
+		`CREATE TABLE IF NOT EXISTS build_logs (
+			id TEXT PRIMARY KEY,
+			build_id TEXT NOT NULL,
+			stream TEXT NOT NULL,
+			content TEXT NOT NULL,
+			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (build_id) REFERENCES build_history(id) ON DELETE CASCADE
+		)`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
@@ -406,6 +432,10 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_current_branch ON org_workspaces(current_branch)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_history_user ON build_history(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_history_workspace ON build_history(workspace_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_history_org_workspace ON build_history(org_workspace_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_logs_build ON build_logs(build_id)`,
 	}
 
 	for _, migration := range migrations {

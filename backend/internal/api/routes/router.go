@@ -64,9 +64,10 @@ type Dependencies struct {
 	StdioMCPRepository *mcp.StdioRepository
 	OrganizationRepo   *repository.OrganizationRepository
 	WorkOSClient       *workos.Client
-	GitHubApp          *github.GitHubApp
+	GitHubApp              *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
-	WorkflowEngine     *workflow.Engine
+	WorkflowEngine         *workflow.Engine
+	BuildHistoryRepo       *repository.BuildHistoryRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -461,6 +462,17 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
+	}
+
+	// Build history routes (auth required)
+	if deps.BuildHistoryRepo != nil {
+		buildHistoryHandler := handlers.NewBuildHistoryHandler(deps.BuildHistoryRepo)
+		builds := v1.Group("/builds", middleware.AuthMiddleware(deps.JWTService))
+		builds.Get("/", buildHistoryHandler.List)
+		builds.Get("/:id", buildHistoryHandler.Get)
+		builds.Get("/:id/logs", buildHistoryHandler.GetLogs)
+		builds.Delete("/:id", buildHistoryHandler.Delete)
+		builds.Post("/:id/cancel", buildHistoryHandler.Cancel)
 	}
 
 	return app
