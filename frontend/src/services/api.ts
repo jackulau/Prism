@@ -479,6 +479,158 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // MCP Server Management
+  async getMCPServers() {
+    return this.request<{
+      servers: Array<{
+        id: string;
+        name: string;
+        url: string;
+        enabled: boolean;
+        has_api_key?: boolean;
+        manifest?: {
+          name: string;
+          version: string;
+          description: string;
+          tool_count: number;
+        };
+        created_at?: string;
+        updated_at?: string;
+        last_sync?: string;
+        last_error?: string;
+      }>;
+    }>('/mcp/servers');
+  }
+
+  async addMCPServer(name: string, url: string, apiKey?: string) {
+    return this.request<{
+      id: string;
+      name: string;
+      url: string;
+      enabled: boolean;
+      manifest?: {
+        name: string;
+        version: string;
+        description: string;
+        tool_count: number;
+      };
+      created_at: string;
+    }>('/mcp/servers', {
+      method: 'POST',
+      body: JSON.stringify({ name, url, api_key: apiKey }),
+    });
+  }
+
+  async updateMCPServer(id: string, data: { name?: string; url?: string; apiKey?: string }) {
+    return this.request<{ success: boolean }>(`/mcp/servers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: data.name,
+        url: data.url,
+        api_key: data.apiKey,
+      }),
+    });
+  }
+
+  async removeMCPServer(id: string) {
+    return this.request<{ success: boolean }>(`/mcp/servers/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async enableMCPServer(id: string) {
+    return this.request<{ success: boolean; enabled: boolean }>(`/mcp/servers/${id}/enable`, {
+      method: 'POST',
+    });
+  }
+
+  async disableMCPServer(id: string) {
+    return this.request<{ success: boolean; enabled: boolean }>(`/mcp/servers/${id}/disable`, {
+      method: 'POST',
+    });
+  }
+
+  async testMCPServer(id: string) {
+    return this.request<{
+      success: boolean;
+      error?: string;
+      manifest?: {
+        name: string;
+        version: string;
+        description: string;
+        tool_count: number;
+      };
+    }>(`/mcp/servers/${id}/test`, {
+      method: 'POST',
+    });
+  }
+
+  async refreshMCPServer(id: string) {
+    return this.request<{
+      success: boolean;
+      last_sync?: string;
+      manifest?: {
+        name: string;
+        version: string;
+        description: string;
+        tool_count: number;
+      };
+    }>(`/mcp/servers/${id}/refresh`, {
+      method: 'POST',
+    });
+  }
+
+  async reconnectMCPServer(id: string) {
+    return this.request<{
+      success: boolean;
+      error?: string;
+    }>(`/mcp/servers/${id}/reconnect`, {
+      method: 'POST',
+    });
+  }
+
+  async getMCPServerStatus(id: string) {
+    return this.request<{
+      connected: boolean;
+      latency_ms?: number;
+      error?: string;
+      last_checked?: string;
+    }>(`/mcp/servers/${id}/status`);
+  }
+
+  async getMCPServerTools(id: string) {
+    return this.request<{
+      tools: Array<{
+        server_id: string;
+        server_name: string;
+        name: string;
+        description: string;
+        parameters?: Record<string, unknown>;
+      }>;
+    }>(`/mcp/servers/${id}/tools`);
+  }
+
+  async getMCPServerStats(id: string, timeRange: 'today' | 'week' | 'all' = 'all') {
+    return this.request<{
+      total_calls: number;
+      successful_calls: number;
+      failed_calls: number;
+      average_response_ms: number;
+    }>(`/mcp/servers/${id}/stats?range=${timeRange}`);
+  }
+
+  async getMCPTools() {
+    return this.request<{
+      tools: Array<{
+        server_id: string;
+        server_name: string;
+        name: string;
+        description: string;
+        parameters?: Record<string, unknown>;
+      }>;
+    }>('/mcp/tools');
+  }
 }
 
 export const apiService = new ApiService();

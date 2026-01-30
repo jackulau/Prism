@@ -33,6 +33,10 @@ func (h *Handler) RegisterRoutes(app fiber.Router) {
 	servers.Post("/:id/refresh", h.RefreshServer)
 	servers.Post("/:id/enable", h.EnableServer)
 	servers.Post("/:id/disable", h.DisableServer)
+	servers.Get("/:id/status", h.GetServerStatus)
+	servers.Get("/:id/tools", h.GetServerTools)
+	servers.Post("/:id/reconnect", h.ReconnectServer)
+	servers.Get("/:id/stats", h.GetServerStats)
 
 	// List all available tools
 	app.Get("/mcp/tools", h.ListTools)
@@ -447,4 +451,156 @@ func (h *Handler) ListTools(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"tools": result})
+}
+
+// GetServerStatus returns the connection status for an MCP server
+func (h *Handler) GetServerStatus(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	serverID := c.Params("id")
+
+	server, err := h.repository.GetByID(serverID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch server",
+		})
+	}
+
+	if server == nil || server.UserID != userID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Server not found",
+		})
+	}
+
+	// Test connection to determine status
+	startTime := time.Now()
+	_, err = h.client.TestConnection(server.URL, server.APIKey)
+	latencyMs := time.Since(startTime).Milliseconds()
+
+	if err != nil {
+		return c.JSON(fiber.Map{
+			"connected":    false,
+			"error":        err.Error(),
+			"last_checked": time.Now().Format(time.RFC3339),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"connected":    true,
+		"latency_ms":   latencyMs,
+		"last_checked": time.Now().Format(time.RFC3339),
+	})
+}
+
+// GetServerTools returns the tools available from a specific MCP server
+func (h *Handler) GetServerTools(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	serverID := c.Params("id")
+
+	server, err := h.repository.GetByID(serverID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch server",
+		})
+	}
+
+	if server == nil || server.UserID != userID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Server not found",
+		})
+	}
+
+	// Get tools from cache or refresh
+	tools := h.client.GetServerTools(serverID)
+	if tools == nil {
+		// Try to refresh the manifest
+		if err := h.client.RefreshManifest(serverID); err != nil {
+			return c.JSON(fiber.Map{"tools": []fiber.Map{}})
+		}
+		tools = h.client.GetServerTools(serverID)
+	}
+
+	result := make([]fiber.Map, 0, len(tools))
+	for _, tool := range tools {
+		result = append(result, fiber.Map{
+			"server_id":   tool.ServerID,
+			"server_name": tool.ServerName,
+			"name":        tool.Name,
+			"description": tool.Description,
+			"parameters":  tool.Parameters,
+		})
+	}
+
+	return c.JSON(fiber.Map{"tools": result})
+}
+
+// ReconnectServer forces a reconnection attempt to an MCP server
+func (h *Handler) ReconnectServer(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	serverID := c.Params("id")
+
+	server, err := h.repository.GetByID(serverID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch server",
+		})
+	}
+
+	if server == nil || server.UserID != userID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Server not found",
+		})
+	}
+
+	// Attempt to reconnect by refreshing the manifest
+	if err := h.client.RefreshManifest(serverID); err != nil {
+		server.LastError = err.Error()
+		h.repository.Update(server)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"success": false,
+			"error":   err.Error(),
+		})
+	}
+
+	// Update server in database
+	updatedServer := h.client.GetServer(serverID)
+	if updatedServer != nil {
+		server.Manifest = updatedServer.Manifest
+		server.LastSync = updatedServer.LastSync
+		server.LastError = ""
+		h.repository.Update(server)
+	}
+
+	return c.JSON(fiber.Map{
+		"success":   true,
+		"last_sync": server.LastSync,
+	})
+}
+
+// GetServerStats returns usage statistics for an MCP server
+func (h *Handler) GetServerStats(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	serverID := c.Params("id")
+
+	server, err := h.repository.GetByID(serverID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch server",
+		})
+	}
+
+	if server == nil || server.UserID != userID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Server not found",
+		})
+	}
+
+	// For now, return placeholder stats
+	// In a full implementation, this would query a metrics/analytics database
+	// that tracks tool call history
+	return c.JSON(fiber.Map{
+		"total_calls":         0,
+		"successful_calls":    0,
+		"failed_calls":        0,
+		"average_response_ms": 0,
+	})
 }
