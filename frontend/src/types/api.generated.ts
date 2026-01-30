@@ -376,6 +376,20 @@ export const API_PATHS = {
 
   // WebSocket
   WEBSOCKET: '/api/v1/ws',
+
+  // Agents
+  AGENTS_LIST: '/api/v1/agents',
+  AGENT_GET: (id: string) => `/api/v1/agents/${id}`,
+  AGENT_DELETE: (id: string) => `/api/v1/agents/${id}`,
+  AGENT_RESULTS: (id: string) => `/api/v1/agents/${id}/results`,
+  AGENTS_BY_CONVERSATION: (conversationId: string) => `/api/v1/conversations/${conversationId}/agents`,
+
+  // Tasks
+  TASKS_LIST: '/api/v1/tasks',
+  TASK_GET: (id: string) => `/api/v1/tasks/${id}`,
+  TASK_CANCEL: (id: string) => `/api/v1/tasks/${id}`,
+  TASK_RETRY: (id: string) => `/api/v1/tasks/${id}/retry`,
+  TASKS_STATS: '/api/v1/tasks/stats',
 } as const;
 
 // ============================================================================

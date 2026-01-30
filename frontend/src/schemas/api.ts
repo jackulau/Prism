@@ -437,3 +437,125 @@ export type ToolStartedPayload = z.infer<typeof toolStartedPayloadSchema>;
 export type ToolCompletedPayload = z.infer<typeof toolCompletedPayloadSchema>;
 export type ToolConfirmPayload = z.infer<typeof toolConfirmPayloadSchema>;
 export type ErrorPayload = z.infer<typeof errorPayloadSchema>;
+
+// ============================================================================
+// Agent Schemas
+// ============================================================================
+
+/** Agent status enum */
+export const agentStatusSchema = z.enum(['pending', 'running', 'completed', 'failed', 'cancelled']);
+
+/** Agent DTO schema */
+export const agentDTOSchema = z.object({
+  id: z.string(),
+  conversation_id: z.string().optional().nullable(),
+  name: z.string(),
+  description: z.string().optional(),
+  provider: z.string(),
+  model: z.string(),
+  system_prompt: z.string().optional(),
+  status: agentStatusSchema,
+  error: z.string().optional(),
+  created_at: z.string(),
+  started_at: z.string().optional().nullable(),
+  completed_at: z.string().optional().nullable(),
+});
+
+/** Agent result DTO schema */
+export const agentResultDTOSchema = z.object({
+  id: z.string(),
+  agent_id: z.string(),
+  task_id: z.string().optional(),
+  success: z.boolean(),
+  output: z.string().optional(),
+  error: z.string().optional(),
+  usage: z.record(z.unknown()).optional().nullable(),
+  metadata: z.record(z.unknown()).optional().nullable(),
+  duration_ms: z.number(),
+  created_at: z.string(),
+});
+
+/** Agent list response schema */
+export const agentListResponseSchema = z.object({
+  agents: z.array(agentDTOSchema),
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+});
+
+/** Agent results response schema */
+export const agentResultsResponseSchema = z.object({
+  results: z.array(agentResultDTOSchema),
+});
+
+/** Agent usage schema */
+export const agentUsageSchema = z.object({
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  total_tokens: z.number(),
+});
+
+// ============================================================================
+// Task Schemas
+// ============================================================================
+
+/** Task status enum */
+export const taskStatusSchema = z.enum(['pending', 'running', 'completed', 'failed', 'cancelled']);
+
+/** Task response schema */
+export const taskResponseSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  prompt: z.string(),
+  context: z.string().optional(),
+  priority: z.number(),
+  status: taskStatusSchema,
+  agent_config: z.record(z.unknown()).optional().nullable(),
+  metadata: z.record(z.unknown()).optional().nullable(),
+  result: z.record(z.unknown()).optional().nullable(),
+  error: z.string().optional(),
+  callback_url: z.string().optional(),
+  created_at: z.number(),
+  started_at: z.number().optional().nullable(),
+  completed_at: z.number().optional().nullable(),
+});
+
+/** Task list response schema */
+export const taskListResponseSchema = z.object({
+  tasks: z.array(taskResponseSchema),
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+});
+
+/** Task stats response schema */
+export const taskStatsResponseSchema = z.object({
+  total: z.number(),
+  pending: z.number(),
+  running: z.number(),
+  completed: z.number(),
+  failed: z.number(),
+});
+
+/** Task action response schema (for cancel/retry) */
+export const taskActionResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  task: taskResponseSchema.optional(),
+});
+
+// ============================================================================
+// Agent Type Exports
+// ============================================================================
+
+export type AgentStatus = z.infer<typeof agentStatusSchema>;
+export type AgentDTO = z.infer<typeof agentDTOSchema>;
+export type AgentResultDTO = z.infer<typeof agentResultDTOSchema>;
+export type AgentListResponse = z.infer<typeof agentListResponseSchema>;
+export type AgentResultsResponse = z.infer<typeof agentResultsResponseSchema>;
+export type AgentUsageDTO = z.infer<typeof agentUsageSchema>;
+export type TaskStatusEnum = z.infer<typeof taskStatusSchema>;
+export type TaskResponse = z.infer<typeof taskResponseSchema>;
+export type TaskListResponse = z.infer<typeof taskListResponseSchema>;
+export type TaskStatsResponse = z.infer<typeof taskStatsResponseSchema>;
+export type TaskActionResponse = z.infer<typeof taskActionResponseSchema>;

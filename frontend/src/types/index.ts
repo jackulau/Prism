@@ -325,3 +325,150 @@ export interface CloudMessageChunk {
   finishReason?: string;
   error?: string;
 }
+
+// ============================================================================
+// Agent Types
+// ============================================================================
+
+/** Agent status values */
+export type AgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+/** Agent record from the backend */
+export interface Agent {
+  id: string;
+  conversationId?: string;
+  name: string;
+  description?: string;
+  provider: string;
+  model: string;
+  systemPrompt?: string;
+  status: AgentStatus;
+  error?: string;
+  createdAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+}
+
+/** Agent execution record */
+export interface AgentExecution {
+  id: string;
+  userId: string;
+  provider: string;
+  llmProvider: string;
+  model: string;
+  agentName: string;
+  status: AgentStatus;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  inputCost: number;
+  outputCost: number;
+  totalCost: number;
+  currency: string;
+  error?: string;
+  startedAt?: Date;
+  completedAt?: Date;
+  createdAt: Date;
+  metadata?: Record<string, unknown>;
+}
+
+/** Agent message in an execution */
+export interface AgentMessage {
+  id: string;
+  executionId: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  toolCalls?: AgentToolCallInfo[];
+  toolCallId?: string;
+  promptTokens: number;
+  completionTokens: number;
+  createdAt: Date;
+}
+
+/** Tool call info within an agent message */
+export interface AgentToolCallInfo {
+  id: string;
+  name: string;
+  parameters: Record<string, unknown>;
+}
+
+/** Agent tool call record */
+export interface AgentToolCall {
+  id: string;
+  executionId: string;
+  messageId?: string;
+  toolName: string;
+  parameters: Record<string, unknown>;
+  output?: string;
+  error?: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  durationMs: number;
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+/** Agent result record */
+export interface AgentResult {
+  id: string;
+  agentId: string;
+  taskId?: string;
+  success: boolean;
+  output?: string;
+  error?: string;
+  usage?: AgentUsage;
+  metadata?: Record<string, unknown>;
+  durationMs: number;
+  createdAt: Date;
+}
+
+/** Agent token usage */
+export interface AgentUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+// ============================================================================
+// Task Types
+// ============================================================================
+
+/** Task status values */
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+/** Task priority levels */
+export type TaskPriority = 0 | 1 | 2 | 3;
+
+/** Task record from the backend */
+export interface Task {
+  id: string;
+  userId: string;
+  prompt: string;
+  context?: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  agentConfig?: TaskAgentConfig;
+  metadata?: Record<string, unknown>;
+  result?: Record<string, unknown>;
+  error?: string;
+  callbackUrl?: string;
+  createdAt: number;
+  startedAt?: number;
+  completedAt?: number;
+}
+
+/** Task agent configuration */
+export interface TaskAgentConfig {
+  provider?: string;
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+}
+
+/** Task statistics */
+export interface TaskStats {
+  total: number;
+  pending: number;
+  running: number;
+  completed: number;
+  failed: number;
+}
