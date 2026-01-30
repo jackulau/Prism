@@ -229,6 +229,26 @@ class ApiService {
     });
   }
 
+  async testProviderPrompt(
+    provider: string,
+    model: string,
+    prompt: string,
+    apiKey?: string
+  ) {
+    return this.request<{
+      response: string;
+      latency_ms: number;
+      tokens_used: {
+        input: number;
+        output: number;
+      };
+      model: string;
+    }>(`/providers/${provider}/test-prompt`, {
+      method: 'POST',
+      body: JSON.stringify({ model, prompt, api_key: apiKey }),
+    });
+  }
+
   // Sandbox
   async getSandboxFiles() {
     return this.request<{

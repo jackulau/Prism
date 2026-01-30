@@ -7,6 +7,7 @@ import { themes, type ThemeConfig } from '../config/themes';
 import { RemoteAccessSettings } from '../components/settings/RemoteAccessSettings';
 import { ConnectionInfo } from '../components/settings/ConnectionInfo';
 import { RemoteSessions } from '../components/settings/RemoteSessions';
+import { ProviderTestPanel } from '../components/settings/ProviderTestPanel';
 
 interface GitHubStatus {
   connected: boolean;
@@ -30,12 +31,28 @@ interface OllamaStatus {
   models: string[];
 }
 
+interface ProviderModel {
+  id: string;
+  name: string;
+  context_window: number;
+  supports_tools: boolean;
+  supports_vision: boolean;
+}
+
+interface ProviderData {
+  name: string;
+  models: ProviderModel[];
+  supports_tools: boolean;
+  supports_vision: boolean;
+}
+
 export function SettingsPage() {
   const { accessToken } = useAuthStore();
   const { theme, setTheme } = useAppStore();
   const [githubStatus, setGithubStatus] = useState<GitHubStatus | null>(null);
   const [integrations, setIntegrations] = useState<IntegrationsStatus | null>(null);
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus | null>(null);
+  const [providers, setProviders] = useState<ProviderData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,9 +92,10 @@ export function SettingsPage() {
         setIntegrations(await intResponse.value.json());
       }
 
-      // Parse Ollama status from providers
+      // Parse Ollama status from providers and store all providers
       if (providersResponse.status === 'fulfilled' && providersResponse.value.ok) {
         const data = await providersResponse.value.json();
+        setProviders(data.providers || []);
         const ollama = data.providers?.find((p: { name: string }) => p.name === 'ollama');
         if (ollama) {
           setOllamaStatus({
@@ -173,39 +191,51 @@ export function SettingsPage() {
           </p>
           <ProviderKeyInput
             provider="OpenAI"
+            providerKey="openai"
             placeholder="sk-..."
             keyUrl="https://platform.openai.com/api-keys"
             description="GPT-4.1, o3, o4-mini"
+            models={providers.find(p => p.name === 'openai')?.models || []}
           />
           <ProviderKeyInput
             provider="Anthropic"
+            providerKey="anthropic"
             placeholder="sk-ant-..."
             keyUrl="https://console.anthropic.com/settings/keys"
             description="Claude Opus/Sonnet/Haiku 4.5"
+            models={providers.find(p => p.name === 'anthropic')?.models || []}
           />
           <ProviderKeyInput
             provider="Google AI"
+            providerKey="google"
             placeholder="AIza..."
             keyUrl="https://aistudio.google.com/app/apikey"
             description="Gemini 2.5 Flash/Pro (1M context)"
+            models={providers.find(p => p.name === 'google')?.models || []}
           />
           <ProviderKeyInput
             provider="OpenRouter"
+            providerKey="openrouter"
             placeholder="sk-or-..."
             keyUrl="https://openrouter.ai/keys"
             description="200+ models (Llama, Mistral, etc.)"
+            models={providers.find(p => p.name === 'openrouter')?.models || []}
           />
           <ProviderKeyInput
             provider="Groq"
+            providerKey="groq"
             placeholder="gsk_..."
             keyUrl="https://console.groq.com/keys"
             description="Ultra-fast inference (Llama, Mixtral)"
+            models={providers.find(p => p.name === 'groq')?.models || []}
           />
           <ProviderKeyInput
             provider="DeepSeek"
+            providerKey="deepseek"
             placeholder="sk-..."
             keyUrl="https://platform.deepseek.com/api_keys"
             description="DeepSeek V3, R1, Coder"
+            models={providers.find(p => p.name === 'deepseek')?.models || []}
           />
         </div>
       </section>
@@ -370,16 +400,21 @@ export function SettingsPage() {
 
 function ProviderKeyInput({
   provider,
+  providerKey,
   placeholder,
   keyUrl,
   description,
+  models = [],
 }: {
   provider: string;
+  providerKey: string;
   placeholder: string;
   keyUrl?: string;
   description?: string;
+  models?: Array<{ id: string; name: string }>;
 }) {
   const [value, setValue] = useState('');
+  const [savedKey, setSavedKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { accessToken } = useAuthStore();
@@ -396,11 +431,11 @@ function ProviderKeyInput({
 
     setError(null);
     try {
-      const providerKey = provider.toLowerCase().replace(' ', '_');
       const response = await apiService.setProviderKey(providerKey, value);
       if (response.error) {
         setError(response.error);
       } else {
+        setSavedKey(value);
         setSaved(true);
         setValue('');
         setTimeout(() => setSaved(false), 2000);
@@ -410,8 +445,11 @@ function ProviderKeyInput({
     }
   };
 
+  // Determine the API key to use for testing (entered but not saved, or saved)
+  const testApiKey = value || savedKey || undefined;
+
   return (
-    <div className="space-y-1 mb-3 last:mb-0">
+    <div className="space-y-1 mb-4 last:mb-0">
       <div className="flex items-center gap-3">
         <div className="w-28 flex-shrink-0">
           {keyUrl ? (
@@ -451,6 +489,17 @@ function ProviderKeyInput({
       </div>
       {error && (
         <div className="ml-28 pl-3 text-xs text-red-400">{error}</div>
+      )}
+      {/* Test panel - show when API key is entered or saved */}
+      {(value || savedKey || models.length > 0) && (
+        <div className="ml-28 pl-3">
+          <ProviderTestPanel
+            provider={providerKey}
+            models={models}
+            apiKey={testApiKey}
+            collapsed={true}
+          />
+        </div>
       )}
     </div>
   );
