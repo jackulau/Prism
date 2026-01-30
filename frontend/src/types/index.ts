@@ -1,3 +1,6 @@
+// Results aggregation types
+export * from './results';
+
 // WebSocket message types
 export type MessageType =
   | 'chat.message'
