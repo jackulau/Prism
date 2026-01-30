@@ -8,6 +8,7 @@ import Organization from '../pages/Organization';
 import { SettingsPage } from '../pages/Settings';
 import { AuthPage } from '../components/auth/AuthPage';
 import Workspace from '../pages/Workspace';
+import ParallelBatch from '../pages/ParallelBatch';
 
 export const router = createBrowserRouter([
   {
@@ -45,6 +46,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings',
         element: <SettingsPage />,
+      },
+      {
+        path: 'batch',
+        element: <ParallelBatch />,
       },
     ],
   },
