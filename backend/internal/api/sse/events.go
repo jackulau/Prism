@@ -79,6 +79,16 @@ const (
 	EventSwarmCancelled      EventType = "swarm.cancelled"
 	EventSwarmStatus         EventType = "swarm.status"
 	EventSwarmList           EventType = "swarm.list"
+
+	// Approval events
+	EventApprovalRequested   EventType = "approval.requested"
+	EventApprovalApproved    EventType = "approval.approved"
+	EventApprovalRejected    EventType = "approval.rejected"
+	EventApprovalEscalated   EventType = "approval.escalated"
+	EventApprovalExpired     EventType = "approval.expired"
+	EventApprovalCancelled   EventType = "approval.cancelled"
+	EventApprovalStepUpdated EventType = "approval.step_updated"
+	EventApprovalReminder    EventType = "approval.reminder"
 )
 
 // Event represents an SSE event
@@ -255,5 +265,104 @@ func NewError(code, message string) *Event {
 	return NewEvent(EventError, ErrorData{
 		Code:    code,
 		Message: message,
+	})
+}
+
+// ApprovalRequestData represents data for approval request events
+type ApprovalRequestData struct {
+	RequestID        string                 `json:"request_id"`
+	WorkflowID       string                 `json:"workflow_id"`
+	WorkflowName     string                 `json:"workflow_name,omitempty"`
+	OrganizationID   string                 `json:"organization_id"`
+	RequesterID      string                 `json:"requester_id"`
+	RequesterEmail   string                 `json:"requester_email,omitempty"`
+	OperationType    string                 `json:"operation_type"`
+	OperationDetails map[string]interface{} `json:"operation_details,omitempty"`
+	CurrentStep      int                    `json:"current_step"`
+	TotalSteps       int                    `json:"total_steps"`
+	Status           string                 `json:"status"`
+	Priority         int                    `json:"priority,omitempty"`
+	ExpiresAt        string                 `json:"expires_at,omitempty"`
+}
+
+// ApprovalDecisionData represents data for approval decision events
+type ApprovalDecisionData struct {
+	RequestID     string `json:"request_id"`
+	ApproverID    string `json:"approver_id"`
+	ApproverEmail string `json:"approver_email,omitempty"`
+	Decision      string `json:"decision"`
+	Comment       string `json:"comment,omitempty"`
+	StepOrder     int    `json:"step_order"`
+}
+
+// ApprovalStepData represents data for approval step update events
+type ApprovalStepData struct {
+	RequestID     string `json:"request_id"`
+	StepOrder     int    `json:"step_order"`
+	StepName      string `json:"step_name"`
+	ApprovedCount int    `json:"approved_count"`
+	RequiredCount int    `json:"required_count"`
+	Status        string `json:"status"`
+}
+
+// NewApprovalRequested creates an approval requested event
+func NewApprovalRequested(data *ApprovalRequestData) *Event {
+	return NewEvent(EventApprovalRequested, data)
+}
+
+// NewApprovalApproved creates an approval approved event
+func NewApprovalApproved(requestID, approverID, comment string) *Event {
+	return NewEvent(EventApprovalApproved, ApprovalDecisionData{
+		RequestID:  requestID,
+		ApproverID: approverID,
+		Decision:   "approved",
+		Comment:    comment,
+	})
+}
+
+// NewApprovalRejected creates an approval rejected event
+func NewApprovalRejected(requestID, approverID, comment string) *Event {
+	return NewEvent(EventApprovalRejected, ApprovalDecisionData{
+		RequestID:  requestID,
+		ApproverID: approverID,
+		Decision:   "rejected",
+		Comment:    comment,
+	})
+}
+
+// NewApprovalEscalated creates an approval escalated event
+func NewApprovalEscalated(requestID string, newPriority int) *Event {
+	return NewEvent(EventApprovalEscalated, map[string]interface{}{
+		"request_id":   requestID,
+		"new_priority": newPriority,
+	})
+}
+
+// NewApprovalExpired creates an approval expired event
+func NewApprovalExpired(requestID string) *Event {
+	return NewEvent(EventApprovalExpired, map[string]interface{}{
+		"request_id": requestID,
+	})
+}
+
+// NewApprovalCancelled creates an approval cancelled event
+func NewApprovalCancelled(requestID, cancelledBy string) *Event {
+	return NewEvent(EventApprovalCancelled, map[string]interface{}{
+		"request_id":   requestID,
+		"cancelled_by": cancelledBy,
+	})
+}
+
+// NewApprovalStepUpdated creates an approval step update event
+func NewApprovalStepUpdated(data *ApprovalStepData) *Event {
+	return NewEvent(EventApprovalStepUpdated, data)
+}
+
+// NewApprovalReminder creates an approval reminder event
+func NewApprovalReminder(requestID, stepName string, expiresAt string) *Event {
+	return NewEvent(EventApprovalReminder, map[string]interface{}{
+		"request_id": requestID,
+		"step_name":  stepName,
+		"expires_at": expiresAt,
 	})
 }

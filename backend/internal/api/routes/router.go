@@ -17,6 +17,7 @@ import (
 	"github.com/jacklau/prism/internal/api/middleware"
 	"github.com/jacklau/prism/internal/api/sse"
 	ws "github.com/jacklau/prism/internal/api/websocket"
+	"github.com/jacklau/prism/internal/approval"
 	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/integrations"
@@ -67,6 +68,8 @@ type Dependencies struct {
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
 	WorkflowEngine     *workflow.Engine
+	ApprovalEngine     *approval.Engine
+	ApprovalRepo       *repository.ApprovalRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -461,6 +464,37 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
+	}
+
+	// Approval workflow routes
+	if deps.ApprovalEngine != nil && deps.ApprovalRepo != nil {
+		approvalHandler := handlers.NewApprovalHandler(deps.ApprovalEngine, deps.ApprovalRepo, deps.OrganizationRepo)
+		approvals := v1.Group("/approvals", middleware.AuthMiddleware(deps.JWTService))
+
+		// Workflow management
+		approvals.Post("/workflows", approvalHandler.CreateWorkflow)
+		approvals.Get("/workflows", approvalHandler.ListWorkflows)
+		approvals.Get("/workflows/:id", approvalHandler.GetWorkflow)
+		approvals.Put("/workflows/:id", approvalHandler.UpdateWorkflow)
+		approvals.Delete("/workflows/:id", approvalHandler.DeleteWorkflow)
+
+		// Request management
+		approvals.Post("/requests", approvalHandler.CreateRequest)
+		approvals.Get("/requests", approvalHandler.ListRequests)
+		approvals.Get("/requests/pending", approvalHandler.ListPendingForUser)
+		approvals.Get("/requests/:id", approvalHandler.GetRequest)
+		approvals.Get("/requests/:id/decisions", approvalHandler.GetDecisions)
+
+		// Actions
+		approvals.Post("/requests/:id/approve", approvalHandler.Approve)
+		approvals.Post("/requests/:id/reject", approvalHandler.Reject)
+		approvals.Post("/requests/:id/escalate", approvalHandler.Escalate)
+		approvals.Post("/requests/:id/cancel", approvalHandler.Cancel)
+
+		// Stats
+		approvals.Get("/stats", approvalHandler.GetStats)
+
+		log.Println("Approval workflow routes registered")
 	}
 
 	return app
