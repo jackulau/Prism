@@ -1,7 +1,8 @@
 import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
+import { useWorkspaceStore } from '../store/workspaceStore';
 import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext } from '../types';
-import type { FileNode } from '../store/sandboxStore';
+import type { FileNode, AttributionSummary, AgentInfo, FileHistoryEntry } from '../store/sandboxStore';
 
 interface PendingFileRequest {
   resolve: (content: string) => void;
@@ -253,6 +254,14 @@ class WebSocketService {
       case 'file.history_content':
         this.handleFileHistoryContent(message);
         break;
+
+      case 'attribution.summary':
+        this.handleAttributionSummary(message);
+        break;
+
+      case 'attribution.by_agent':
+        this.handleAttributionByAgent(message);
+        break;
     }
   }
 
@@ -357,6 +366,38 @@ class WebSocketService {
     const sandboxStore = useSandboxStore.getState();
     sandboxStore.setHistoryContent(message.content || '');
     sandboxStore.setIsLoadingHistory(false);
+  }
+
+  private handleAttributionSummary(message: OutgoingWSMessage) {
+    const workspaceStore = useWorkspaceStore.getState();
+    const metadata = message.metadata as {
+      summary?: AttributionSummary;
+      agents?: AgentInfo[];
+      tools?: string[];
+    } | undefined;
+
+    if (metadata?.summary) {
+      workspaceStore.setAttributionSummary(metadata.summary);
+    }
+    if (metadata?.agents) {
+      workspaceStore.setAgentList(metadata.agents);
+    }
+    if (metadata?.tools) {
+      workspaceStore.setToolList(metadata.tools);
+    }
+  }
+
+  private handleAttributionByAgent(message: OutgoingWSMessage) {
+    const sandboxStore = useSandboxStore.getState();
+    const metadata = message.metadata as {
+      agent_id?: string;
+      entries?: FileHistoryEntry[];
+    } | undefined;
+
+    if (metadata?.entries) {
+      // Update file history with filtered entries
+      sandboxStore.setFileHistory(metadata.entries);
+    }
   }
 
   // Helper to convert SandboxFile[] to FileNode[]
@@ -568,6 +609,24 @@ class WebSocketService {
       params: {
         action: 'get',
         history_id: historyId,
+      },
+    } as IncomingWSMessage);
+  }
+
+  requestAttributionSummary() {
+    this.send({
+      type: 'attribution.summary_request',
+      conversation_id: '',
+      params: {},
+    } as IncomingWSMessage);
+  }
+
+  requestAttributionByAgent(agentId: string) {
+    this.send({
+      type: 'attribution.by_agent_request',
+      conversation_id: '',
+      params: {
+        agent_id: agentId,
       },
     } as IncomingWSMessage);
   }

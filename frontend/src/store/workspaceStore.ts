@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import type { FileContext, EditSuggestion, Workspace, Range } from '../types/workspace';
+import type { AttributionSummary, AgentInfo } from './sandboxStore';
+import { wsService } from '../services/websocket';
 
 interface WorkspaceState {
   // Workspace state
@@ -48,6 +50,22 @@ interface WorkspaceState {
   // Actions - Highlights
   setHighlightedRanges: (path: string, ranges: Range[]) => void;
   clearHighlightedRanges: (path: string) => void;
+
+  // Attribution state
+  attributionSummary: AttributionSummary | null;
+  selectedAgent: string | null;
+  selectedTool: string | null;
+  agentList: AgentInfo[];
+  toolList: string[];
+
+  // Attribution actions
+  setAttributionSummary: (summary: AttributionSummary | null) => void;
+  filterByAgent: (agentId: string | null) => void;
+  filterByTool: (toolName: string | null) => void;
+  setAgentList: (agents: AgentInfo[]) => void;
+  setToolList: (tools: string[]) => void;
+  loadAttributionSummary: () => Promise<void>;
+  navigateToMessage: (messageId: string, conversationId: string) => void;
 }
 
 const STORAGE_KEYS = {
@@ -81,6 +99,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   fileTreeWidth: getStoredNumber(STORAGE_KEYS.fileTreeWidth, 250),
   previewWidth: getStoredNumber(STORAGE_KEYS.previewWidth, 400),
   highlightedRanges: new Map(),
+
+  // Attribution state
+  attributionSummary: null,
+  selectedAgent: null,
+  selectedTool: null,
+  agentList: [],
+  toolList: [],
 
   // Workspace actions
   setWorkspace: (workspace) => set({ currentWorkspace: workspace }),
@@ -241,4 +266,27 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     newHighlights.delete(path);
     return { highlightedRanges: newHighlights };
   }),
+
+  // Attribution actions
+  setAttributionSummary: (summary) => set({ attributionSummary: summary }),
+
+  filterByAgent: (agentId) => set({ selectedAgent: agentId }),
+
+  filterByTool: (toolName) => set({ selectedTool: toolName }),
+
+  setAgentList: (agents) => set({ agentList: agents }),
+
+  setToolList: (tools) => set({ toolList: tools }),
+
+  loadAttributionSummary: async () => {
+    // Request attribution summary via WebSocket
+    wsService.requestAttributionSummary();
+  },
+
+  navigateToMessage: (messageId, conversationId) => {
+    // Navigate to conversation page and scroll to message
+    // This will be handled by the router/navigation system
+    const url = `/conversation/${conversationId}?message=${messageId}`;
+    window.location.href = url;
+  },
 }));

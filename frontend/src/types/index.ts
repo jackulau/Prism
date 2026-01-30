@@ -27,6 +27,11 @@ export type MessageType =
   | 'file.history_request'
   | 'file.history_list'
   | 'file.history_content'
+  // Attribution message types
+  | 'attribution.summary_request'
+  | 'attribution.summary'
+  | 'attribution.by_agent_request'
+  | 'attribution.by_agent'
   // CloudProvider message types
   | 'cloud_agent.created'
   | 'cloud_agent.message'
