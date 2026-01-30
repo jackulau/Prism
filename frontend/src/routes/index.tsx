@@ -8,6 +8,7 @@ import Organization from '../pages/Organization';
 import { SettingsPage } from '../pages/Settings';
 import { AuthPage } from '../components/auth/AuthPage';
 import Workspace from '../pages/Workspace';
+import Approvals from '../pages/Approvals';
 
 export const router = createBrowserRouter([
   {
@@ -25,6 +26,10 @@ export const router = createBrowserRouter([
       {
         path: 'workspace/:id?',
         element: <Workspace />,
+      },
+      {
+        path: 'approvals',
+        element: <Approvals />,
       },
       {
         path: 'workers',
