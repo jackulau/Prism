@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/security"
 )
 
@@ -86,4 +87,151 @@ func GetEmail(c *fiber.Ctx) string {
 		return ""
 	}
 	return email
+}
+
+// GetAPIKeyScopes gets the API key scopes from the context (set by APIKeyAuthMiddleware)
+func GetAPIKeyScopes(c *fiber.Ctx) []string {
+	scopes, ok := c.Locals("apiKeyScopes").([]string)
+	if !ok {
+		return nil
+	}
+	return scopes
+}
+
+// APIKeyAuthMiddleware creates a middleware for API key authentication
+// It validates API keys passed via the X-API-Key header
+func APIKeyAuthMiddleware(apiKeyRepo *repository.UserAPIKeyRepository) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Check X-API-Key header
+		apiKey := c.Get("X-API-Key")
+		if apiKey == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "missing X-API-Key header",
+			})
+		}
+
+		// Hash the provided key
+		keyHash := security.HashAPIKey(apiKey)
+
+		// Look up the key
+		key, err := apiKeyRepo.GetByKeyHash(keyHash)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to validate API key",
+			})
+		}
+
+		if key == nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid API key",
+			})
+		}
+
+		// Check expiration
+		if key.IsExpired() {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "API key has expired",
+			})
+		}
+
+		// Update last used timestamp (async to not block request)
+		go func() {
+			_ = apiKeyRepo.UpdateLastUsed(key.ID)
+		}()
+
+		// Get scopes
+		scopes, _ := apiKeyRepo.GetScopes(key.ID)
+
+		// Set user context
+		c.Locals("userID", key.UserID)
+		c.Locals("apiKeyID", key.ID)
+		c.Locals("apiKeyScopes", scopes)
+
+		return c.Next()
+	}
+}
+
+// APIKeyOrJWTAuthMiddleware creates a middleware that accepts either API key or JWT auth
+func APIKeyOrJWTAuthMiddleware(jwtService *security.JWTService, apiKeyRepo *repository.UserAPIKeyRepository) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// First try X-API-Key header
+		apiKey := c.Get("X-API-Key")
+		if apiKey != "" {
+			keyHash := security.HashAPIKey(apiKey)
+			key, err := apiKeyRepo.GetByKeyHash(keyHash)
+			if err == nil && key != nil && !key.IsExpired() {
+				// Update last used
+				go func() {
+					_ = apiKeyRepo.UpdateLastUsed(key.ID)
+				}()
+
+				scopes, _ := apiKeyRepo.GetScopes(key.ID)
+				c.Locals("userID", key.UserID)
+				c.Locals("apiKeyID", key.ID)
+				c.Locals("apiKeyScopes", scopes)
+				return c.Next()
+			}
+		}
+
+		// Fall back to JWT auth
+		authHeader := c.Get("Authorization")
+		if authHeader == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "missing authorization",
+			})
+		}
+
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid authorization header format",
+			})
+		}
+
+		token := parts[1]
+		claims, err := jwtService.ValidateAccessToken(token)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+				"error": "invalid or expired token",
+			})
+		}
+
+		c.Locals("userID", claims.UserID)
+		c.Locals("email", claims.Email)
+
+		return c.Next()
+	}
+}
+
+// RequireScope creates a middleware that checks if the request has a required scope
+// This should be used after APIKeyAuthMiddleware or APIKeyOrJWTAuthMiddleware
+func RequireScope(requiredScope string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// If authenticated via JWT (no API key), allow all scopes
+		apiKeyID := c.Locals("apiKeyID")
+		if apiKeyID == nil {
+			return c.Next()
+		}
+
+		// Check scopes for API key auth
+		scopes := GetAPIKeyScopes(c)
+		if !hasScope(scopes, requiredScope) {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"error": "insufficient scope: " + requiredScope + " required",
+			})
+		}
+
+		return c.Next()
+	}
+}
+
+// hasScope checks if a slice of scopes contains a required scope
+func hasScope(scopes []string, required string) bool {
+	for _, s := range scopes {
+		// Admin scope grants all permissions
+		if s == "admin" || s == required {
+			return true
+		}
+	}
+	return false
 }
