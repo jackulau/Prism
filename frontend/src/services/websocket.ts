@@ -1,6 +1,21 @@
 import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
-import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext } from '../types';
+import { useAgentProgressStore } from '../store/agentProgressStore';
+import type {
+  OutgoingWSMessage,
+  IncomingWSMessage,
+  Message,
+  SandboxFile,
+  ToolCall,
+  ChatMode,
+  FileContext,
+  AgentProgressMessage,
+  AgentStepStartedMessage,
+  AgentStepCompletedMessage,
+  AgentThinkingMessage,
+  AgentEstimateMessage,
+  SwarmProgressMessage,
+} from '../types';
 import type { FileNode } from '../store/sandboxStore';
 
 interface PendingFileRequest {
@@ -253,6 +268,32 @@ class WebSocketService {
       case 'file.history_content':
         this.handleFileHistoryContent(message);
         break;
+
+      // Agent Progress events
+      case 'agent.progress':
+        this.handleAgentProgress(message as unknown as AgentProgressMessage);
+        break;
+
+      case 'agent.step_started':
+        this.handleAgentStepStarted(message as unknown as AgentStepStartedMessage);
+        break;
+
+      case 'agent.step_completed':
+        this.handleAgentStepCompleted(message as unknown as AgentStepCompletedMessage);
+        break;
+
+      case 'agent.thinking_start':
+      case 'agent.thinking_end':
+        this.handleAgentThinking(message as unknown as AgentThinkingMessage);
+        break;
+
+      case 'agent.estimate':
+        this.handleAgentEstimate(message as unknown as AgentEstimateMessage);
+        break;
+
+      case 'swarm.progress':
+        this.handleSwarmProgress(message as unknown as SwarmProgressMessage);
+        break;
     }
   }
 
@@ -357,6 +398,120 @@ class WebSocketService {
     const sandboxStore = useSandboxStore.getState();
     sandboxStore.setHistoryContent(message.content || '');
     sandboxStore.setIsLoadingHistory(false);
+  }
+
+  // Agent Progress handlers
+  private handleAgentProgress(data: AgentProgressMessage) {
+    const progressStore = useAgentProgressStore.getState();
+
+    // Start agent if not already tracked
+    const existing = progressStore.getAgentProgress(data.agent_id);
+    if (!existing) {
+      progressStore.startAgent(data.agent_id, data.step_name || 'Agent', data.total_steps);
+    }
+
+    progressStore.updateProgress(data.agent_id, {
+      currentStep: data.current_step,
+      totalSteps: data.total_steps,
+      percentComplete: data.percent_complete,
+      stepName: data.step_name,
+      message: data.message,
+      status: 'running',
+    });
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[WS] Agent progress:', data.agent_id, data.percent_complete + '%');
+    }
+  }
+
+  private handleAgentStepStarted(data: AgentStepStartedMessage) {
+    const progressStore = useAgentProgressStore.getState();
+
+    progressStore.updateProgress(data.agent_id, {
+      currentStep: data.step_number,
+      stepName: data.step_name,
+      status: 'running',
+    });
+
+    progressStore.addProgressEvent(data.agent_id, {
+      type: 'step_started',
+      data: { step: data.step_number, name: data.step_name },
+    });
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[WS] Agent step started:', data.agent_id, data.step_name);
+    }
+  }
+
+  private handleAgentStepCompleted(data: AgentStepCompletedMessage) {
+    const progressStore = useAgentProgressStore.getState();
+
+    progressStore.addProgressEvent(data.agent_id, {
+      type: 'step_completed',
+      data: { step: data.step_number, name: data.step_name, result: data.result },
+    });
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[WS] Agent step completed:', data.agent_id, data.step_name);
+    }
+  }
+
+  private handleAgentThinking(data: AgentThinkingMessage) {
+    const progressStore = useAgentProgressStore.getState();
+    const isThinking = data.type === 'agent.thinking_start';
+
+    progressStore.setThinking(data.agent_id, isThinking);
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[WS] Agent thinking:', data.agent_id, isThinking ? 'started' : 'ended');
+    }
+  }
+
+  private handleAgentEstimate(data: AgentEstimateMessage) {
+    const progressStore = useAgentProgressStore.getState();
+
+    progressStore.updateProgress(data.agent_id, {
+      estimatedTokensRemaining: data.estimated_tokens_remaining,
+      estimatedTimeRemaining: data.estimated_time_ms,
+    });
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[WS] Agent estimate:', data.agent_id,
+        `${data.estimated_time_ms}ms remaining, confidence: ${data.confidence}`);
+    }
+  }
+
+  private handleSwarmProgress(data: SwarmProgressMessage) {
+    const progressStore = useAgentProgressStore.getState();
+
+    // Ensure swarm exists
+    const existingSwarm = progressStore.getSwarmProgress(data.swarm_id);
+    if (!existingSwarm) {
+      // Create swarm with known agent IDs
+      const agentIds = Object.keys(data.agent_progress);
+      progressStore.startSwarm(data.swarm_id, agentIds);
+    }
+
+    // Update individual agent progress from swarm data
+    for (const [agentId, percent] of Object.entries(data.agent_progress)) {
+      const agent = progressStore.getAgentProgress(agentId);
+      if (agent) {
+        progressStore.updateProgress(agentId, { percentComplete: percent });
+      }
+    }
+
+    // Update swarm progress
+    progressStore.updateSwarmProgress(data.swarm_id);
+
+    // Handle completion
+    if (data.status === 'completed' || data.status === 'failed') {
+      progressStore.completeSwarm(data.swarm_id, data.status as 'completed' | 'failed');
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[WS] Swarm progress:', data.swarm_id,
+        `${data.overall_percent}% (${data.completed_agents}/${data.total_agents} agents)`);
+    }
   }
 
   // Helper to convert SandboxFile[] to FileNode[]
