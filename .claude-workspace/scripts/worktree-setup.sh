@@ -45,7 +45,7 @@ for env_file in "$GIT_ROOT"/.env*; do
 done
 
 echo "Updating status..."
-cat > "$STATUS_FILE" << STATUSEOF
+cat > "$STATUS_FILE" << EOFSTATUS
 id: $TASK
 status: in_progress
 branch: $BRANCH
@@ -57,6 +57,6 @@ dependencies_met: true
 conflicts: []
 commit_sha: null
 tests_passing: null
-STATUSEOF
+EOFSTATUS
 
 echo "✅ Worktree setup complete!"

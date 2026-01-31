@@ -50,7 +50,7 @@ for subtask_dir in "$WORKSPACE"/worktrees/*/; do
 
   if [[ -f "$STATUS_FILE" && -f "$TASK_FILE" ]]; then
     STATUS=$(grep "^status:" "$STATUS_FILE" | awk '{print $2}')
-    PRIORITY=$(grep "^priority:" "$TASK_FILE" | head -1 | awk '{print $2}')
+    WAVE=$(awk '/^---$/,/^---$/ {print}' "$TASK_FILE" | grep "^wave:" | head -1 | awk '{print $2}')
 
     case $STATUS in
       pending) ICON="⏸️ " ;;
@@ -59,6 +59,6 @@ for subtask_dir in "$WORKSPACE"/worktrees/*/; do
       blocked) ICON="⛔" ;;
     esac
 
-    printf "  %s %-30s [P%s] %s\n" "$ICON" "$SUBTASK" "$PRIORITY" "$STATUS"
+    printf "  %s %-40s [Wave %s] %s\n" "$ICON" "$SUBTASK" "$WAVE" "$STATUS"
   fi
 done

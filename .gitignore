@@ -64,3 +64,6 @@ frontend/.cache/
 
 # Uploads
 uploads/
+
+# Claude workspace (parallel task execution)
+.claude-workspace/worktrees/

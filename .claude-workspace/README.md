@@ -4,7 +4,6 @@ This directory contains state for parallel development workflows.
 
 ## Structure
 
-- `PARALLEL_PLAN.md` - Main plan with all subtasks
 - `worktrees/` - Subtask-specific worktrees and state
 - `integration/` - Merge planning and logs
 - `scripts/` - Helper utilities
