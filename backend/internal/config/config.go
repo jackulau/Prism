@@ -53,6 +53,13 @@ type WorkOSConfig struct {
 	WebhookSecret  string
 }
 
+// AuthConfig contains authentication and session management settings
+type AuthConfig struct {
+	AccessTokenTTL  time.Duration // Default: 15 minutes
+	RefreshTokenTTL time.Duration // Default: 7 days
+	MaxSessions     int           // Maximum sessions per user, 0 = unlimited
+}
+
 type Config struct {
 	// Server
 	Port        string
@@ -69,6 +76,9 @@ type Config struct {
 	JWTSecret        string
 	JWTAccessExpiry  time.Duration
 	JWTRefreshExpiry time.Duration
+
+	// Authentication - Session Management
+	Auth AuthConfig
 
 	// Authentication - WorkOS
 	WorkOS WorkOSConfig
@@ -181,6 +191,13 @@ func Load() (*Config, error) {
 		JWTSecret:        getEnv("JWT_SECRET", "change-me-in-production"),
 		JWTAccessExpiry:  getDurationEnv("JWT_ACCESS_EXPIRY", 15*time.Minute),
 		JWTRefreshExpiry: getDurationEnv("JWT_REFRESH_EXPIRY", 7*24*time.Hour),
+
+		// Authentication - Session Management
+		Auth: AuthConfig{
+			AccessTokenTTL:  getDurationEnv("AUTH_ACCESS_TOKEN_TTL", 15*time.Minute),
+			RefreshTokenTTL: getDurationEnv("AUTH_REFRESH_TOKEN_TTL", 7*24*time.Hour),
+			MaxSessions:     getIntEnv("AUTH_MAX_SESSIONS", 10),
+		},
 
 		// Authentication - WorkOS
 		WorkOS: WorkOSConfig{

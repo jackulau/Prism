@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jacklau/prism/internal/api/middleware"
+	"github.com/jacklau/prism/internal/config"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/security"
 )
@@ -18,6 +19,7 @@ type AuthHandler struct {
 	userRepo    *repository.UserRepository
 	sessionRepo *repository.SessionRepository
 	jwtService  *security.JWTService
+	config      *config.Config
 }
 
 // NewAuthHandler creates a new auth handler
@@ -26,7 +28,34 @@ func NewAuthHandler(userRepo *repository.UserRepository, sessionRepo *repository
 		userRepo:    userRepo,
 		sessionRepo: sessionRepo,
 		jwtService:  jwtService,
+		config:      nil, // Will use defaults
 	}
+}
+
+// NewAuthHandlerWithConfig creates a new auth handler with configuration
+func NewAuthHandlerWithConfig(userRepo *repository.UserRepository, sessionRepo *repository.SessionRepository, jwtService *security.JWTService, cfg *config.Config) *AuthHandler {
+	return &AuthHandler{
+		userRepo:    userRepo,
+		sessionRepo: sessionRepo,
+		jwtService:  jwtService,
+		config:      cfg,
+	}
+}
+
+// getRefreshTokenTTL returns the configured refresh token TTL or default
+func (h *AuthHandler) getRefreshTokenTTL() time.Duration {
+	if h.config != nil && h.config.Auth.RefreshTokenTTL > 0 {
+		return h.config.Auth.RefreshTokenTTL
+	}
+	return 7 * 24 * time.Hour // Default: 7 days
+}
+
+// getMaxSessions returns the configured max sessions or default
+func (h *AuthHandler) getMaxSessions() int {
+	if h.config != nil && h.config.Auth.MaxSessions > 0 {
+		return h.config.Auth.MaxSessions
+	}
+	return 10 // Default: 10 sessions per user
 }
 
 // RegisterRequest represents a registration request
@@ -122,9 +151,13 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	// Create session
+	// Extract device info and IP address
+	deviceInfo := c.Get("User-Agent")
+	ipAddress := c.IP()
+
+	// Create session with device info
 	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
+	_, err = h.sessionRepo.CreateSession(user.ID, refreshTokenHash, deviceInfo, ipAddress, time.Now().Add(h.getRefreshTokenTTL()))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create session",
@@ -174,6 +207,20 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 	}
 
+	// Check max sessions limit
+	maxSessions := h.getMaxSessions()
+	if maxSessions > 0 {
+		sessionCount, err := h.sessionRepo.CountUserSessions(user.ID)
+		if err == nil && sessionCount >= maxSessions {
+			// Revoke oldest sessions to make room
+			sessions, _ := h.sessionRepo.GetUserSessions(user.ID)
+			if len(sessions) > 0 {
+				// Revoke the oldest session (last in the list, sorted by last_used_at DESC)
+				h.sessionRepo.RevokeSession(sessions[len(sessions)-1].ID)
+			}
+		}
+	}
+
 	// Generate tokens
 	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email)
 	if err != nil {
@@ -182,9 +229,13 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 	}
 
-	// Create session
+	// Extract device info and IP address
+	deviceInfo := c.Get("User-Agent")
+	ipAddress := c.IP()
+
+	// Create session with device info
 	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
+	_, err = h.sessionRepo.CreateSession(user.ID, refreshTokenHash, deviceInfo, ipAddress, time.Now().Add(h.getRefreshTokenTTL()))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create session",
@@ -224,7 +275,7 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	})
 }
 
-// Refresh handles token refresh
+// Refresh handles token refresh with token rotation (single-use refresh tokens)
 func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 	var req RefreshRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -241,7 +292,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		})
 	}
 
-	// Check if session exists
+	// Check if session exists and is not revoked
 	refreshTokenHash := security.HashAPIKey(req.RefreshToken)
 	session, err := h.sessionRepo.GetByRefreshTokenHash(refreshTokenHash)
 	if err != nil {
@@ -250,19 +301,23 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		})
 	}
 	if session == nil {
+		// Token was already used or session was revoked (potential replay attack)
+		// Revoke all user sessions as a security measure
+		h.sessionRepo.RevokeAllUserSessions(claims.UserID)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-			"error": "session not found",
+			"error": "session not found or already used",
 		})
 	}
 
-	// Delete old session
-	if err := h.sessionRepo.Delete(session.ID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to invalidate old session",
+	// Check if session is expired
+	if session.ExpiresAt.Before(time.Now()) {
+		h.sessionRepo.RevokeSession(session.ID)
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "session expired",
 		})
 	}
 
-	// Generate new tokens
+	// Generate new tokens (token rotation - invalidates old token)
 	tokens, err := h.jwtService.GenerateTokenPair(claims.UserID, claims.Email)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -270,12 +325,12 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		})
 	}
 
-	// Create new session
+	// Update session with new refresh token hash (token rotation)
 	newRefreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(claims.UserID, newRefreshTokenHash, time.Now().Add(7*24*time.Hour))
-	if err != nil {
+	newExpiresAt := time.Now().Add(h.getRefreshTokenTTL())
+	if err := h.sessionRepo.UpdateRefreshTokenHash(session.ID, newRefreshTokenHash, newExpiresAt); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to create session",
+			"error": "failed to update session",
 		})
 	}
 
@@ -364,9 +419,13 @@ func (h *AuthHandler) GuestLogin(c *fiber.Ctx) error {
 		})
 	}
 
-	// Create session
+	// Extract device info and IP address
+	deviceInfo := c.Get("User-Agent")
+	ipAddress := c.IP()
+
+	// Create session with device info
 	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
+	_, err = h.sessionRepo.CreateSession(user.ID, refreshTokenHash, deviceInfo, ipAddress, time.Now().Add(h.getRefreshTokenTTL()))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create session",
@@ -382,5 +441,133 @@ func (h *AuthHandler) GuestLogin(c *fiber.Ctx) error {
 			Email:     user.Email,
 			CreatedAt: user.CreatedAt,
 		},
+	})
+}
+
+// SessionDTO represents a session data transfer object
+type SessionDTO struct {
+	ID         string    `json:"id"`
+	DeviceInfo string    `json:"device_info"`
+	IPAddress  string    `json:"ip_address"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	IsCurrent  bool      `json:"is_current"`
+}
+
+// ListSessions returns all active sessions for the current user
+func (h *AuthHandler) ListSessions(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	// Get current session from the refresh token if available
+	currentSessionID := c.Locals("sessionID")
+
+	sessions, err := h.sessionRepo.GetUserSessions(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get sessions",
+		})
+	}
+
+	sessionDTOs := make([]SessionDTO, len(sessions))
+	for i, s := range sessions {
+		isCurrent := false
+		if currentSessionID != nil {
+			isCurrent = s.ID == currentSessionID.(string)
+		}
+		sessionDTOs[i] = SessionDTO{
+			ID:         s.ID,
+			DeviceInfo: s.DeviceInfo,
+			IPAddress:  s.IPAddress,
+			CreatedAt:  s.CreatedAt,
+			LastUsedAt: s.LastUsedAt,
+			ExpiresAt:  s.ExpiresAt,
+			IsCurrent:  isCurrent,
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"sessions": sessionDTOs,
+		"count":    len(sessionDTOs),
+	})
+}
+
+// RevokeSession revokes a specific session
+func (h *AuthHandler) RevokeSession(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	sessionID := c.Params("id")
+	if sessionID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "session id is required",
+		})
+	}
+
+	// Verify the session belongs to the user
+	session, err := h.sessionRepo.GetSessionByID(sessionID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get session",
+		})
+	}
+	if session == nil || session.UserID != userID {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "session not found",
+		})
+	}
+
+	// Revoke the session
+	if err := h.sessionRepo.RevokeSession(sessionID); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to revoke session",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "session revoked successfully",
+	})
+}
+
+// RevokeAllSessions revokes all sessions for the current user (logout everywhere)
+func (h *AuthHandler) RevokeAllSessions(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	// Check if user wants to keep the current session
+	keepCurrent := c.Query("keep_current") == "true"
+	currentSessionID := c.Locals("sessionID")
+
+	if keepCurrent && currentSessionID != nil {
+		// Revoke all sessions except the current one
+		if err := h.sessionRepo.RevokeOtherSessions(userID, currentSessionID.(string)); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to revoke sessions",
+			})
+		}
+	} else {
+		// Revoke all sessions
+		if err := h.sessionRepo.RevokeAllUserSessions(userID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to revoke sessions",
+			})
+		}
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "all sessions revoked successfully",
 	})
 }

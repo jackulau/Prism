@@ -50,8 +50,12 @@ func (db *DB) Migrate() error {
 			id TEXT PRIMARY KEY,
 			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			refresh_token_hash TEXT NOT NULL,
+			device_info TEXT DEFAULT '',
+			ip_address TEXT DEFAULT '',
 			expires_at DATETIME NOT NULL,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_used_at DATETIME,
+			is_revoked INTEGER DEFAULT 0
 		)`,
 
 		// User API keys (for external access)
@@ -378,6 +382,12 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN sso_connection_id TEXT`,
 		`ALTER TABLE users ADD COLUMN sso_provider TEXT`,
 
+		// Add session management fields to sessions table (migrations for existing tables)
+		`ALTER TABLE sessions ADD COLUMN device_info TEXT DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN ip_address TEXT DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN last_used_at DATETIME`,
+		`ALTER TABLE sessions ADD COLUMN is_revoked INTEGER DEFAULT 0`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
@@ -406,6 +416,8 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_current_branch ON org_workspaces(current_branch)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token ON sessions(refresh_token_hash)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_is_revoked ON sessions(user_id, is_revoked)`,
 	}
 
 	for _, migration := range migrations {

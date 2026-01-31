@@ -142,8 +142,12 @@ type Session struct {
 	ID               string
 	UserID           string
 	RefreshTokenHash string
+	DeviceInfo       string
+	IPAddress        string
 	ExpiresAt        time.Time
 	CreatedAt        time.Time
+	LastUsedAt       time.Time
+	IsRevoked        bool
 }
 
 // SessionRepository handles session database operations
@@ -156,14 +160,15 @@ func NewSessionRepository(db *sql.DB) *SessionRepository {
 	return &SessionRepository{db: db}
 }
 
-// Create creates a new session
-func (r *SessionRepository) Create(userID, refreshTokenHash string, expiresAt time.Time) (*Session, error) {
+// CreateSession creates a new session with device info and IP address
+func (r *SessionRepository) CreateSession(userID, refreshTokenHash, deviceInfo, ipAddress string, expiresAt time.Time) (*Session, error) {
 	id := uuid.New().String()
 	now := time.Now()
 
 	_, err := r.db.Exec(
-		`INSERT INTO sessions (id, user_id, refresh_token_hash, expires_at, created_at) VALUES (?, ?, ?, ?, ?)`,
-		id, userID, refreshTokenHash, expiresAt, now,
+		`INSERT INTO sessions (id, user_id, refresh_token_hash, device_info, ip_address, expires_at, created_at, last_used_at, is_revoked)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+		id, userID, refreshTokenHash, deviceInfo, ipAddress, expiresAt, now, now,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -173,18 +178,33 @@ func (r *SessionRepository) Create(userID, refreshTokenHash string, expiresAt ti
 		ID:               id,
 		UserID:           userID,
 		RefreshTokenHash: refreshTokenHash,
+		DeviceInfo:       deviceInfo,
+		IPAddress:        ipAddress,
 		ExpiresAt:        expiresAt,
 		CreatedAt:        now,
+		LastUsedAt:       now,
+		IsRevoked:        false,
 	}, nil
+}
+
+// Create creates a new session (backward compatible)
+func (r *SessionRepository) Create(userID, refreshTokenHash string, expiresAt time.Time) (*Session, error) {
+	return r.CreateSession(userID, refreshTokenHash, "", "", expiresAt)
 }
 
 // GetByRefreshTokenHash retrieves a session by refresh token hash
 func (r *SessionRepository) GetByRefreshTokenHash(hash string) (*Session, error) {
 	session := &Session{}
+	var deviceInfo, ipAddress sql.NullString
+	var lastUsedAt sql.NullTime
+	var isRevoked sql.NullBool
+
 	err := r.db.QueryRow(
-		`SELECT id, user_id, refresh_token_hash, expires_at, created_at FROM sessions WHERE refresh_token_hash = ?`,
+		`SELECT id, user_id, refresh_token_hash, device_info, ip_address, expires_at, created_at, last_used_at, is_revoked
+		 FROM sessions WHERE refresh_token_hash = ? AND (is_revoked = 0 OR is_revoked IS NULL)`,
 		hash,
-	).Scan(&session.ID, &session.UserID, &session.RefreshTokenHash, &session.ExpiresAt, &session.CreatedAt)
+	).Scan(&session.ID, &session.UserID, &session.RefreshTokenHash, &deviceInfo, &ipAddress,
+		&session.ExpiresAt, &session.CreatedAt, &lastUsedAt, &isRevoked)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -193,7 +213,154 @@ func (r *SessionRepository) GetByRefreshTokenHash(hash string) (*Session, error)
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
 
+	session.DeviceInfo = deviceInfo.String
+	session.IPAddress = ipAddress.String
+	if lastUsedAt.Valid {
+		session.LastUsedAt = lastUsedAt.Time
+	}
+	session.IsRevoked = isRevoked.Valid && isRevoked.Bool
+
 	return session, nil
+}
+
+// GetSessionByID retrieves a session by its ID
+func (r *SessionRepository) GetSessionByID(id string) (*Session, error) {
+	session := &Session{}
+	var deviceInfo, ipAddress sql.NullString
+	var lastUsedAt sql.NullTime
+	var isRevoked sql.NullBool
+
+	err := r.db.QueryRow(
+		`SELECT id, user_id, refresh_token_hash, device_info, ip_address, expires_at, created_at, last_used_at, is_revoked
+		 FROM sessions WHERE id = ?`,
+		id,
+	).Scan(&session.ID, &session.UserID, &session.RefreshTokenHash, &deviceInfo, &ipAddress,
+		&session.ExpiresAt, &session.CreatedAt, &lastUsedAt, &isRevoked)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+
+	session.DeviceInfo = deviceInfo.String
+	session.IPAddress = ipAddress.String
+	if lastUsedAt.Valid {
+		session.LastUsedAt = lastUsedAt.Time
+	}
+	session.IsRevoked = isRevoked.Valid && isRevoked.Bool
+
+	return session, nil
+}
+
+// GetUserSessions retrieves all active sessions for a user
+func (r *SessionRepository) GetUserSessions(userID string) ([]*Session, error) {
+	rows, err := r.db.Query(
+		`SELECT id, user_id, refresh_token_hash, device_info, ip_address, expires_at, created_at, last_used_at, is_revoked
+		 FROM sessions WHERE user_id = ? AND (is_revoked = 0 OR is_revoked IS NULL) AND expires_at > ?
+		 ORDER BY last_used_at DESC`,
+		userID, time.Now(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []*Session
+	for rows.Next() {
+		session := &Session{}
+		var deviceInfo, ipAddress sql.NullString
+		var lastUsedAt sql.NullTime
+		var isRevoked sql.NullBool
+
+		err := rows.Scan(&session.ID, &session.UserID, &session.RefreshTokenHash, &deviceInfo, &ipAddress,
+			&session.ExpiresAt, &session.CreatedAt, &lastUsedAt, &isRevoked)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session: %w", err)
+		}
+
+		session.DeviceInfo = deviceInfo.String
+		session.IPAddress = ipAddress.String
+		if lastUsedAt.Valid {
+			session.LastUsedAt = lastUsedAt.Time
+		}
+		session.IsRevoked = isRevoked.Valid && isRevoked.Bool
+
+		sessions = append(sessions, session)
+	}
+
+	return sessions, nil
+}
+
+// UpdateLastUsed updates the last_used_at timestamp for a session
+func (r *SessionRepository) UpdateLastUsed(sessionID string) error {
+	_, err := r.db.Exec(`UPDATE sessions SET last_used_at = ? WHERE id = ?`, time.Now(), sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to update session last used: %w", err)
+	}
+	return nil
+}
+
+// UpdateRefreshTokenHash updates the refresh token hash for a session (token rotation)
+func (r *SessionRepository) UpdateRefreshTokenHash(sessionID, newHash string, newExpiresAt time.Time) error {
+	_, err := r.db.Exec(
+		`UPDATE sessions SET refresh_token_hash = ?, expires_at = ?, last_used_at = ? WHERE id = ?`,
+		newHash, newExpiresAt, time.Now(), sessionID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update refresh token: %w", err)
+	}
+	return nil
+}
+
+// RevokeSession revokes a specific session
+func (r *SessionRepository) RevokeSession(sessionID string) error {
+	_, err := r.db.Exec(`UPDATE sessions SET is_revoked = 1 WHERE id = ?`, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke session: %w", err)
+	}
+	return nil
+}
+
+// RevokeAllUserSessions revokes all sessions for a user
+func (r *SessionRepository) RevokeAllUserSessions(userID string) error {
+	_, err := r.db.Exec(`UPDATE sessions SET is_revoked = 1 WHERE user_id = ?`, userID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke all sessions: %w", err)
+	}
+	return nil
+}
+
+// RevokeOtherSessions revokes all sessions for a user except the current one
+func (r *SessionRepository) RevokeOtherSessions(userID, currentSessionID string) error {
+	_, err := r.db.Exec(`UPDATE sessions SET is_revoked = 1 WHERE user_id = ? AND id != ?`, userID, currentSessionID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke other sessions: %w", err)
+	}
+	return nil
+}
+
+// CleanupExpiredSessions deletes all expired or revoked sessions
+func (r *SessionRepository) CleanupExpiredSessions() error {
+	_, err := r.db.Exec(`DELETE FROM sessions WHERE expires_at < ? OR is_revoked = 1`, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired sessions: %w", err)
+	}
+	return nil
+}
+
+// CountUserSessions counts active sessions for a user
+func (r *SessionRepository) CountUserSessions(userID string) (int, error) {
+	var count int
+	err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM sessions WHERE user_id = ? AND (is_revoked = 0 OR is_revoked IS NULL) AND expires_at > ?`,
+		userID, time.Now(),
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count sessions: %w", err)
+	}
+	return count, nil
 }
 
 // Delete deletes a session by ID

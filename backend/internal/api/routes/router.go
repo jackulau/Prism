@@ -126,6 +126,11 @@ func Setup(deps *Dependencies) *fiber.App {
 	authProtected.Post("/logout", authHandler.Logout)
 	authProtected.Get("/me", authHandler.Me)
 
+	// Session management routes
+	authProtected.Get("/sessions", authHandler.ListSessions)
+	authProtected.Delete("/sessions/:id", authHandler.RevokeSession)
+	authProtected.Delete("/sessions", authHandler.RevokeAllSessions)
+
 	// SSO routes (WorkOS)
 	if deps.WorkOSService != nil && deps.WorkOSService.IsConfigured() {
 		workosHandler := handlers.NewWorkOSHandler(
