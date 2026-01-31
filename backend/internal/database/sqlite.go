@@ -378,7 +378,20 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN sso_connection_id TEXT`,
 		`ALTER TABLE users ADD COLUMN sso_provider TEXT`,
 
+		// Add last_used and use_count tracking to provider_keys
+		`ALTER TABLE provider_keys ADD COLUMN last_used_at DATETIME`,
+		`ALTER TABLE provider_keys ADD COLUMN use_count INTEGER DEFAULT 0`,
+
+		// API key scopes table for granular permissions
+		`CREATE TABLE IF NOT EXISTS api_key_scopes (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			api_key_id TEXT NOT NULL,
+			scope TEXT NOT NULL,
+			FOREIGN KEY (api_key_id) REFERENCES user_api_keys(id) ON DELETE CASCADE
+		)`,
+
 		// Indexes
+		`CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_id ON api_key_scopes(api_key_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)`,

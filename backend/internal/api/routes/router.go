@@ -67,6 +67,7 @@ type Dependencies struct {
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
 	WorkflowEngine     *workflow.Engine
+	UserAPIKeyRepo     *repository.UserAPIKeyRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -273,6 +274,22 @@ func Setup(deps *Dependencies) *fiber.App {
 		customProviders.Delete("/:id", customProviderHandler.Delete)
 		customProviders.Post("/test", customProviderHandler.TestEndpoint)
 		customProviders.Post("/:id/fetch-models", customProviderHandler.FetchModels)
+	}
+
+	// User API key management routes (auth required)
+	if deps.UserAPIKeyRepo != nil && deps.ProviderKeyRepo != nil {
+		apiKeyHandler := handlers.NewAPIKeyHandler(deps.UserAPIKeyRepo, deps.ProviderKeyRepo)
+		apiKeys := v1.Group("/api-keys", middleware.AuthMiddleware(deps.JWTService))
+		apiKeys.Get("/", apiKeyHandler.ListAPIKeys)
+		apiKeys.Post("/", apiKeyHandler.CreateAPIKey)
+		apiKeys.Get("/:id", apiKeyHandler.GetAPIKey)
+		apiKeys.Delete("/:id", apiKeyHandler.DeleteAPIKey)
+		apiKeys.Put("/:id/name", apiKeyHandler.UpdateAPIKeyName)
+		apiKeys.Post("/:id/rotate", apiKeyHandler.RotateAPIKey)
+
+		// Provider key metadata routes
+		providers.Get("/keys/metadata", apiKeyHandler.ListProviderKeys)
+		providers.Get("/:provider/keys/metadata", apiKeyHandler.GetProviderKeyMetadata)
 	}
 
 	// Preview/Sandbox routes (auth required)
