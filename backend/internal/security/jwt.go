@@ -139,3 +139,30 @@ func (s *JWTService) RefreshTokens(refreshToken string) (*TokenPair, error) {
 
 	return s.GenerateTokenPair(claims.UserID, claims.Email)
 }
+
+// MFA Token Support
+
+const mfaTokenExpiry = 5 * time.Minute
+
+// GenerateMFAToken generates a short-lived token for MFA verification flow
+func (s *JWTService) GenerateMFAToken(userID, email string) (string, error) {
+	token, _, err := s.generateToken(userID, email, "mfa", mfaTokenExpiry)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate MFA token: %w", err)
+	}
+	return token, nil
+}
+
+// ValidateMFAToken validates an MFA session token and returns the claims
+func (s *JWTService) ValidateMFAToken(tokenString string) (*Claims, error) {
+	claims, err := s.validateToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	if claims.Type != "mfa" {
+		return nil, fmt.Errorf("invalid token type: expected mfa, got %s", claims.Type)
+	}
+
+	return claims, nil
+}

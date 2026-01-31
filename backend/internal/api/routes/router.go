@@ -43,8 +43,10 @@ type Dependencies struct {
 	WorkOSService      *security.WorkOSService
 	OAuth2Service      *security.OAuth2Service
 	SSORegistry        *security.SSORegistry
+	MFAService         *security.MFAService
 	UserRepo           *repository.UserRepository
 	SessionRepo        *repository.SessionRepository
+	MFARepo            *repository.MFARepository
 	ConversationRepo   *repository.ConversationRepository
 	MessageRepo        *repository.MessageRepository
 	WebhookRepo        *repository.WebhookRepository
@@ -127,6 +129,10 @@ func Setup(deps *Dependencies) *fiber.App {
 
 	// Auth routes (no auth required)
 	authHandler := handlers.NewAuthHandler(deps.UserRepo, deps.SessionRepo, deps.JWTService)
+	// Set MFA repository for MFA-aware login
+	if deps.MFARepo != nil {
+		authHandler.SetMFARepository(deps.MFARepo)
+	}
 	auth := v1.Group("/auth")
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)
@@ -149,6 +155,25 @@ func Setup(deps *Dependencies) *fiber.App {
 	authProtected := auth.Group("", middleware.AuthMiddleware(deps.JWTService))
 	authProtected.Post("/logout", authHandler.Logout)
 	authProtected.Get("/me", authHandler.Me)
+
+	// MFA routes
+	if deps.MFARepo != nil && deps.MFAService != nil {
+		mfaHandler := handlers.NewMFAHandler(deps.MFARepo, deps.UserRepo, deps.MFAService, deps.JWTService)
+
+		// MFA routes that don't require auth (used during login flow)
+		auth.Post("/mfa/validate", mfaHandler.Validate)
+		auth.Post("/mfa/backup-codes/verify", mfaHandler.VerifyBackupCode)
+
+		// MFA routes that require auth (for setup and management)
+		mfa := auth.Group("/mfa", middleware.AuthMiddleware(deps.JWTService))
+		mfa.Post("/setup", mfaHandler.Setup)
+		mfa.Post("/verify", mfaHandler.Verify)
+		mfa.Get("/status", mfaHandler.Status)
+		mfa.Post("/disable", mfaHandler.Disable)
+		mfa.Post("/backup-codes", mfaHandler.RegenerateBackupCodes)
+
+		log.Println("MFA routes registered")
+	}
 
 	// SSO routes (WorkOS)
 	if deps.WorkOSService != nil && deps.WorkOSService.IsConfigured() {

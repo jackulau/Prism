@@ -531,6 +531,29 @@ func (db *DB) Migrate() error {
 		// Add is_builtin field to tools table if not exists
 		`ALTER TABLE tools ADD COLUMN is_builtin INTEGER DEFAULT 0`,
 
+		// MFA tables
+		`CREATE TABLE IF NOT EXISTS user_mfa (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id TEXT NOT NULL UNIQUE,
+			secret_encrypted BLOB NOT NULL,
+			secret_nonce BLOB NOT NULL,
+			is_enabled INTEGER NOT NULL DEFAULT 0,
+			backup_codes_encrypted BLOB,
+			backup_codes_nonce BLOB,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			verified_at DATETIME,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+
+		`CREATE TABLE IF NOT EXISTS mfa_verification_attempts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id TEXT NOT NULL,
+			success INTEGER NOT NULL,
+			ip_address TEXT,
+			attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_id ON api_key_scopes(api_key_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`,
@@ -778,6 +801,10 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_retention_policies_org ON data_retention_policies(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_legal_holds_org ON legal_holds(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_legal_holds_active ON legal_holds(active)`,
+
+		// MFA indexes
+		`CREATE INDEX IF NOT EXISTS idx_mfa_verification_user_id ON mfa_verification_attempts(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_mfa_verification_attempted_at ON mfa_verification_attempts(user_id, attempted_at)`,
 	}
 
 	for _, migration := range migrations {
