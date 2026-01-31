@@ -15,6 +15,7 @@ type Tool struct {
 	SlugName         string
 	Description      string
 	IsModel          bool
+	IsBuiltin        bool
 	ProviderID       string
 	ParametersSchema string
 	CreatedAt        time.Time
@@ -41,9 +42,9 @@ func (r *ToolRepository) Create(tool *Tool) error {
 	tool.UpdatedAt = now
 
 	_, err := r.db.Exec(`
-		INSERT INTO tools (id, display_name, slug_name, description, is_model, provider_id, parameters_schema, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, tool.ID, tool.DisplayName, tool.SlugName, tool.Description, tool.IsModel, tool.ProviderID, tool.ParametersSchema, tool.CreatedAt, tool.UpdatedAt)
+		INSERT INTO tools (id, display_name, slug_name, description, is_model, is_builtin, provider_id, parameters_schema, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, tool.ID, tool.DisplayName, tool.SlugName, tool.Description, tool.IsModel, tool.IsBuiltin, tool.ProviderID, tool.ParametersSchema, tool.CreatedAt, tool.UpdatedAt)
 
 	if err != nil {
 		return fmt.Errorf("failed to create tool: %w", err)
@@ -57,10 +58,10 @@ func (r *ToolRepository) GetByID(id string) (*Tool, error) {
 	var description, providerID, parametersSchema sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT id, display_name, slug_name, description, is_model, provider_id, parameters_schema, created_at, updated_at
+		SELECT id, display_name, slug_name, description, is_model, is_builtin, provider_id, parameters_schema, created_at, updated_at
 		FROM tools
 		WHERE id = ?
-	`, id).Scan(&tool.ID, &tool.DisplayName, &tool.SlugName, &description, &tool.IsModel, &providerID, &parametersSchema, &tool.CreatedAt, &tool.UpdatedAt)
+	`, id).Scan(&tool.ID, &tool.DisplayName, &tool.SlugName, &description, &tool.IsModel, &tool.IsBuiltin, &providerID, &parametersSchema, &tool.CreatedAt, &tool.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -82,10 +83,10 @@ func (r *ToolRepository) GetBySlug(slug string) (*Tool, error) {
 	var description, providerID, parametersSchema sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT id, display_name, slug_name, description, is_model, provider_id, parameters_schema, created_at, updated_at
+		SELECT id, display_name, slug_name, description, is_model, is_builtin, provider_id, parameters_schema, created_at, updated_at
 		FROM tools
 		WHERE slug_name = ?
-	`, slug).Scan(&tool.ID, &tool.DisplayName, &tool.SlugName, &description, &tool.IsModel, &providerID, &parametersSchema, &tool.CreatedAt, &tool.UpdatedAt)
+	`, slug).Scan(&tool.ID, &tool.DisplayName, &tool.SlugName, &description, &tool.IsModel, &tool.IsBuiltin, &providerID, &parametersSchema, &tool.CreatedAt, &tool.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -104,7 +105,7 @@ func (r *ToolRepository) GetBySlug(slug string) (*Tool, error) {
 // List retrieves all tools
 func (r *ToolRepository) List() ([]*Tool, error) {
 	rows, err := r.db.Query(`
-		SELECT id, display_name, slug_name, description, is_model, provider_id, parameters_schema, created_at, updated_at
+		SELECT id, display_name, slug_name, description, is_model, is_builtin, provider_id, parameters_schema, created_at, updated_at
 		FROM tools
 		ORDER BY display_name ASC
 	`)
@@ -119,7 +120,7 @@ func (r *ToolRepository) List() ([]*Tool, error) {
 // ListByProvider retrieves tools by provider ID
 func (r *ToolRepository) ListByProvider(providerID string) ([]*Tool, error) {
 	rows, err := r.db.Query(`
-		SELECT id, display_name, slug_name, description, is_model, provider_id, parameters_schema, created_at, updated_at
+		SELECT id, display_name, slug_name, description, is_model, is_builtin, provider_id, parameters_schema, created_at, updated_at
 		FROM tools
 		WHERE provider_id = ?
 		ORDER BY display_name ASC
@@ -135,7 +136,7 @@ func (r *ToolRepository) ListByProvider(providerID string) ([]*Tool, error) {
 // ListModels retrieves all tools that are models (is_model = true)
 func (r *ToolRepository) ListModels() ([]*Tool, error) {
 	rows, err := r.db.Query(`
-		SELECT id, display_name, slug_name, description, is_model, provider_id, parameters_schema, created_at, updated_at
+		SELECT id, display_name, slug_name, description, is_model, is_builtin, provider_id, parameters_schema, created_at, updated_at
 		FROM tools
 		WHERE is_model = 1
 		ORDER BY display_name ASC
@@ -201,7 +202,7 @@ func (r *ToolRepository) scanTools(rows *sql.Rows) ([]*Tool, error) {
 		tool := &Tool{}
 		var description, providerID, parametersSchema sql.NullString
 
-		err := rows.Scan(&tool.ID, &tool.DisplayName, &tool.SlugName, &description, &tool.IsModel, &providerID, &parametersSchema, &tool.CreatedAt, &tool.UpdatedAt)
+		err := rows.Scan(&tool.ID, &tool.DisplayName, &tool.SlugName, &description, &tool.IsModel, &tool.IsBuiltin, &providerID, &parametersSchema, &tool.CreatedAt, &tool.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan tool: %w", err)
 		}

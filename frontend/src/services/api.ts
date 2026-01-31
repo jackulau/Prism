@@ -479,6 +479,102 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // Tool Catalog
+  async listTools(options?: { provider_id?: string; models_only?: boolean }) {
+    const params = new URLSearchParams();
+    if (options?.provider_id) params.set('provider_id', options.provider_id);
+    if (options?.models_only) params.set('models_only', 'true');
+    const queryString = params.toString();
+    return this.request<{
+      tools: Array<{
+        id: string;
+        display_name: string;
+        slug_name: string;
+        description?: string;
+        is_model: boolean;
+        is_builtin: boolean;
+        provider_id?: string;
+        parameters_schema?: string;
+        created_at: string;
+        updated_at: string;
+      }>;
+    }>(`/tools${queryString ? `?${queryString}` : ''}`);
+  }
+
+  async getTool(id: string) {
+    return this.request<{
+      id: string;
+      display_name: string;
+      slug_name: string;
+      description?: string;
+      is_model: boolean;
+      is_builtin: boolean;
+      provider_id?: string;
+      parameters_schema?: string;
+      created_at: string;
+      updated_at: string;
+    }>(`/tools/${id}`);
+  }
+
+  async createTool(tool: {
+    display_name: string;
+    slug_name: string;
+    description?: string;
+    is_model?: boolean;
+    provider_id?: string;
+    parameters_schema?: string;
+  }) {
+    return this.request<{
+      id: string;
+      display_name: string;
+      slug_name: string;
+      description?: string;
+      is_model: boolean;
+      is_builtin: boolean;
+      provider_id?: string;
+      parameters_schema?: string;
+      created_at: string;
+      updated_at: string;
+    }>('/tools', {
+      method: 'POST',
+      body: JSON.stringify(tool),
+    });
+  }
+
+  async updateTool(
+    id: string,
+    tool: {
+      display_name?: string;
+      slug_name?: string;
+      description?: string;
+      is_model?: boolean;
+      provider_id?: string;
+      parameters_schema?: string;
+    }
+  ) {
+    return this.request<{
+      id: string;
+      display_name: string;
+      slug_name: string;
+      description?: string;
+      is_model: boolean;
+      is_builtin: boolean;
+      provider_id?: string;
+      parameters_schema?: string;
+      created_at: string;
+      updated_at: string;
+    }>(`/tools/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(tool),
+    });
+  }
+
+  async deleteTool(id: string) {
+    return this.request<{ message: string }>(`/tools/${id}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const apiService = new ApiService();

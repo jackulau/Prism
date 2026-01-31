@@ -15,6 +15,7 @@ import {
   Trash2,
   Loader2,
   Cpu,
+  Wrench,
   type LucideIcon
 } from 'lucide-react';
 import { useAppStore } from '../../store';
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Home, label: 'Dashboard', path: '/' },
   { icon: MessageSquare, label: 'Workspaces', path: '/workspace' },
   { icon: Bot, label: 'Workers', path: '/workers' },
+  { icon: Wrench, label: 'Tools', path: '/tools' },
   { icon: Plug, label: 'Integrations', path: '/integrations' },
   { icon: BarChart3, label: 'Usage', path: '/usage' },
   { icon: Building, label: 'Organization', path: '/organization' },

@@ -8,6 +8,7 @@ import Organization from '../pages/Organization';
 import { SettingsPage } from '../pages/Settings';
 import { AuthPage } from '../components/auth/AuthPage';
 import Workspace from '../pages/Workspace';
+import ToolCatalog from '../pages/ToolCatalog';
 
 export const router = createBrowserRouter([
   {
@@ -33,6 +34,10 @@ export const router = createBrowserRouter([
       {
         path: 'integrations',
         element: <Integrations />,
+      },
+      {
+        path: 'tools',
+        element: <ToolCatalog />,
       },
       {
         path: 'usage',

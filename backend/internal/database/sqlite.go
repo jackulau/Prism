@@ -378,6 +378,23 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN sso_connection_id TEXT`,
 		`ALTER TABLE users ADD COLUMN sso_provider TEXT`,
 
+		// Tools catalog
+		`CREATE TABLE IF NOT EXISTS tools (
+			id TEXT PRIMARY KEY,
+			display_name TEXT NOT NULL,
+			slug_name TEXT UNIQUE NOT NULL,
+			description TEXT,
+			is_model INTEGER DEFAULT 0,
+			is_builtin INTEGER DEFAULT 0,
+			provider_id TEXT,
+			parameters_schema TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Add is_builtin field to tools table if not exists
+		`ALTER TABLE tools ADD COLUMN is_builtin INTEGER DEFAULT 0`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
