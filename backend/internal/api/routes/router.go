@@ -66,7 +66,8 @@ type Dependencies struct {
 	WorkOSClient       *workos.Client
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
-	WorkflowEngine     *workflow.Engine
+	WorkflowEngine       *workflow.Engine
+	ApprovalConfigRepo   *repository.ApprovalConfigRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -410,7 +411,7 @@ func Setup(deps *Dependencies) *fiber.App {
 
 	// Tool catalog routes (auth required)
 	if deps.ToolRepo != nil {
-		toolsCatalogHandler := handlers.NewToolsCatalogHandler(deps.ToolRepo)
+		toolsCatalogHandler := handlers.NewToolsCatalogHandler(deps.ToolRepo, deps.ApprovalConfigRepo)
 		toolsCatalog := v1.Group("/tools", middleware.AuthMiddleware(deps.JWTService))
 		toolsCatalog.Get("/", toolsCatalogHandler.ListTools)
 		toolsCatalog.Get("/slug/:slug", toolsCatalogHandler.GetToolBySlug)
@@ -418,6 +419,12 @@ func Setup(deps *Dependencies) *fiber.App {
 		toolsCatalog.Post("/", toolsCatalogHandler.CreateTool)
 		toolsCatalog.Put("/:id", toolsCatalogHandler.UpdateTool)
 		toolsCatalog.Delete("/:id", toolsCatalogHandler.DeleteTool)
+
+		// Approval config routes
+		toolsCatalog.Get("/approval-config", toolsCatalogHandler.GetApprovalConfig)
+		toolsCatalog.Put("/approval-config", toolsCatalogHandler.UpdateApprovalConfig)
+		toolsCatalog.Post("/approval-config/trusted/:tool_name", toolsCatalogHandler.AddTrustedTool)
+		toolsCatalog.Delete("/approval-config/trusted/:tool_name", toolsCatalogHandler.RemoveTrustedTool)
 	}
 
 	// Integrations routes (for Settings page)

@@ -4,17 +4,20 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacklau/prism/internal/api/middleware"
 	"github.com/jacklau/prism/internal/database/repository"
+	"github.com/jacklau/prism/internal/tools"
 )
 
 // ToolsCatalogHandler handles tool catalog endpoints
 type ToolsCatalogHandler struct {
-	toolRepo *repository.ToolRepository
+	toolRepo           *repository.ToolRepository
+	approvalConfigRepo *repository.ApprovalConfigRepository
 }
 
 // NewToolsCatalogHandler creates a new tools catalog handler
-func NewToolsCatalogHandler(toolRepo *repository.ToolRepository) *ToolsCatalogHandler {
+func NewToolsCatalogHandler(toolRepo *repository.ToolRepository, approvalConfigRepo *repository.ApprovalConfigRepository) *ToolsCatalogHandler {
 	return &ToolsCatalogHandler{
-		toolRepo: toolRepo,
+		toolRepo:           toolRepo,
+		approvalConfigRepo: approvalConfigRepo,
 	}
 }
 
@@ -286,4 +289,197 @@ func (h *ToolsCatalogHandler) DeleteTool(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "tool deleted successfully",
 	})
+}
+
+// ApprovalConfigResponse represents the approval config in API responses
+type ApprovalConfigResponse struct {
+	Enabled             bool     `json:"enabled"`
+	AutoApproveReadOnly bool     `json:"auto_approve_read_only"`
+	TrustedTools        []string `json:"trusted_tools"`
+	MaxIterations       int      `json:"max_iterations"`
+	ReadOnlyTools       []string `json:"read_only_tools"`
+}
+
+// UpdateApprovalConfigRequest represents a request to update approval config
+type UpdateApprovalConfigRequest struct {
+	Enabled             *bool    `json:"enabled,omitempty"`
+	AutoApproveReadOnly *bool    `json:"auto_approve_read_only,omitempty"`
+	TrustedTools        []string `json:"trusted_tools,omitempty"`
+	MaxIterations       *int     `json:"max_iterations,omitempty"`
+}
+
+// GetApprovalConfig returns the user's approval configuration
+func (h *ToolsCatalogHandler) GetApprovalConfig(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	if h.approvalConfigRepo == nil {
+		// Return default config if repo not available
+		return c.JSON(ApprovalConfigResponse{
+			Enabled:             false,
+			AutoApproveReadOnly: false,
+			TrustedTools:        []string{},
+			MaxIterations:       10,
+			ReadOnlyTools:       getReadOnlyToolsList(),
+		})
+	}
+
+	config, err := h.approvalConfigRepo.Get(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get approval config",
+		})
+	}
+
+	return c.JSON(ApprovalConfigResponse{
+		Enabled:             config.Enabled,
+		AutoApproveReadOnly: config.AutoApproveReadOnly,
+		TrustedTools:        config.TrustedTools,
+		MaxIterations:       config.MaxIterations,
+		ReadOnlyTools:       getReadOnlyToolsList(),
+	})
+}
+
+// UpdateApprovalConfig updates the user's approval configuration
+func (h *ToolsCatalogHandler) UpdateApprovalConfig(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	if h.approvalConfigRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "approval config not available",
+		})
+	}
+
+	var req UpdateApprovalConfigRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request body",
+		})
+	}
+
+	// Get existing config
+	config, err := h.approvalConfigRepo.Get(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get existing config",
+		})
+	}
+
+	// Apply updates
+	if req.Enabled != nil {
+		config.Enabled = *req.Enabled
+	}
+	if req.AutoApproveReadOnly != nil {
+		config.AutoApproveReadOnly = *req.AutoApproveReadOnly
+	}
+	if req.TrustedTools != nil {
+		config.TrustedTools = req.TrustedTools
+	}
+	if req.MaxIterations != nil {
+		if *req.MaxIterations < 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "max_iterations must be non-negative",
+			})
+		}
+		config.MaxIterations = *req.MaxIterations
+	}
+
+	// Save config
+	if err := h.approvalConfigRepo.Save(config); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to save approval config",
+		})
+	}
+
+	return c.JSON(ApprovalConfigResponse{
+		Enabled:             config.Enabled,
+		AutoApproveReadOnly: config.AutoApproveReadOnly,
+		TrustedTools:        config.TrustedTools,
+		MaxIterations:       config.MaxIterations,
+		ReadOnlyTools:       getReadOnlyToolsList(),
+	})
+}
+
+// AddTrustedTool adds a tool to the trusted list
+func (h *ToolsCatalogHandler) AddTrustedTool(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	if h.approvalConfigRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "approval config not available",
+		})
+	}
+
+	toolName := c.Params("tool_name")
+	if toolName == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "tool_name is required",
+		})
+	}
+
+	if err := h.approvalConfigRepo.AddTrustedTool(userID, toolName); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to add trusted tool",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "tool added to trusted list",
+	})
+}
+
+// RemoveTrustedTool removes a tool from the trusted list
+func (h *ToolsCatalogHandler) RemoveTrustedTool(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	if h.approvalConfigRepo == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "approval config not available",
+		})
+	}
+
+	toolName := c.Params("tool_name")
+	if toolName == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "tool_name is required",
+		})
+	}
+
+	if err := h.approvalConfigRepo.RemoveTrustedTool(userID, toolName); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to remove trusted tool",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "tool removed from trusted list",
+	})
+}
+
+// getReadOnlyToolsList returns the list of built-in read-only tools
+func getReadOnlyToolsList() []string {
+	result := make([]string, 0, len(tools.ReadOnlyTools))
+	for toolName := range tools.ReadOnlyTools {
+		result = append(result, toolName)
+	}
+	return result
 }
