@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../../store/authStore';
-import { Server, Plus, X, CheckCircle, XCircle, RefreshCw, Trash2, ExternalLink } from 'lucide-react';
+import { Server, Plus, X, CheckCircle, XCircle, RefreshCw, Trash2, ExternalLink, Play, Clock, Zap, Loader2, MessageSquare, AlertCircle } from 'lucide-react';
+import { apiService } from '../../services/api';
 
 interface CustomProvider {
   id: string;
@@ -373,6 +374,7 @@ function CustomProviderCard({
   onFetchModels: () => void;
 }) {
   const [fetching, setFetching] = useState(false);
+  const [showTestPanel, setShowTestPanel] = useState(false);
 
   const handleFetchModels = async () => {
     setFetching(true);
@@ -381,62 +383,306 @@ function CustomProviderCard({
   };
 
   return (
-    <div className="flex items-center justify-between p-3 bg-editor-bg rounded-lg">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-medium truncate">{provider.name}</p>
-          {provider.has_api_key && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
-              API Key
-            </span>
-          )}
-          {provider.supports_tools && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
-              Tools
-            </span>
-          )}
-          {provider.supports_vision && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">
-              Vision
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-editor-muted truncate">{provider.base_url}</p>
-        {provider.models && provider.models.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {provider.models.slice(0, 3).map((model) => (
-              <span
-                key={model}
-                className="text-xs px-1.5 py-0.5 rounded bg-editor-surface border border-editor-border"
-              >
-                {model}
+    <div className="p-3 bg-editor-bg rounded-lg">
+      <div className="flex items-center justify-between">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-medium truncate">{provider.name}</p>
+            {provider.has_api_key && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400">
+                API Key
               </span>
-            ))}
-            {provider.models.length > 3 && (
-              <span className="text-xs px-1.5 py-0.5 text-editor-muted">
-                +{provider.models.length - 3} more
+            )}
+            {provider.supports_tools && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">
+                Tools
+              </span>
+            )}
+            {provider.supports_vision && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                Vision
               </span>
             )}
           </div>
+          <p className="text-sm text-editor-muted truncate">{provider.base_url}</p>
+          {provider.models && provider.models.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {provider.models.slice(0, 3).map((model) => (
+                <span
+                  key={model}
+                  className="text-xs px-1.5 py-0.5 rounded bg-editor-surface border border-editor-border"
+                >
+                  {model}
+                </span>
+              ))}
+              {provider.models.length > 3 && (
+                <span className="text-xs px-1.5 py-0.5 text-editor-muted">
+                  +{provider.models.length - 3} more
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2 ml-4">
+          {provider.models && provider.models.length > 0 && (
+            <button
+              onClick={() => setShowTestPanel(!showTestPanel)}
+              className="p-2 hover:bg-editor-surface rounded text-editor-muted hover:text-editor-text transition-colors"
+              title="Test provider with a prompt"
+            >
+              <Play className="w-4 h-4" />
+            </button>
+          )}
+          <button
+            onClick={handleFetchModels}
+            disabled={fetching}
+            className="p-2 hover:bg-editor-surface rounded text-editor-muted hover:text-editor-text transition-colors"
+            title="Fetch models from endpoint"
+          >
+            <RefreshCw className={`w-4 h-4 ${fetching ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={onRemove}
+            className="p-2 hover:bg-editor-surface rounded text-red-400 hover:text-red-300 transition-colors"
+            title="Remove provider"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Test panel for custom provider */}
+      {showTestPanel && provider.models && provider.models.length > 0 && (
+        <CustomProviderTestPanel
+          providerId={provider.id}
+          providerName={provider.name}
+          models={provider.models}
+        />
+      )}
+    </div>
+  );
+}
+
+interface CustomTestResult {
+  id: string;
+  model: string;
+  prompt: string;
+  response: string;
+  latencyMs: number;
+  tokensUsed: { input: number; output: number };
+  timestamp: Date;
+}
+
+const PRESET_PROMPTS = [
+  { label: 'Quick check', value: 'Hello, respond with one word.' },
+  { label: 'Math test', value: 'What is 2+2? Just the number.' },
+  { label: 'Creative', value: 'Write a haiku about coding.' },
+  { label: 'Custom', value: '' },
+];
+
+function CustomProviderTestPanel({
+  providerId,
+  providerName,
+  models,
+}: {
+  providerId: string;
+  providerName: string;
+  models: string[];
+}) {
+  const { accessToken } = useAuthStore();
+  const [selectedModel, setSelectedModel] = useState(models[0] || '');
+  const [selectedPreset, setSelectedPreset] = useState(0);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [testHistory, setTestHistory] = useState<CustomTestResult[]>([]);
+
+  useEffect(() => {
+    if (accessToken) {
+      apiService.setToken(accessToken);
+    }
+  }, [accessToken]);
+
+  const getPrompt = () => {
+    if (selectedPreset === PRESET_PROMPTS.length - 1) {
+      return customPrompt;
+    }
+    return PRESET_PROMPTS[selectedPreset].value;
+  };
+
+  const handleTest = async () => {
+    const prompt = getPrompt();
+    if (!prompt || !selectedModel) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Custom providers use the provider name prefixed with "custom_"
+      const response = await apiService.testProviderPrompt(
+        `custom_${providerId}`,
+        selectedModel,
+        prompt
+      );
+
+      if (response.error) {
+        setError(response.error);
+        return;
+      }
+
+      if (response.data) {
+        const result: CustomTestResult = {
+          id: `${Date.now()}`,
+          model: selectedModel,
+          prompt,
+          response: response.data.response,
+          latencyMs: response.data.latency_ms,
+          tokensUsed: response.data.tokens_used,
+          timestamp: new Date(),
+        };
+
+        setTestHistory(prev => [result, ...prev.slice(0, 4)]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send test prompt');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 pt-3 border-t border-editor-border space-y-3">
+      <div className="flex items-center gap-2 text-xs text-editor-muted">
+        <Play className="w-3 h-3" />
+        <span>Test {providerName}</span>
+      </div>
+
+      {/* Model selector */}
+      <div>
+        <label className="block text-xs text-editor-muted mb-1">Model</label>
+        <select
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+          className="w-full px-3 py-2 bg-editor-surface border border-editor-border rounded-lg text-sm"
+        >
+          {models.map((model) => (
+            <option key={model} value={model}>
+              {model}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Preset prompt selector */}
+      <div>
+        <label className="block text-xs text-editor-muted mb-1">Test Prompt</label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {PRESET_PROMPTS.map((preset, index) => (
+            <button
+              key={index}
+              onClick={() => setSelectedPreset(index)}
+              className={`px-2 py-1 text-xs rounded-full border transition-colors ${
+                selectedPreset === index
+                  ? 'bg-editor-accent/20 border-editor-accent text-editor-accent'
+                  : 'border-editor-border text-editor-muted hover:border-editor-accent hover:text-editor-text'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
+        {selectedPreset === PRESET_PROMPTS.length - 1 ? (
+          <textarea
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            placeholder="Enter your test prompt..."
+            maxLength={1000}
+            rows={3}
+            className="w-full px-3 py-2 bg-editor-surface border border-editor-border rounded-lg text-sm resize-none"
+          />
+        ) : (
+          <div className="px-3 py-2 bg-editor-surface border border-editor-border rounded-lg text-sm text-editor-muted italic">
+            {PRESET_PROMPTS[selectedPreset].value}
+          </div>
         )}
       </div>
-      <div className="flex items-center gap-2 ml-4">
-        <button
-          onClick={handleFetchModels}
-          disabled={fetching}
-          className="p-2 hover:bg-editor-surface rounded text-editor-muted hover:text-editor-text transition-colors"
-          title="Fetch models from endpoint"
-        >
-          <RefreshCw className={`w-4 h-4 ${fetching ? 'animate-spin' : ''}`} />
-        </button>
-        <button
-          onClick={onRemove}
-          className="p-2 hover:bg-editor-surface rounded text-red-400 hover:text-red-300 transition-colors"
-          title="Remove provider"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
-      </div>
+
+      {/* Error display */}
+      {error && (
+        <div className="flex items-start gap-2 p-2 bg-red-500/20 border border-red-500/50 rounded-lg">
+          <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-red-400">{error}</p>
+        </div>
+      )}
+
+      {/* Send button */}
+      <button
+        onClick={handleTest}
+        disabled={loading || !getPrompt() || !selectedModel}
+        className="w-full px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+      >
+        {loading ? (
+          <>
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Sending...
+          </>
+        ) : (
+          <>
+            <Play className="w-4 h-4" />
+            Send Test
+          </>
+        )}
+      </button>
+
+      {/* Test history */}
+      {testHistory.length > 0 && (
+        <div className="mt-3 border-t border-editor-border pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-medium text-editor-muted flex items-center gap-1">
+              <MessageSquare className="w-3 h-3" />
+              Recent Tests ({testHistory.length})
+            </h4>
+            <button
+              onClick={() => setTestHistory([])}
+              className="text-xs text-editor-muted hover:text-red-400 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="space-y-2">
+            {testHistory.map((result) => (
+              <div key={result.id} className="p-2 bg-editor-surface rounded-lg border border-editor-border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-editor-accent truncate">
+                    {result.model}
+                  </span>
+                  <div className="flex items-center gap-3 text-xs text-editor-muted">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {result.latencyMs}ms
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      {result.tokensUsed.input}/{result.tokensUsed.output}
+                    </span>
+                  </div>
+                </div>
+                <div className="mb-2">
+                  <span className="text-[10px] uppercase tracking-wider text-editor-muted">Prompt</span>
+                  <p className="text-xs text-editor-muted truncate">{result.prompt}</p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-editor-muted">Response</span>
+                  <p className="text-xs text-editor-text whitespace-pre-wrap break-words max-h-24 overflow-y-auto">
+                    {result.response}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

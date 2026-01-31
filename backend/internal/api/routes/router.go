@@ -327,6 +327,7 @@ func Setup(deps *Dependencies) *fiber.App {
 		providers.Post("/:provider/validate", providerHandler.ValidateKey)
 		providers.Get("/:provider/key/status", providerHandler.GetKeyStatus)
 		providers.Get("/keys", providerHandler.ListKeys)
+		providers.Post("/:provider/test-prompt", providerHandler.TestPrompt)
 	}
 
 	// Custom OpenAI-compatible provider routes
