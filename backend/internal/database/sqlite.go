@@ -406,6 +406,62 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_organization_id ON org_workspaces(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_github_repo ON org_workspaces(organization_id, github_repository_name)`,
 		`CREATE INDEX IF NOT EXISTS idx_org_workspaces_current_branch ON org_workspaces(current_branch)`,
+
+		// SSO configurations table
+		`CREATE TABLE IF NOT EXISTS sso_configurations (
+			id TEXT PRIMARY KEY,
+			organization_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			type TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			priority INTEGER DEFAULT 0,
+			enabled INTEGER DEFAULT 0,
+			config_json TEXT,
+			encrypted_secret BLOB,
+			secret_nonce BLOB,
+			workos_connection_id TEXT,
+			last_error TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// SSO attribute mappings table
+		`CREATE TABLE IF NOT EXISTS sso_attribute_mappings (
+			id TEXT PRIMARY KEY,
+			sso_provider_id TEXT NOT NULL REFERENCES sso_configurations(id) ON DELETE CASCADE,
+			source_attribute TEXT NOT NULL,
+			target_field TEXT NOT NULL,
+			transform_type TEXT,
+			transform_pattern TEXT
+		)`,
+
+		// Organizations table (if not exists)
+		`CREATE TABLE IF NOT EXISTS organizations (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			workos_organization_id TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Organization members table (if not exists)
+		`CREATE TABLE IF NOT EXISTS organization_members (
+			id TEXT PRIMARY KEY,
+			organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			role TEXT NOT NULL DEFAULT 'member',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(organization_id, user_id)
+		)`,
+
+		// SSO indexes
+		`CREATE INDEX IF NOT EXISTS idx_sso_configurations_org ON sso_configurations(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sso_configurations_type ON sso_configurations(organization_id, type)`,
+		`CREATE INDEX IF NOT EXISTS idx_sso_configurations_enabled ON sso_configurations(organization_id, enabled, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_sso_attribute_mappings_provider ON sso_attribute_mappings(sso_provider_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_organizations_workos ON organizations(workos_organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_organization_members_org ON organization_members(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_organization_members_user ON organization_members(user_id)`,
 	}
 
 	for _, migration := range migrations {
