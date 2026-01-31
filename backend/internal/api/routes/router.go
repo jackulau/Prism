@@ -67,6 +67,8 @@ type Dependencies struct {
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
 	WorkflowEngine     *workflow.Engine
+	TeamRepo           *repository.TeamRepository
+	RoleRepo           *repository.RoleRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -461,6 +463,38 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Patch("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
+	}
+
+	// Team routes
+	if deps.TeamRepo != nil {
+		teamHandler := handlers.NewTeamHandler(deps.TeamRepo, deps.RoleRepo, deps.OrganizationRepo)
+
+		// Team CRUD routes (requires org membership via scoping middleware)
+		teams := v1.Group("/teams", middleware.AuthMiddleware(deps.JWTService))
+		teams.Use(middleware.TeamScopeMiddleware(deps.TeamRepo, deps.OrganizationRepo))
+
+		// List user's teams
+		teams.Get("/me", teamHandler.ListUserTeams)
+
+		// Organization-scoped team operations
+		teams.Post("/", teamHandler.CreateTeam)
+		teams.Get("/", teamHandler.ListTeams)
+		teams.Get("/:id", teamHandler.GetTeam)
+		teams.Put("/:id", teamHandler.UpdateTeam)
+		teams.Delete("/:id", teamHandler.DeleteTeam)
+
+		// Team membership routes
+		teams.Get("/:id/members", teamHandler.GetMembers)
+		teams.Post("/:id/members", teamHandler.AddMember)
+		teams.Delete("/:id/members/:userId", teamHandler.RemoveMember)
+		teams.Put("/:id/members/:userId/role", teamHandler.UpdateMemberRole)
+
+		// Role routes
+		teams.Get("/roles/list", teamHandler.ListRoles)
+		teams.Post("/roles", teamHandler.CreateRole)
+		teams.Delete("/roles/:roleId", teamHandler.DeleteRole)
+
+		log.Println("Team routes registered")
 	}
 
 	return app
