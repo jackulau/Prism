@@ -12,3 +12,9 @@ export type {
   ConnectedAgentProgressCardProps,
   AgentProgressState,
 } from './ConnectedAgentProgressCard';
+
+export { AgentProgressPanel } from './AgentProgressPanel';
+export type { AgentProgressPanelProps } from './AgentProgressPanel';
+
+export { SwarmProgressCard } from './SwarmProgressCard';
+export type { SwarmProgressCardProps } from './SwarmProgressCard';

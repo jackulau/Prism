@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { Send, Bot, User, StopCircle, Paperclip, Hash, Zap, Clock, RotateCcw, X, Trash2, Plus, HelpCircle, Cpu, Download, Plug, MessageSquare, Copy, Check, Pencil, RefreshCw, ChevronDown, ChevronRight, Brain } from 'lucide-react'
 import { useAppStore } from '../../store'
+import { useAgentProgressStore } from '../../store/agentProgressStore'
 import { wsService } from '../../services/websocket'
 import { MessageQueue } from './MessageQueue'
 import { ModelSelector } from '../ModelSelector'
@@ -8,6 +9,7 @@ import { ModeSwitcher } from './ModeSwitcher'
 import { ThinkingToggle } from './ThinkingToggle'
 import { MarkdownRenderer } from '../markdown/MarkdownRenderer'
 import { ToolCallCard } from './ToolCallCard'
+import { AgentProgressPanel } from '../agent/AgentProgressPanel'
 import { toast } from '../../store/toastStore'
 import type { Message, ToolCall } from '../../types'
 
@@ -330,6 +332,19 @@ export function EnhancedChatPanel() {
 
   const isGenerating = metrics.isGenerating
   const isConnected = connectionStatus === 'connected'
+
+  // Agent progress from store
+  const activeAgents = useAgentProgressStore((state) => state.activeAgents)
+  const clearAgent = useAgentProgressStore((state) => state.clearAgent)
+
+  // Get agents that are currently running or thinking
+  const runningAgents = useMemo(
+    () =>
+      Array.from(activeAgents.values()).filter(
+        (a) => a.status === 'running' || a.status === 'thinking' || a.status === 'pending'
+      ),
+    [activeAgents]
+  )
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -844,6 +859,23 @@ export function EnhancedChatPanel() {
 
       {/* Message Queue */}
       <MessageQueue />
+
+      {/* Agent Progress Panel - shows when agents are actively running */}
+      {runningAgents.length > 0 && (
+        <div className="px-4 py-2 border-t border-editor-border bg-editor-surface/30">
+          <AgentProgressPanel
+            agents={runningAgents}
+            position="inline"
+            collapsible
+            maxVisible={2}
+            onCancelAgent={(agentId) => {
+              // Clear agent from store - backend cancellation would happen
+              // via a separate API call when that's implemented
+              clearAgent(agentId)
+            }}
+          />
+        </div>
+      )}
 
       {/* Input */}
       <div className="p-4 border-t border-editor-border">

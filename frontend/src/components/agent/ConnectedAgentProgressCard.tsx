@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { AgentProgressCard, AgentProgressCardProps } from './AgentProgressCard';
+import { useAgentProgressStore } from '../../store/agentProgressStore';
 import type { AgentStatus } from './StatusBadge';
 
 /**
  * Agent progress state interface for store integration.
- * When an agentProgressStore is implemented, it should provide
- * data conforming to this interface.
  */
 export interface AgentProgressState {
   agentId: string;
@@ -33,23 +32,37 @@ export interface ConnectedAgentProgressCardProps {
 }
 
 /**
- * Hook placeholder for when an agentProgressStore is implemented.
- *
- * Example usage when store is available:
- * ```ts
- * import { useAgentProgressStore } from '../../store/agentProgressStore';
- *
- * export const useAgentProgress = (agentId: string): AgentProgressState | null => {
- *   return useAgentProgressStore(state => state.getAgentProgress(agentId));
- * };
- * ```
- *
- * For now, this returns null to indicate no progress data is available.
+ * Hook that connects to the agentProgressStore to get agent progress data.
  */
-const useAgentProgress = (_agentId: string): AgentProgressState | null => {
-  // Placeholder - returns null until agentProgressStore is implemented
-  // In production, this would connect to the actual store
-  return null;
+const useAgentProgress = (agentId: string): AgentProgressState | null => {
+  const agent = useAgentProgressStore((state) => state.activeAgents.get(agentId));
+
+  return useMemo(() => {
+    if (!agent) return null;
+
+    // Calculate elapsed time and thinking duration
+    const elapsedTime = agent.startedAt ? Date.now() - agent.startedAt : undefined;
+    const thinkingDuration = agent.thinkingStartedAt
+      ? Date.now() - agent.thinkingStartedAt
+      : undefined;
+
+    return {
+      agentId: agent.agentId,
+      name: agent.name,
+      status: agent.status,
+      percentComplete: agent.percentComplete,
+      currentStep: agent.currentStep,
+      totalSteps: agent.totalSteps,
+      stepName: agent.stepName,
+      message: agent.message,
+      isThinking: agent.isThinking,
+      thinkingDuration,
+      estimatedTimeRemaining: agent.estimatedTimeRemaining ?? undefined,
+      estimatedTokensRemaining: agent.estimatedTokensRemaining ?? undefined,
+      tokensGenerated: agent.tokensGenerated,
+      elapsedTime,
+    };
+  }, [agent]);
 };
 
 /**

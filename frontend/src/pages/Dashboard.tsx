@@ -1,6 +1,7 @@
 import { RecentWorkspaces } from '../components/dashboard/RecentWorkspaces';
 import { QuickActions } from '../components/dashboard/QuickActions';
 import { UsageSummary } from '../components/dashboard/UsageSummary';
+import { ActiveAgents } from '../components/dashboard/ActiveAgents';
 
 export default function Dashboard() {
   return (
@@ -16,6 +17,9 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <QuickActions />
+
+        {/* Active Agents - shows running AI agents and swarms */}
+        <ActiveAgents />
 
         {/* Usage Summary */}
         <UsageSummary />
