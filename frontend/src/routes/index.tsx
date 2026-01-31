@@ -5,6 +5,7 @@ import Workers from '../pages/Workers';
 import Integrations from '../pages/Integrations';
 import Usage from '../pages/Usage';
 import Organization from '../pages/Organization';
+import TeamsPage from '../pages/settings/Teams';
 import { SettingsPage } from '../pages/Settings';
 import { AuthPage } from '../components/auth/AuthPage';
 import Workspace from '../pages/Workspace';
@@ -41,6 +42,10 @@ export const router = createBrowserRouter([
       {
         path: 'organization',
         element: <Organization />,
+      },
+      {
+        path: 'teams',
+        element: <TeamsPage />,
       },
       {
         path: 'settings',
