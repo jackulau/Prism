@@ -8,8 +8,10 @@ import { AuthGuard } from '../components/auth/AuthGuard';
 import { AuthPage } from '../components/auth/AuthPage';
 import { TRPCProvider } from '../providers/TRPCProvider';
 import { TeamSelector } from '../components/layout/TeamSelector';
+import { CommandPalette } from '../components/CommandPalette';
 import { useAppStore } from '../store';
 import { useShortcutsStore } from '../store/shortcutsStore';
+import { useCommandPaletteStore } from '../store/commandPaletteStore';
 import { applyTheme } from '../config/themes';
 import { useWorkspaceShortcuts } from '../hooks/useWorkspaceShortcuts';
 
@@ -18,6 +20,7 @@ export function AppLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { theme, loadProviders, createNewConversation } = useAppStore();
   const { closeHelpModal, isHelpModalOpen } = useShortcutsStore();
+  const { open: openCommandPalette } = useCommandPaletteStore();
 
   // Apply theme on mount and when it changes
   useEffect(() => {
@@ -57,6 +60,19 @@ export function AppLayout() {
     onClosePreview: handleCloseModal,
   });
 
+  // Global keyboard shortcut for command palette (Cmd/Ctrl + K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        openCommandPalette();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [openCommandPalette]);
+
   return (
     <TRPCProvider>
       <AuthGuard fallback={<AuthPage />}>
@@ -89,6 +105,9 @@ export function AppLayout() {
 
           {/* Toast Notifications */}
           <ToastContainer />
+
+          {/* Command Palette */}
+          <CommandPalette />
         </div>
       </AuthGuard>
     </TRPCProvider>
