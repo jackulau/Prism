@@ -479,6 +479,42 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // Session Management
+  async listSessions() {
+    return this.request<{
+      sessions: Array<{
+        id: number;
+        ip_address: string;
+        user_agent: string;
+        device_name: string;
+        created_at: string;
+        last_activity: string;
+        expires_at: string;
+        is_current: boolean;
+      }>;
+    }>('/sessions');
+  }
+
+  async terminateSession(sessionId: number) {
+    return this.request<{ success: boolean }>(`/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async terminateOtherSessions() {
+    return this.request<{ success: boolean; terminated_count: number }>(
+      '/sessions/others',
+      { method: 'DELETE' }
+    );
+  }
+
+  async terminateAllSessions() {
+    return this.request<{ success: boolean; terminated_count: number }>(
+      '/sessions/all',
+      { method: 'DELETE' }
+    );
+  }
 }
 
 export const apiService = new ApiService();
