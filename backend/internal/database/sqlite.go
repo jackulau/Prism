@@ -378,8 +378,16 @@ func (db *DB) Migrate() error {
 		`ALTER TABLE users ADD COLUMN sso_connection_id TEXT`,
 		`ALTER TABLE users ADD COLUMN sso_provider TEXT`,
 
+		// Session metadata columns for timeout management
+		`ALTER TABLE sessions ADD COLUMN last_activity_at DATETIME`,
+		`ALTER TABLE sessions ADD COLUMN ip_address TEXT`,
+		`ALTER TABLE sessions ADD COLUMN user_agent TEXT`,
+		`ALTER TABLE sessions ADD COLUMN device_name TEXT`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_activity_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_tool_executions_message_id ON tool_executions(message_id)`,

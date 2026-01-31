@@ -44,6 +44,13 @@ type DatabaseConfig struct {
 	SSLMode  string
 }
 
+// SessionConfig contains session timeout and cleanup settings
+type SessionConfig struct {
+	IdleTimeout     time.Duration // How long before an idle session expires (default: 30m)
+	MaxPerUser      int           // Maximum concurrent sessions per user (default: 10)
+	CleanupInterval time.Duration // How often to clean up expired/idle sessions (default: 5m)
+}
+
 // WorkOSConfig contains WorkOS authentication settings
 type WorkOSConfig struct {
 	APIKey         string
@@ -69,6 +76,9 @@ type Config struct {
 	JWTSecret        string
 	JWTAccessExpiry  time.Duration
 	JWTRefreshExpiry time.Duration
+
+	// Session Management
+	Session SessionConfig
 
 	// Authentication - WorkOS
 	WorkOS WorkOSConfig
@@ -181,6 +191,13 @@ func Load() (*Config, error) {
 		JWTSecret:        getEnv("JWT_SECRET", "change-me-in-production"),
 		JWTAccessExpiry:  getDurationEnv("JWT_ACCESS_EXPIRY", 15*time.Minute),
 		JWTRefreshExpiry: getDurationEnv("JWT_REFRESH_EXPIRY", 7*24*time.Hour),
+
+		// Session Management
+		Session: SessionConfig{
+			IdleTimeout:     getDurationEnv("SESSION_IDLE_TIMEOUT", 30*time.Minute),
+			MaxPerUser:      getIntEnv("SESSION_MAX_PER_USER", 10),
+			CleanupInterval: getDurationEnv("SESSION_CLEANUP_INTERVAL", 5*time.Minute),
+		},
 
 		// Authentication - WorkOS
 		WorkOS: WorkOSConfig{

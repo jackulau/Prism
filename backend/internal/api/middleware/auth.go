@@ -39,6 +39,9 @@ func AuthMiddleware(jwtService *security.JWTService) fiber.Handler {
 		// Set user info in context
 		c.Locals("userID", claims.UserID)
 		c.Locals("email", claims.Email)
+		if claims.SessionID != "" {
+			c.Locals("sessionID", claims.SessionID)
+		}
 
 		return c.Next()
 	}
@@ -65,6 +68,9 @@ func OptionalAuthMiddleware(jwtService *security.JWTService) fiber.Handler {
 
 		c.Locals("userID", claims.UserID)
 		c.Locals("email", claims.Email)
+		if claims.SessionID != "" {
+			c.Locals("sessionID", claims.SessionID)
+		}
 
 		return c.Next()
 	}

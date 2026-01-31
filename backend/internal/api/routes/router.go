@@ -27,6 +27,7 @@ import (
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
+	"github.com/jacklau/prism/internal/services/session"
 	"github.com/jacklau/prism/internal/tools"
 )
 
@@ -34,6 +35,7 @@ import (
 type Dependencies struct {
 	Config             *config.Config
 	JWTService         *security.JWTService
+	SessionService     *session.Service
 	EncryptionService  *security.EncryptionService
 	WorkOSService      *security.WorkOSService
 	UserRepo           *repository.UserRepository
@@ -102,7 +104,7 @@ func Setup(deps *Dependencies) *fiber.App {
 	v1 := app.Group("/api/v1")
 
 	// Auth routes (no auth required)
-	authHandler := handlers.NewAuthHandler(deps.UserRepo, deps.SessionRepo, deps.JWTService)
+	authHandler := handlers.NewAuthHandler(deps.UserRepo, deps.SessionService, deps.JWTService, deps.Config.JWTRefreshExpiry)
 	auth := v1.Group("/auth")
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)
@@ -121,10 +123,26 @@ func Setup(deps *Dependencies) *fiber.App {
 		})
 	}
 
-	// Auth routes (auth required)
+	// Auth routes (auth required) with activity tracking
 	authProtected := auth.Group("", middleware.AuthMiddleware(deps.JWTService))
+	if deps.SessionService != nil {
+		authProtected.Use(middleware.ActivityMiddleware(deps.SessionService))
+	}
 	authProtected.Post("/logout", authHandler.Logout)
 	authProtected.Get("/me", authHandler.Me)
+
+	// Session management routes
+	if deps.SessionService != nil {
+		sessionHandler := handlers.NewSessionHandler(deps.SessionService)
+		sessions := v1.Group("/sessions", middleware.AuthMiddleware(deps.JWTService))
+		if deps.SessionService != nil {
+			sessions.Use(middleware.ActivityMiddleware(deps.SessionService))
+		}
+		sessions.Get("/", sessionHandler.ListSessions)
+		sessions.Delete("/others", sessionHandler.TerminateOtherSessions)
+		sessions.Delete("/:id", sessionHandler.TerminateSession)
+		sessions.Delete("/", sessionHandler.TerminateAllSessions)
+	}
 
 	// SSO routes (WorkOS)
 	if deps.WorkOSService != nil && deps.WorkOSService.IsConfigured() {

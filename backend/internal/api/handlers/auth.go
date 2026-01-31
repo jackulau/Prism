@@ -11,21 +11,24 @@ import (
 	"github.com/jacklau/prism/internal/api/middleware"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/security"
+	"github.com/jacklau/prism/internal/services/session"
 )
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	userRepo    *repository.UserRepository
-	sessionRepo *repository.SessionRepository
-	jwtService  *security.JWTService
+	userRepo       *repository.UserRepository
+	sessionService *session.Service
+	jwtService     *security.JWTService
+	refreshExpiry  time.Duration
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(userRepo *repository.UserRepository, sessionRepo *repository.SessionRepository, jwtService *security.JWTService) *AuthHandler {
+func NewAuthHandler(userRepo *repository.UserRepository, sessionService *session.Service, jwtService *security.JWTService, refreshExpiry time.Duration) *AuthHandler {
 	return &AuthHandler{
-		userRepo:    userRepo,
-		sessionRepo: sessionRepo,
-		jwtService:  jwtService,
+		userRepo:       userRepo,
+		sessionService: sessionService,
+		jwtService:     jwtService,
+		refreshExpiry:  refreshExpiry,
 	}
 }
 
@@ -114,20 +117,32 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	// Generate tokens
-	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email)
+	// Create session with metadata first to get session ID
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	// Use a placeholder token hash initially, we'll update it after generating the real tokens
+	session, err := h.sessionService.Create(user.ID, "placeholder", time.Now().Add(h.refreshExpiry), ipAddress, userAgent)
 	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to create session",
+		})
+	}
+
+	// Generate tokens with session ID
+	tokens, err := h.jwtService.GenerateTokenPairWithSession(user.ID, user.Email, session.ID)
+	if err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to generate tokens",
 		})
 	}
 
-	// Create session
+	// Update session with actual refresh token hash
 	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
-	if err != nil {
+	if err := h.sessionService.UpdateTokenHash(session.ID, refreshTokenHash); err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to create session",
+			"error": "failed to update session",
 		})
 	}
 
@@ -174,20 +189,31 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 	}
 
-	// Generate tokens
-	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email)
+	// Create session with metadata first to get session ID
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	session, err := h.sessionService.Create(user.ID, "placeholder", time.Now().Add(h.refreshExpiry), ipAddress, userAgent)
 	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to create session",
+		})
+	}
+
+	// Generate tokens with session ID
+	tokens, err := h.jwtService.GenerateTokenPairWithSession(user.ID, user.Email, session.ID)
+	if err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to generate tokens",
 		})
 	}
 
-	// Create session
+	// Update session with actual refresh token hash
 	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
-	if err != nil {
+	if err := h.sessionService.UpdateTokenHash(session.ID, refreshTokenHash); err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to create session",
+			"error": "failed to update session",
 		})
 	}
 
@@ -212,16 +238,30 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 		})
 	}
 
-	// Delete all sessions for user
-	if err := h.sessionRepo.DeleteByUserID(userID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to logout",
-		})
+	// Delete the current session only (not all sessions)
+	sessionID := middleware.GetSessionID(c)
+	if sessionID != "" {
+		if err := h.sessionService.Terminate(userID, sessionID); err != nil {
+			// Log but don't fail - session might already be deleted
+		}
+	} else {
+		// Fallback: delete all sessions for user if no session ID
+		if err := h.sessionService.TerminateAll(userID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to logout",
+			})
+		}
 	}
 
 	return c.JSON(fiber.Map{
 		"message": "logged out successfully",
 	})
+}
+
+// RefreshResponse extends AuthResponse with session expiration info
+type RefreshResponse struct {
+	AuthResponse
+	SessionExpired bool `json:"session_expired,omitempty"`
 }
 
 // Refresh handles token refresh
@@ -243,7 +283,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 
 	// Check if session exists
 	refreshTokenHash := security.HashAPIKey(req.RefreshToken)
-	session, err := h.sessionRepo.GetByRefreshTokenHash(refreshTokenHash)
+	session, err := h.sessionService.GetByTokenHash(refreshTokenHash)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to verify session",
@@ -255,27 +295,60 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		})
 	}
 
+	// Check if session is idle (exceeded idle timeout)
+	if h.sessionService.IsSessionIdle(session) {
+		// Delete the idle session
+		_ = h.sessionService.Delete(session.ID)
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error":           "session expired due to inactivity",
+			"session_expired": true,
+		})
+	}
+
+	// Check if session is valid (not expired)
+	if !h.sessionService.IsValid(session) {
+		_ = h.sessionService.Delete(session.ID)
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error":           "session expired",
+			"session_expired": true,
+		})
+	}
+
 	// Delete old session
-	if err := h.sessionRepo.Delete(session.ID); err != nil {
+	if err := h.sessionService.Delete(session.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to invalidate old session",
 		})
 	}
 
-	// Generate new tokens
-	tokens, err := h.jwtService.GenerateTokenPair(claims.UserID, claims.Email)
+	// Create new session first to get session ID
+	ipAddress := c.IP()
+	userAgent := session.UserAgent // Keep original user agent
+	if userAgent == "" {
+		userAgent = c.Get("User-Agent")
+	}
+	newSession, err := h.sessionService.Create(claims.UserID, "placeholder", time.Now().Add(h.refreshExpiry), ipAddress, userAgent)
 	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to create session",
+		})
+	}
+
+	// Generate new tokens with session ID
+	tokens, err := h.jwtService.GenerateTokenPairWithSession(claims.UserID, claims.Email, newSession.ID)
+	if err != nil {
+		_ = h.sessionService.Terminate(claims.UserID, newSession.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to generate tokens",
 		})
 	}
 
-	// Create new session
+	// Update session with actual refresh token hash
 	newRefreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(claims.UserID, newRefreshTokenHash, time.Now().Add(7*24*time.Hour))
-	if err != nil {
+	if err := h.sessionService.UpdateTokenHash(newSession.ID, newRefreshTokenHash); err != nil {
+		_ = h.sessionService.Terminate(claims.UserID, newSession.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to create session",
+			"error": "failed to update session",
 		})
 	}
 
@@ -356,20 +429,31 @@ func (h *AuthHandler) GuestLogin(c *fiber.Ctx) error {
 		})
 	}
 
-	// Generate tokens
-	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email)
+	// Create session with metadata first to get session ID
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	session, err := h.sessionService.Create(user.ID, "placeholder", time.Now().Add(h.refreshExpiry), ipAddress, userAgent)
 	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to create session",
+		})
+	}
+
+	// Generate tokens with session ID
+	tokens, err := h.jwtService.GenerateTokenPairWithSession(user.ID, user.Email, session.ID)
+	if err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to generate tokens",
 		})
 	}
 
-	// Create session
+	// Update session with actual refresh token hash
 	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
-	if err != nil {
+	if err := h.sessionService.UpdateTokenHash(session.ID, refreshTokenHash); err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to create session",
+			"error": "failed to update session",
 		})
 	}
 
