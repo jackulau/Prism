@@ -28,6 +28,9 @@ export default {
         'typing': 'typing 1s steps(3) infinite',
         'progress-shimmer': 'progress-shimmer 1.5s ease-in-out infinite',
         'progress-stripe': 'progress-stripe 1s linear infinite',
+        'bounce-dot': 'bounce-dot 1.4s ease-in-out infinite',
+        'wave': 'wave 1.2s ease-in-out infinite',
+        'typewriter-blink': 'typewriter-blink 1s step-end infinite',
       },
       keyframes: {
         typing: {
@@ -42,6 +45,18 @@ export default {
         'progress-stripe': {
           'from': { backgroundPosition: '1rem 0' },
           'to': { backgroundPosition: '0 0' },
+        },
+        'bounce-dot': {
+          '0%, 80%, 100%': { transform: 'translateY(0)' },
+          '40%': { transform: 'translateY(-50%)' },
+        },
+        'wave': {
+          '0%, 100%': { height: '25%' },
+          '50%': { height: '100%' },
+        },
+        'typewriter-blink': {
+          '0%, 50%': { opacity: '1' },
+          '51%, 100%': { opacity: '0' },
         },
       },
       backgroundImage: {
