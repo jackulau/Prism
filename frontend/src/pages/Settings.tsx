@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useAppStore } from '../store';
 import { apiService } from '../services/api';
-import { Github, Key, Bell, Server, CheckCircle, XCircle, ExternalLink, X, Palette, Check, Cpu, Wifi } from 'lucide-react';
+import { Github, Key, Bell, Server, CheckCircle, XCircle, ExternalLink, X, Palette, Check, Cpu, Wifi, Plus, Loader2, AlertCircle } from 'lucide-react';
 import { themes, type ThemeConfig } from '../config/themes';
 import { RemoteAccessSettings } from '../components/settings/RemoteAccessSettings';
 import { ConnectionInfo } from '../components/settings/ConnectionInfo';
 import { RemoteSessions } from '../components/settings/RemoteSessions';
+import { MCPServerCard } from '../components/settings/MCPServerCard';
+import { useMCPServerStore, type MCPServer } from '../store/mcpServerStore';
 
 interface GitHubStatus {
   connected: boolean;
@@ -457,104 +459,213 @@ function ProviderKeyInput({
 }
 
 function MCPServerList() {
-  const [servers, setServers] = useState<Array<{ id: string; name: string; url: string; enabled: boolean }>>([]);
-  const [newUrl, setNewUrl] = useState('');
-  const [newName, setNewName] = useState('');
   const { accessToken } = useAuthStore();
+  const {
+    servers,
+    serversLoading,
+    serversError,
+    setToken,
+    fetchServers,
+    addServer,
+    startStatusPolling,
+    stopStatusPolling,
+    clearError,
+  } = useMCPServerStore();
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newUrl, setNewUrl] = useState('');
+  const [newApiKey, setNewApiKey] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
 
   useEffect(() => {
-    fetchServers();
-  }, [accessToken]);
-
-  const fetchServers = async () => {
-    if (!accessToken) return;
-    try {
-      const response = await fetch('/api/v1/mcp/servers', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setServers(data.servers || []);
-      }
-    } catch {
-      // Failed to fetch MCP servers - list will remain empty
+    if (accessToken) {
+      setToken(accessToken);
+      fetchServers();
+      startStatusPolling(30000); // Poll every 30 seconds
     }
-  };
+    return () => {
+      stopStatusPolling();
+    };
+  }, [accessToken, setToken, fetchServers, startStatusPolling, stopStatusPolling]);
 
   const handleAdd = async () => {
-    if (!newUrl || !newName || !accessToken) return;
+    if (!newName.trim() || !newUrl.trim()) return;
 
-    try {
-      await fetch('/api/v1/mcp/servers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ name: newName, url: newUrl }),
-      });
-      setNewUrl('');
+    setAdding(true);
+    setAddError(null);
+
+    const result = await addServer(newName.trim(), newUrl.trim(), newApiKey.trim() || undefined);
+
+    if (result.success) {
       setNewName('');
-      fetchServers();
-    } catch {
-      // Failed to add MCP server - server won't appear in list
+      setNewUrl('');
+      setNewApiKey('');
+      setShowAddForm(false);
+    } else {
+      setAddError(result.error || 'Failed to add server');
     }
+
+    setAdding(false);
   };
 
-  const handleRemove = async (id: string) => {
-    if (!accessToken) return;
-
-    try {
-      await fetch(`/api/v1/mcp/servers/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      fetchServers();
-    } catch {
-      // Failed to remove MCP server - server will remain in list
-    }
+  const handleEdit = (server: MCPServer) => {
+    setEditingServer(server);
   };
+
+  if (serversLoading && servers.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="w-6 h-6 animate-spin text-editor-muted" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
-      {servers.map((server) => (
-        <div key={server.id} className="flex items-center justify-between p-3 bg-editor-bg rounded-lg">
-          <div>
-            <p className="font-medium">{server.name}</p>
-            <p className="text-sm text-editor-muted">{server.url}</p>
+    <div className="space-y-4">
+      {/* Error message */}
+      {serversError && (
+        <div className="p-3 bg-red-400/10 border border-red-400/20 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-2 text-red-400">
+            <AlertCircle className="w-4 h-4" />
+            <span className="text-sm">{serversError}</span>
           </div>
           <button
-            onClick={() => handleRemove(server.id)}
-            className="text-red-400 hover:text-red-300 text-sm"
+            onClick={clearError}
+            className="text-red-400 hover:text-red-300"
           >
-            Remove
+            <X className="w-4 h-4" />
           </button>
         </div>
-      ))}
+      )}
 
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="Server name"
-          className="flex-1 px-3 py-2 bg-editor-bg border border-editor-border rounded-lg text-sm"
-        />
-        <input
-          type="url"
-          value={newUrl}
-          onChange={(e) => setNewUrl(e.target.value)}
-          placeholder="https://mcp-server.example.com"
-          className="flex-1 px-3 py-2 bg-editor-bg border border-editor-border rounded-lg text-sm"
-        />
-        <button
-          onClick={handleAdd}
-          disabled={!newUrl || !newName}
-          className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Add
-        </button>
-      </div>
+      {/* Server list */}
+      {servers.length === 0 ? (
+        <div className="text-center py-8">
+          <Server className="w-12 h-12 mx-auto mb-3 text-editor-muted opacity-50" />
+          <p className="text-editor-muted text-sm mb-4">No MCP servers configured</p>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Your First Server
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {servers.map((server) => (
+            <MCPServerCard
+              key={server.id}
+              server={server}
+              onEdit={handleEdit}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Add server form */}
+      {showAddForm || (servers.length > 0 && !showAddForm) ? (
+        servers.length > 0 && !showAddForm ? (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="w-full flex items-center justify-center gap-2 p-3 border border-dashed border-editor-border rounded-lg text-editor-muted hover:text-editor-text hover:border-editor-muted transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="text-sm">Add Server</span>
+          </button>
+        ) : (
+          <div className="p-4 bg-editor-bg rounded-lg space-y-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium">Add MCP Server</h3>
+              <button
+                onClick={() => {
+                  setShowAddForm(false);
+                  setAddError(null);
+                  setNewName('');
+                  setNewUrl('');
+                  setNewApiKey('');
+                }}
+                className="p-1 text-editor-muted hover:text-editor-text"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm text-editor-muted mb-1">Server Name</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="My MCP Server"
+                  className="w-full px-3 py-2 bg-editor-surface border border-editor-border rounded-lg text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-editor-muted mb-1">Server URL</label>
+                <input
+                  type="url"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                  placeholder="https://mcp-server.example.com"
+                  className="w-full px-3 py-2 bg-editor-surface border border-editor-border rounded-lg text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm text-editor-muted mb-1">API Key (optional)</label>
+                <input
+                  type="password"
+                  value={newApiKey}
+                  onChange={(e) => setNewApiKey(e.target.value)}
+                  placeholder="Enter API key if required"
+                  className="w-full px-3 py-2 bg-editor-surface border border-editor-border rounded-lg text-sm"
+                />
+              </div>
+
+              {addError && (
+                <div className="p-2 bg-red-400/10 border border-red-400/20 rounded-lg">
+                  <p className="text-xs text-red-400">{addError}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setAddError(null);
+                  }}
+                  className="px-4 py-2 text-sm text-editor-muted hover:text-editor-text"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdd}
+                  disabled={!newName.trim() || !newUrl.trim() || adding}
+                  className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {adding ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Testing Connection...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      Add Server
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      ) : null}
     </div>
   );
 }

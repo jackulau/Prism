@@ -200,6 +200,17 @@ func (c *Client) GetAllTools(userID string) []*RemoteTool {
 	return allTools
 }
 
+// GetServerTools returns tools for a specific server
+func (c *Client) GetServerTools(serverID string) []*RemoteTool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if tools, exists := c.toolCache[serverID]; exists {
+		return tools
+	}
+	return nil
+}
+
 // ExecuteTool executes a tool on a remote MCP server
 func (c *Client) ExecuteTool(ctx context.Context, serverID, toolName string, params map[string]interface{}) (interface{}, error) {
 	c.mu.RLock()
