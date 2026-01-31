@@ -1,5 +1,7 @@
 import { ReactNode, useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore, initAuth, getSSOCallbackParams, handleSSOCallback } from '../../store/authStore';
+import { useOnboardingStore } from '../../store/onboardingStore';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -7,9 +9,13 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children, fallback }: AuthGuardProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, isLoading } = useAuthStore();
+  const { hasCompletedOnboarding } = useOnboardingStore();
   const [ssoError, setSsoError] = useState<string | null>(null);
   const [ssoLoading, setSsoLoading] = useState(false);
+  const [hasCheckedOnboarding, setHasCheckedOnboarding] = useState(false);
 
   useEffect(() => {
     const ssoParams = getSSOCallbackParams();
@@ -26,6 +32,23 @@ export function AuthGuard({ children, fallback }: AuthGuardProps) {
       initAuth();
     }
   }, []);
+
+  // Check onboarding status after authentication
+  useEffect(() => {
+    if (isAuthenticated && !isLoading && !ssoLoading && !hasCheckedOnboarding) {
+      setHasCheckedOnboarding(true);
+
+      // Don't redirect if already on the onboarding page
+      if (location.pathname === '/onboarding') {
+        return;
+      }
+
+      // Redirect to onboarding if not completed
+      if (!hasCompletedOnboarding) {
+        navigate('/onboarding', { replace: true });
+      }
+    }
+  }, [isAuthenticated, isLoading, ssoLoading, hasCompletedOnboarding, hasCheckedOnboarding, navigate, location.pathname]);
 
   if (ssoLoading || isLoading) {
     return (
