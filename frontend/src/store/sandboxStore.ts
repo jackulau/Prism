@@ -15,12 +15,40 @@ export interface TerminalLine {
   timestamp: number
 }
 
+export type AgentType = 'assistant' | 'autonomous' | 'workflow'
+
 export interface FileHistoryEntry {
   id: string
   file_path: string
   operation: string
   size: number
   created_at: string
+  // Attribution fields
+  agent_id?: string
+  agent_name?: string
+  agent_type?: AgentType
+  tool_name?: string
+  tool_slug?: string
+  message_id?: string
+  conversation_id?: string
+  workflow_id?: string
+  description?: string
+}
+
+export interface AttributionSummary {
+  total_changes: number
+  by_agent: Record<string, number>
+  by_tool: Record<string, number>
+  by_operation: Record<string, number>
+  timeline_by_day: Record<string, number>
+  most_active_agent: string
+  most_used_tool: string
+}
+
+export interface AgentInfo {
+  id: string
+  name: string
+  type: AgentType
 }
 
 // Restore types

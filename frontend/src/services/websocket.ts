@@ -1,10 +1,8 @@
 import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
-import { toast } from '../store/toastStore';
-import { useMonitoringStore } from '../store/monitoringStore';
+import { useWorkspaceStore } from '../store/workspaceStore';
 import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext } from '../types';
-import type { FileNode } from '../store/sandboxStore';
-import type { ActiveAgent, AgentStatus } from '../types/monitoring';
+import type { FileNode, AttributionSummary, AgentInfo, FileHistoryEntry } from '../store/sandboxStore';
 
 interface PendingFileRequest {
   resolve: (content: string) => void;
@@ -21,23 +19,10 @@ class WebSocketService {
   private messageQueue: IncomingWSMessage[] = [];
   private isConnecting = false;
   private intentionalDisconnect = false;
-  private wasConnected = false;
 
   // Track pending file requests with timeouts
   private pendingFileRequests: Map<string, PendingFileRequest> = new Map();
   private readonly FILE_REQUEST_TIMEOUT = 5000; // 5 seconds
-
-  // Reconnect attempt listeners
-  private reconnectListeners: Set<(attempts: number) => void> = new Set();
-
-  onReconnectAttempt(callback: (attempts: number) => void): () => void {
-    this.reconnectListeners.add(callback);
-    return () => this.reconnectListeners.delete(callback);
-  }
-
-  private notifyReconnectAttempt() {
-    this.reconnectListeners.forEach(cb => cb(this.reconnectAttempts));
-  }
 
   connect(token?: string) {
     // Prevent multiple simultaneous connections
@@ -63,7 +48,6 @@ class WebSocketService {
     const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/ws`;
 
     useAppStore.getState().setConnectionStatus('connecting');
-    useMonitoringStore.getState().updateWsStatus('connecting');
 
     // If token provided, pass via Sec-WebSocket-Protocol header for auth
     // Otherwise connect without auth for anonymous/development mode
@@ -72,16 +56,7 @@ class WebSocketService {
     this.ws.onopen = () => {
       this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('connected');
-      useMonitoringStore.getState().updateWsStatus('connected');
-      useMonitoringStore.getState().recordHeartbeat();
-
-      // Show toast if this was a reconnection
-      if (this.reconnectAttempts > 0 || this.wasConnected) {
-        toast.success('Connection restored');
-      }
-
       this.reconnectAttempts = 0;
-      this.wasConnected = true;
 
       // Send queued messages
       while (this.messageQueue.length > 0) {
@@ -102,14 +77,9 @@ class WebSocketService {
     this.ws.onclose = () => {
       this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('disconnected');
-      useMonitoringStore.getState().updateWsStatus('disconnected');
 
       // Only attempt reconnect if this wasn't an intentional disconnect
       if (!this.intentionalDisconnect) {
-        // Show toast only if we were previously connected
-        if (this.wasConnected && this.reconnectAttempts === 0) {
-          toast.warning('Connection lost - attempting to reconnect');
-        }
         this.attemptReconnect();
       }
     };
@@ -117,7 +87,6 @@ class WebSocketService {
     this.ws.onerror = () => {
       this.isConnecting = false;
       useAppStore.getState().setConnectionStatus('error');
-      useMonitoringStore.getState().updateWsStatus('error');
     };
   }
 
@@ -286,60 +255,12 @@ class WebSocketService {
         this.handleFileHistoryContent(message);
         break;
 
-      case 'file.history_restored':
-        this.handleFileHistoryRestored(message);
+      case 'attribution.summary':
+        this.handleAttributionSummary(message);
         break;
 
-      case 'file.history_batch_restored':
-        this.handleFileHistoryBatchRestored(message);
-        break;
-
-      case 'file.history_conflicts':
-        this.handleFileHistoryConflicts(message);
-        break;
-
-      // Agent lifecycle handlers
-      case 'agent.started':
-        this.handleAgentStarted(message);
-        break;
-
-      case 'agent.completed':
-        this.handleAgentCompleted(message);
-        break;
-
-      case 'agent.failed':
-        this.handleAgentFailed(message);
-        break;
-
-      case 'agent.cancelled':
-        this.handleAgentCancelled(message);
-        break;
-
-      // Swarm handlers
-      case 'swarm.started':
-        this.handleSwarmStarted(message);
-        break;
-
-      case 'swarm.agent_started':
-        this.handleSwarmAgentStarted(message);
-        break;
-
-      case 'swarm.agent_completed':
-        this.handleSwarmAgentCompleted(message);
-        break;
-
-      case 'swarm.completed':
-        this.handleSwarmCompleted(message);
-        break;
-
-      case 'swarm.failed':
-        this.handleSwarmFailed(message);
-        break;
-
-      // Heartbeat handlers
-      case 'heartbeat':
-      case 'heartbeat.ack':
-        this.handleHeartbeat();
+      case 'attribution.by_agent':
+        this.handleAttributionByAgent(message);
         break;
     }
   }
@@ -447,220 +368,36 @@ class WebSocketService {
     sandboxStore.setIsLoadingHistory(false);
   }
 
-  private handleFileHistoryRestored(message: OutgoingWSMessage) {
-    const sandboxStore = useSandboxStore.getState();
-    sandboxStore.setIsRestoring(false);
+  private handleAttributionSummary(message: OutgoingWSMessage) {
+    const workspaceStore = useWorkspaceStore.getState();
+    const metadata = message.metadata as {
+      summary?: AttributionSummary;
+      agents?: AgentInfo[];
+      tools?: string[];
+    } | undefined;
 
-    if (message.success) {
-      const metadata = message.metadata as { history_id?: string; backup_id?: string } | undefined;
-      const backupId = metadata?.backup_id || null;
-
-      // Store backup ID for undo functionality
-      sandboxStore.setLastRestoreBackupId(backupId);
-      sandboxStore.setLastRestoreEntry(sandboxStore.pendingRestore);
-
-      // Close the preview dialog
-      sandboxStore.setShowRestorePreview(false);
-      sandboxStore.cancelRestore();
-
-      // Refresh file content if the file is selected
-      if (message.file_path) {
-        this.requestFile(message.file_path);
-      }
-    } else {
-      sandboxStore.setRestoreError(message.error || 'Restore failed');
+    if (metadata?.summary) {
+      workspaceStore.setAttributionSummary(metadata.summary);
+    }
+    if (metadata?.agents) {
+      workspaceStore.setAgentList(metadata.agents);
+    }
+    if (metadata?.tools) {
+      workspaceStore.setToolList(metadata.tools);
     }
   }
 
-  private handleFileHistoryBatchRestored(message: OutgoingWSMessage) {
+  private handleAttributionByAgent(message: OutgoingWSMessage) {
     const sandboxStore = useSandboxStore.getState();
-    sandboxStore.setIsRestoring(false);
-
-    const metadata = message.metadata as {
-      results?: Array<{ history_id: string; file_path: string; success: boolean; error?: string; backup_id?: string }>;
-      total_success?: number;
-      total_failed?: number;
-    } | undefined;
-
-    const results = metadata?.results || [];
-    sandboxStore.setBatchRestoreResults(results);
-
-    if (message.success) {
-      // Close the batch restore dialog
-      sandboxStore.setShowBatchRestoreDialog(false);
-      sandboxStore.setBatchRestoreEntries([]);
-    } else {
-      sandboxStore.setRestoreError(`${metadata?.total_failed || 0} files failed to restore`);
-    }
-  }
-
-  private handleFileHistoryConflicts(message: OutgoingWSMessage) {
-    const sandboxStore = useSandboxStore.getState();
-    sandboxStore.setIsRestoring(false);
-
-    const metadata = message.metadata as {
-      conflicts?: Array<{ file_path: string; history_timestamp: string; current_modified: string; has_newer_version: boolean }>;
-    } | undefined;
-
-    const conflicts = metadata?.conflicts || [];
-    sandboxStore.setRestoreConflicts(conflicts);
-  }
-
-  // Agent lifecycle handlers
-  private handleAgentStarted(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
     const metadata = message.metadata as {
       agent_id?: string;
-      agent_name?: string;
-      workspace_id?: string;
-      task_description?: string;
+      entries?: FileHistoryEntry[];
     } | undefined;
 
-    if (metadata?.agent_id) {
-      const agent: ActiveAgent = {
-        id: metadata.agent_id,
-        name: metadata.agent_name || 'Unknown Agent',
-        status: 'running',
-        startedAt: Date.now(),
-        updatedAt: Date.now(),
-        workspaceId: metadata.workspace_id,
-        taskDescription: metadata.task_description,
-      };
-      monitoringStore.addAgent(agent);
+    if (metadata?.entries) {
+      // Update file history with filtered entries
+      sandboxStore.setFileHistory(metadata.entries);
     }
-  }
-
-  private handleAgentCompleted(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
-    const metadata = message.metadata as { agent_id?: string } | undefined;
-
-    if (metadata?.agent_id) {
-      monitoringStore.updateAgent(metadata.agent_id, { status: 'completed' as AgentStatus });
-      monitoringStore.removeAgent(metadata.agent_id);
-    }
-  }
-
-  private handleAgentFailed(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
-    const metadata = message.metadata as { agent_id?: string; error?: string } | undefined;
-
-    if (metadata?.agent_id) {
-      monitoringStore.updateAgent(metadata.agent_id, {
-        status: 'failed' as AgentStatus,
-        metadata: { error: metadata.error },
-      });
-      monitoringStore.removeAgent(metadata.agent_id);
-    }
-  }
-
-  private handleAgentCancelled(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
-    const metadata = message.metadata as { agent_id?: string } | undefined;
-
-    if (metadata?.agent_id) {
-      monitoringStore.updateAgent(metadata.agent_id, { status: 'cancelled' as AgentStatus });
-      monitoringStore.removeAgent(metadata.agent_id);
-    }
-  }
-
-  // Swarm handlers
-  private handleSwarmStarted(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
-    const metadata = message.metadata as {
-      swarm_id?: string;
-      swarm_name?: string;
-      workspace_id?: string;
-      agent_count?: number;
-    } | undefined;
-
-    monitoringStore.addActivityEvent({
-      type: 'swarm.started',
-      title: `Swarm Started: ${metadata?.swarm_name || 'Unknown'}`,
-      description: `${metadata?.agent_count || 0} agents initialized`,
-      severity: 'info',
-      workspaceId: metadata?.workspace_id,
-      metadata: { swarm_id: metadata?.swarm_id },
-    });
-  }
-
-  private handleSwarmAgentStarted(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
-    const metadata = message.metadata as {
-      agent_id?: string;
-      agent_name?: string;
-      swarm_id?: string;
-      workspace_id?: string;
-      task_description?: string;
-    } | undefined;
-
-    if (metadata?.agent_id) {
-      const agent: ActiveAgent = {
-        id: metadata.agent_id,
-        name: metadata.agent_name || 'Swarm Agent',
-        status: 'running',
-        startedAt: Date.now(),
-        updatedAt: Date.now(),
-        workspaceId: metadata.workspace_id,
-        taskDescription: metadata.task_description,
-        metadata: { swarm_id: metadata.swarm_id },
-      };
-      monitoringStore.addAgent(agent);
-    }
-  }
-
-  private handleSwarmAgentCompleted(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
-    const metadata = message.metadata as { agent_id?: string } | undefined;
-
-    if (metadata?.agent_id) {
-      monitoringStore.updateAgent(metadata.agent_id, { status: 'completed' as AgentStatus });
-      monitoringStore.removeAgent(metadata.agent_id);
-    }
-  }
-
-  private handleSwarmCompleted(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
-    const metadata = message.metadata as {
-      swarm_id?: string;
-      swarm_name?: string;
-      workspace_id?: string;
-      total_agents?: number;
-      completed_agents?: number;
-    } | undefined;
-
-    monitoringStore.addActivityEvent({
-      type: 'swarm.completed',
-      title: `Swarm Completed: ${metadata?.swarm_name || 'Unknown'}`,
-      description: `${metadata?.completed_agents || 0}/${metadata?.total_agents || 0} agents completed`,
-      severity: 'success',
-      workspaceId: metadata?.workspace_id,
-      metadata: { swarm_id: metadata?.swarm_id },
-    });
-  }
-
-  private handleSwarmFailed(message: OutgoingWSMessage) {
-    const monitoringStore = useMonitoringStore.getState();
-    const metadata = message.metadata as {
-      swarm_id?: string;
-      swarm_name?: string;
-      workspace_id?: string;
-      error?: string;
-    } | undefined;
-
-    monitoringStore.addActivityEvent({
-      type: 'swarm.failed',
-      title: `Swarm Failed: ${metadata?.swarm_name || 'Unknown'}`,
-      description: metadata?.error || 'Swarm execution failed',
-      severity: 'error',
-      workspaceId: metadata?.workspace_id,
-      metadata: { swarm_id: metadata?.swarm_id },
-    });
-  }
-
-  // Heartbeat handler
-  private handleHeartbeat() {
-    const monitoringStore = useMonitoringStore.getState();
-    monitoringStore.recordHeartbeat();
   }
 
   // Helper to convert SandboxFile[] to FileNode[]
@@ -676,18 +413,14 @@ class WebSocketService {
   private attemptReconnect() {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      this.notifyReconnectAttempt();
       const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
       useAppStore.getState().setConnectionStatus('connecting');
-      useMonitoringStore.getState().updateWsStatus('connecting');
       setTimeout(() => {
         this.connect(this.token || undefined);
       }, delay);
     } else {
       // Max reconnection attempts reached - set failed status for UI feedback
       useAppStore.getState().setConnectionStatus('error');
-      useMonitoringStore.getState().updateWsStatus('error');
-      toast.error('Unable to connect. Please check your network.');
     }
   }
 
@@ -880,25 +613,20 @@ class WebSocketService {
     } as IncomingWSMessage);
   }
 
-  restoreFromHistory(historyId: string, createBackup = true) {
+  requestAttributionSummary() {
     this.send({
-      type: 'file.history_restore',
+      type: 'attribution.summary_request',
       conversation_id: '',
-      params: {
-        history_id: historyId,
-        create_backup: createBackup,
-      },
+      params: {},
     } as IncomingWSMessage);
   }
 
-  batchRestoreFromHistory(historyIds: string[], createBackup = true, checkConflicts = true) {
+  requestAttributionByAgent(agentId: string) {
     this.send({
-      type: 'file.history_batch_restore',
+      type: 'attribution.by_agent_request',
       conversation_id: '',
       params: {
-        history_ids: historyIds,
-        create_backup: createBackup,
-        check_conflicts: checkConflicts,
+        agent_id: agentId,
       },
     } as IncomingWSMessage);
   }
