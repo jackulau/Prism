@@ -24,6 +24,7 @@ import {
   FileText,
   Download,
   Shield,
+  Layers,
   type LucideIcon
 } from 'lucide-react';
 import { useAppStore } from '../../store';
@@ -51,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Bot, label: 'Agents', path: '/agents' },
   { icon: Cpu, label: 'Workers', path: '/workers' },
   { icon: Workflow, label: 'Workflows', path: '/workflows' },
+  { icon: Layers, label: 'Parallel Batch', path: '/batch' },
   // Resources
   { icon: CheckSquare, label: 'Tasks', path: '/tasks' },
   { icon: Wrench, label: 'Tools', path: '/tools' },

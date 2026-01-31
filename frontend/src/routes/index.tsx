@@ -21,6 +21,7 @@ import AuditLogs from '../pages/settings/AuditLogs';
 import DataExport from '../pages/settings/DataExport';
 import ComplianceReports from '../pages/settings/ComplianceReports';
 import ToolCatalog from '../pages/ToolCatalog';
+import ParallelBatch from '../pages/ParallelBatch';
 
 export const router = createBrowserRouter([
   {
@@ -114,6 +115,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings/compliance',
         element: <ComplianceReports />,
+      },
+      {
+        path: 'batch',
+        element: <ParallelBatch />,
       },
     ],
   },
