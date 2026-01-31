@@ -15,6 +15,7 @@ import {
   Trash2,
   Loader2,
   Cpu,
+  Workflow,
   type LucideIcon
 } from 'lucide-react';
 import { useAppStore } from '../../store';
@@ -35,6 +36,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { icon: Home, label: 'Dashboard', path: '/' },
   { icon: MessageSquare, label: 'Workspaces', path: '/workspace' },
+  { icon: Workflow, label: 'Workflows', path: '/workflows' },
   { icon: Bot, label: 'Workers', path: '/workers' },
   { icon: Plug, label: 'Integrations', path: '/integrations' },
   { icon: BarChart3, label: 'Usage', path: '/usage' },
