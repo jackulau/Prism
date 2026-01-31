@@ -478,7 +478,7 @@ function MCPServerList() {
   const [newApiKey, setNewApiKey] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  const [editingServer, setEditingServer] = useState<MCPServer | null>(null);
+  const [_editingServer, _setEditingServer] = useState<MCPServer | null>(null);  // TODO: implement editing feature
 
   useEffect(() => {
     if (accessToken) {
@@ -512,7 +512,7 @@ function MCPServerList() {
   };
 
   const handleEdit = (server: MCPServer) => {
-    setEditingServer(server);
+    _setEditingServer(server);
   };
 
   if (serversLoading && servers.length === 0) {

@@ -1,6 +1,5 @@
-// Re-export agent progress types
+// Re-export agent progress types (except AgentStatus which is defined locally)
 export type {
-  AgentStatus,
   SwarmStatus,
   ProgressEvent,
   ProgressMetrics,

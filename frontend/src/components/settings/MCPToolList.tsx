@@ -7,7 +7,7 @@ interface MCPToolListProps {
   serverName: string;
 }
 
-export function MCPToolList({ serverId, serverName }: MCPToolListProps) {
+export function MCPToolList({ serverId, serverName: _serverName }: MCPToolListProps) {
   const { serverTools, toolsLoading, fetchServerTools } = useMCPServerStore();
   const tools = serverTools[serverId] || [];
   const loading = toolsLoading[serverId];

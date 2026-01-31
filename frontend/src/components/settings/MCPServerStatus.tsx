@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { CheckCircle, XCircle, AlertCircle, RefreshCw, Clock } from 'lucide-react';
-import { useMCPServerStore, type MCPServerStatus as MCPStatus } from '../../store/mcpServerStore';
+import { useMCPServerStore } from '../../store/mcpServerStore';
 
 interface MCPServerStatusProps {
   serverId: string;
@@ -12,7 +12,7 @@ interface MCPServerStatusProps {
 
 export function MCPServerStatus({
   serverId,
-  serverName,
+  serverName: _serverName,  // Available for debugging/logging
   enabled,
   lastError,
   compact = false,

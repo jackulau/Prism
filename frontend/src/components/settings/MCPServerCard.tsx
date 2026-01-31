@@ -27,7 +27,8 @@ export function MCPServerCard({ server, onEdit }: MCPServerCardProps) {
   const [deleting, setDeleting] = useState(false);
   const { removeServer, enableServer, disableServer, serverStatuses } = useMCPServerStore();
 
-  const status = serverStatuses[server.id];
+  // Status is available via serverStatuses[server.id] when needed for future features
+  void serverStatuses;
 
   const handleDelete = async () => {
     if (deleting) return;

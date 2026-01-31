@@ -302,7 +302,7 @@ export const useMCPServerStore = create<MCPServerState>((set, get) => ({
   },
 
   startStatusPolling: (intervalMs = 30000) => {
-    const { pollingInterval, servers } = get();
+    const { pollingInterval, servers: _initialServers } = get();
 
     // Clear existing interval if any
     if (pollingInterval) {
