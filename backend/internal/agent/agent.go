@@ -102,6 +102,12 @@ const (
 	AgentEventCompleted     AgentEventType = "completed"
 	AgentEventFailed        AgentEventType = "failed"
 	AgentEventCancelled     AgentEventType = "cancelled"
+	AgentEventProgress      AgentEventType = "progress"       // Progress update with step info
+	AgentEventStepStarted   AgentEventType = "step_started"   // Workflow step started
+	AgentEventStepCompleted AgentEventType = "step_completed" // Workflow step completed
+	AgentEventThinkingStart AgentEventType = "thinking_start" // Started thinking/reasoning
+	AgentEventThinkingEnd   AgentEventType = "thinking_end"   // Finished thinking/reasoning
+	AgentEventEstimate      AgentEventType = "estimate"       // Time/work estimate update
 )
 
 // NewAgent creates a new agent instance

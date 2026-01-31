@@ -896,6 +896,31 @@ func forwardAgentEvents(deps *Dependencies, client *ws.Client, execution *agent.
 			toolName, _ := event.Data["name"].(string)
 			params := event.Data["parameters"]
 			client.SendMessage(ws.NewAgentToolCall(agentInstance.ID, taskID, toolName, params))
+
+		// New progress event handlers
+		case agent.AgentEventProgress:
+			progress := transformAgentProgressEvent(event)
+			client.SendMessage(ws.NewAgentProgress(agentInstance.ID, progress))
+
+		case agent.AgentEventStepStarted:
+			step := transformAgentStepEvent(event)
+			client.SendMessage(ws.NewAgentStepStarted(agentInstance.ID, step))
+
+		case agent.AgentEventStepCompleted:
+			step := transformAgentStepEvent(event)
+			client.SendMessage(ws.NewAgentStepCompleted(agentInstance.ID, step))
+
+		case agent.AgentEventThinkingStart:
+			context, _ := event.Data["context"].(string)
+			client.SendMessage(ws.NewAgentThinkingStart(agentInstance.ID, context, event.Timestamp.UnixMilli()))
+
+		case agent.AgentEventThinkingEnd:
+			client.SendMessage(ws.NewAgentThinkingEnd(agentInstance.ID, event.Timestamp.UnixMilli()))
+
+		case agent.AgentEventEstimate:
+			estimate := transformAgentEstimateEvent(event)
+			client.SendMessage(ws.NewAgentEstimate(agentInstance.ID, estimate))
+
 		case agent.AgentEventCompleted:
 			output, _ := event.Data["output"].(string)
 			// Wait for result to get duration
@@ -915,6 +940,93 @@ func forwardAgentEvents(deps *Dependencies, client *ws.Client, execution *agent.
 			return
 		}
 	}
+}
+
+// transformAgentProgressEvent transforms an agent event to AgentProgressInfo
+func transformAgentProgressEvent(event *agent.AgentEvent) *ws.AgentProgressInfo {
+	progress := &ws.AgentProgressInfo{
+		Timestamp: event.Timestamp.UnixMilli(),
+	}
+
+	if currentStep, ok := event.Data["current_step"].(int); ok {
+		progress.CurrentStep = currentStep
+	}
+	if totalSteps, ok := event.Data["total_steps"].(int); ok {
+		progress.TotalSteps = totalSteps
+	}
+	if percentComplete, ok := event.Data["percent_complete"].(float64); ok {
+		progress.PercentComplete = percentComplete
+	}
+	if stepName, ok := event.Data["step_name"].(string); ok {
+		progress.StepName = stepName
+	}
+	if message, ok := event.Data["message"].(string); ok {
+		progress.Message = message
+	}
+
+	return progress
+}
+
+// transformAgentStepEvent transforms an agent event to AgentStepInfo
+func transformAgentStepEvent(event *agent.AgentEvent) *ws.AgentStepInfo {
+	step := &ws.AgentStepInfo{
+		StartedAt: event.Timestamp.UnixMilli(),
+	}
+
+	if stepID, ok := event.Data["step_id"].(string); ok {
+		step.StepID = stepID
+	}
+	if stepName, ok := event.Data["step_name"].(string); ok {
+		step.StepName = stepName
+	}
+	if stepType, ok := event.Data["step_type"].(string); ok {
+		step.StepType = stepType
+	}
+	if status, ok := event.Data["status"].(string); ok {
+		step.Status = status
+	}
+	if input, ok := event.Data["input"]; ok {
+		step.Input = input
+	}
+	if output, ok := event.Data["output"]; ok {
+		step.Output = output
+	}
+	if errMsg, ok := event.Data["error"].(string); ok {
+		step.Error = errMsg
+	}
+	if duration, ok := event.Data["duration"].(int64); ok {
+		step.Duration = duration
+	}
+	if completedAt, ok := event.Data["completed_at"].(int64); ok {
+		step.CompletedAt = completedAt
+	}
+	if metadata, ok := event.Data["metadata"].(map[string]interface{}); ok {
+		step.Metadata = metadata
+	}
+
+	return step
+}
+
+// transformAgentEstimateEvent transforms an agent event to AgentEstimateInfo
+func transformAgentEstimateEvent(event *agent.AgentEvent) *ws.AgentEstimateInfo {
+	estimate := &ws.AgentEstimateInfo{
+		Timestamp: event.Timestamp.UnixMilli(),
+	}
+
+	if estimatedSteps, ok := event.Data["estimated_steps"].(int); ok {
+		estimate.EstimatedSteps = estimatedSteps
+	}
+	if estimatedDuration, ok := event.Data["estimated_duration_ms"].(int64); ok {
+		estimate.EstimatedDurationMs = estimatedDuration
+	}
+	if confidence, ok := event.Data["confidence"].(float64); ok {
+		estimate.Confidence = confidence
+	}
+	if message, ok := event.Data["message"].(string); ok {
+		estimate.Message = message
+	}
+
+	return estimate
 }
 
 // forwardBatchEvents forwards batch execution events to the WebSocket client
