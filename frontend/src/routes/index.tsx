@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '../layouts/AppLayout';
 import Dashboard from '../pages/Dashboard';
+import SingleAgent from '../pages/SingleAgent';
 import Workers from '../pages/Workers';
 import Integrations from '../pages/Integrations';
 import Usage from '../pages/Usage';
@@ -25,6 +26,10 @@ export const router = createBrowserRouter([
       {
         path: 'workspace/:id?',
         element: <Workspace />,
+      },
+      {
+        path: 'agent',
+        element: <SingleAgent />,
       },
       {
         path: 'workers',

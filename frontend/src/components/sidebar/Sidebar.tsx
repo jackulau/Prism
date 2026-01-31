@@ -4,6 +4,7 @@ import {
   Home,
   MessageSquare,
   Bot,
+  Play,
   Plug,
   BarChart3,
   Building,
@@ -35,6 +36,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { icon: Home, label: 'Dashboard', path: '/' },
   { icon: MessageSquare, label: 'Workspaces', path: '/workspace' },
+  { icon: Play, label: 'Agent', path: '/agent' },
   { icon: Bot, label: 'Workers', path: '/workers' },
   { icon: Plug, label: 'Integrations', path: '/integrations' },
   { icon: BarChart3, label: 'Usage', path: '/usage' },
