@@ -1,6 +1,7 @@
 import { OrgNameEditor } from '../components/organization/OrgNameEditor';
 import { MemberList } from '../components/organization/MemberList';
 import { SubscriptionInfo } from '../components/organization/SubscriptionInfo';
+import { OrgWorkspaceManager } from '../components/organization/OrgWorkspaceManager';
 
 export default function Organization() {
   return (
@@ -19,6 +20,9 @@ export default function Organization() {
 
         {/* Subscription Info */}
         <SubscriptionInfo />
+
+        {/* Workspaces */}
+        <OrgWorkspaceManager />
 
         {/* Member List */}
         <MemberList />
