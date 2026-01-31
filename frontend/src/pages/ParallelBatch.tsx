@@ -22,22 +22,27 @@ type TabView = 'tasks' | 'config' | 'progress' | 'results';
 
 export default function ParallelBatch() {
   const {
-    tasks,
-    isRunning,
     execution,
     startBatch,
     stopBatch,
     pauseBatch,
     resumeBatch,
-    results,
+    getOrderedTasks,
+    getCompletedTasks,
   } = useBatchStore();
 
   const [activeTab, setActiveTab] = useState<TabView>('tasks');
 
+  // Get derived values from execution state
+  const tasks = getOrderedTasks();
+  const results = getCompletedTasks();
+  const isRunning = execution.status === 'running';
+  const progress = execution.progress;
+
   const canStart = tasks.length > 0 && !isRunning;
   const canStop = isRunning;
-  const canPause = isRunning && execution?.status === 'running';
-  const canResume = !isRunning && execution?.status === 'paused';
+  const canPause = isRunning;
+  const canResume = !isRunning && execution.status === 'pending' && progress.completed > 0;
 
   const tabs: { id: TabView; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'tasks', label: 'Tasks', icon: <ListTodo size={16} />, badge: tasks.length },
@@ -92,7 +97,7 @@ export default function ParallelBatch() {
             )}
             {canStart && (
               <button
-                onClick={startBatch}
+                onClick={() => startBatch()}
                 className="flex items-center gap-2 px-4 py-2 bg-editor-accent text-white rounded-lg hover:bg-editor-accent/90 transition-colors"
               >
                 <Play size={18} />
@@ -103,14 +108,14 @@ export default function ParallelBatch() {
         </div>
 
         {/* Status Banner */}
-        {execution && (
+        {execution.batchId && (
           <div
             className={`p-4 rounded-lg border ${
               execution.status === 'running'
                 ? 'bg-editor-accent/10 border-editor-accent/30'
                 : execution.status === 'completed'
                 ? 'bg-editor-success/10 border-editor-success/30'
-                : execution.status === 'paused'
+                : execution.status === 'pending'
                 ? 'bg-editor-warning/10 border-editor-warning/30'
                 : 'bg-editor-error/10 border-editor-error/30'
             }`}
@@ -123,7 +128,7 @@ export default function ParallelBatch() {
                       ? 'text-editor-accent'
                       : execution.status === 'completed'
                       ? 'text-editor-success'
-                      : execution.status === 'paused'
+                      : execution.status === 'pending'
                       ? 'text-editor-warning'
                       : 'text-editor-error'
                   }`}
@@ -131,15 +136,15 @@ export default function ParallelBatch() {
                   Batch {execution.status}
                 </span>
                 <span className="text-xs text-editor-muted">
-                  {execution.completedTasks + execution.failedTasks} / {execution.totalTasks} tasks processed
+                  {progress.completed} / {progress.total} tasks processed
                 </span>
               </div>
-              {execution.status === 'running' && (
+              {execution.status === 'running' && progress.total > 0 && (
                 <div className="h-2 w-32 bg-editor-surface rounded-full overflow-hidden">
                   <div
                     className="h-full bg-editor-accent transition-all duration-300"
                     style={{
-                      width: `${((execution.completedTasks + execution.failedTasks) / execution.totalTasks) * 100}%`,
+                      width: `${progress.percentage}%`,
                     }}
                   />
                 </div>

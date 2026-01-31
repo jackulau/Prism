@@ -2,13 +2,13 @@ import { create } from 'zustand';
 import { apiService } from '../services/api';
 
 export interface Session {
-  id: number;
+  id: string;
+  user_id: string;
   ip_address: string;
   user_agent: string;
   device_name: string;
   created_at: string;
-  last_activity: string;
-  expires_at: string;
+  last_activity_at: string;
   is_current: boolean;
 }
 
@@ -21,7 +21,7 @@ interface SessionState {
 
   // Actions
   fetchSessions: () => Promise<void>;
-  terminateSession: (id: number) => Promise<void>;
+  terminateSession: (id: string) => Promise<void>;
   terminateOthers: () => Promise<void>;
   terminateAll: () => Promise<void>;
   showIdleWarning: (countdown: number) => void;
@@ -48,7 +48,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
   },
 
-  terminateSession: async (id: number) => {
+  terminateSession: async (id: string) => {
     const response = await apiService.terminateSession(id);
     if (response.error) {
       set({ error: response.error });

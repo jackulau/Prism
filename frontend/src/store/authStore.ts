@@ -234,7 +234,7 @@ export const loginUser = async (credentials: LoginCredentials): Promise<AuthResp
 export const completeMFALogin = async (authData: {
   access_token: string;
   refresh_token: string;
-  user: { id: string; email: string; created_at: string };
+  user: { id: string; email: string; created_at: string; role?: string };
 }) => {
   const { setUser, setTokens } = useAuthStore.getState();
 
@@ -243,6 +243,7 @@ export const completeMFALogin = async (authData: {
     id: authData.user.id,
     email: authData.user.email,
     createdAt: authData.user.created_at,
+    role: (authData.user.role as Role) || 'user',
   });
 
   // Connect services with token
@@ -385,6 +386,7 @@ export const handleSSOCallback = async (code: string, state: string): Promise<vo
     id: response.data.user.id,
     email: response.data.user.email,
     createdAt: response.data.user.created_at,
+    role: 'user', // Default role for SSO users
   });
 
   // Connect services with token

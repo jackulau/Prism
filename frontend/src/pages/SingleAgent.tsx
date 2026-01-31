@@ -7,58 +7,57 @@ import { useAgentStore } from '../store/agentStore';
 
 export default function SingleAgent() {
   const {
-    executionStatus,
-    config,
-    startExecution,
-    addOutput,
+    currentExecution,
+    startAgent,
+    stopAgent,
+    appendOutput,
     completeExecution,
-    stopExecution,
-    setExecutionError,
+    setError,
   } = useAgentStore();
 
-  const isRunning = executionStatus === 'running';
+  const isRunning = currentExecution.status === 'running';
+  const config = currentExecution.config;
 
-  const handleSubmit = useCallback(async () => {
-    const executionId = startExecution();
+  const handleSubmit = useCallback(async (formConfig: { name: string; provider: string; model: string; systemPrompt?: string }) => {
+    const executionId = `exec-${Date.now()}`;
+    startAgent({
+      name: formConfig.name,
+      provider: formConfig.provider,
+      model: formConfig.model,
+      systemPrompt: formConfig.systemPrompt,
+    }, executionId);
     console.log('Starting agent execution:', executionId);
 
     // Add initial output showing configuration
-    addOutput({
-      type: 'text',
-      content: `Starting agent "${config.name}" with model ${config.provider}/${config.model}...`,
-    });
+    appendOutput(`Starting agent "${formConfig.name}" with model ${formConfig.provider}/${formConfig.model}...`);
 
     try {
       // TODO: Integrate with actual agent execution API
       // For now, simulate a basic execution
-      addOutput({
-        type: 'thinking',
-        content: 'Analyzing the request and preparing response...',
-      });
+      appendOutput('Analyzing the request and preparing response...');
 
       // Simulate processing time
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       // Simulate a response
-      addOutput({
-        type: 'text',
-        content: `Hello! I'm ${config.name}, ready to assist you. This is a placeholder response. The actual agent execution will be connected to the backend API.`,
-      });
+      appendOutput(`Hello! I'm ${formConfig.name}, ready to assist you. This is a placeholder response. The actual agent execution will be connected to the backend API.`);
 
-      completeExecution();
+      completeExecution({
+        agentId: executionId,
+        success: true,
+        completedAt: new Date(),
+        iterationCount: 1,
+      });
     } catch (error) {
-      setExecutionError(error instanceof Error ? error.message : 'Unknown error occurred');
+      setError(error instanceof Error ? error.message : 'Unknown error occurred');
     }
-  }, [config, startExecution, addOutput, completeExecution, setExecutionError]);
+  }, [startAgent, appendOutput, completeExecution, setError]);
 
   const handleStop = useCallback(() => {
     // TODO: Send stop signal to backend
-    addOutput({
-      type: 'text',
-      content: 'Execution stopped by user.',
-    });
-    stopExecution();
-  }, [addOutput, stopExecution]);
+    appendOutput('Execution stopped by user.');
+    stopAgent();
+  }, [appendOutput, stopAgent]);
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -87,7 +86,11 @@ export default function SingleAgent() {
 
         {/* Right Panel - Execution Output */}
         <div className="flex-1 flex flex-col overflow-hidden bg-editor-bg">
-          <AgentExecutionPanel onStop={isRunning ? handleStop : undefined} />
+          <AgentExecutionPanel
+            status={currentExecution.status}
+            output={currentExecution.output.join('\n')}
+            onStop={isRunning ? handleStop : undefined}
+          />
         </div>
       </div>
     </div>

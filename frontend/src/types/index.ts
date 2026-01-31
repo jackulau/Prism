@@ -560,5 +560,99 @@ export interface HistoryFilters {
   searchQuery?: string;
 }
 
+// ============================================================================
+// Agent Progress Message Types (SSE)
+// ============================================================================
+
+export interface AgentProgressMessage {
+  type: 'agent.progress';
+  agent_id: string;
+  progress: number;
+  message?: string;
+  step_name?: string;
+  total_steps?: number;
+  current_step?: number;
+  percent_complete?: number;
+}
+
+export interface AgentStepStartedMessage {
+  type: 'agent.step_started';
+  agent_id: string;
+  step_name: string;
+  step_index: number;
+  step_number?: number;
+}
+
+export interface AgentStepCompletedMessage {
+  type: 'agent.step_completed';
+  agent_id: string;
+  step_name: string;
+  step_index: number;
+  step_number?: number;
+  result?: unknown;
+}
+
+export interface AgentThinkingMessage {
+  type: 'agent.thinking' | 'agent.thinking_start';
+  agent_id: string;
+  content: string;
+}
+
+export interface AgentEstimateMessage {
+  type: 'agent.estimate';
+  agent_id: string;
+  estimated_time_ms: number;
+  total_steps: number;
+  estimated_tokens_remaining?: number;
+  confidence?: number;
+}
+
+export interface SwarmProgressMessage {
+  type: 'swarm.progress';
+  swarm_id: string;
+  progress: number;
+  completed_agents: number;
+  total_agents: number;
+  agent_progress?: Record<string, number>;
+  status?: string;
+  overall_percent?: number;
+}
+
+// ============================================================================
+// Workflow Execution Types
+// ============================================================================
+
+export type WorkflowExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'waiting_input';
+export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'retrying';
+
+export interface WorkflowStepResult {
+  step_id: string;
+  stepId?: string;
+  status: WorkflowStepStatus;
+  output?: unknown;
+  error?: string;
+  started_at?: string;
+  startedAt?: string;
+  completed_at?: string;
+  completedAt?: string;
+}
+
+export interface WorkflowInfo {
+  id: string;
+  name: string;
+  description?: string;
+  steps: WorkflowStepInfo[];
+  totalSteps?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowStepInfo {
+  id: string;
+  name: string;
+  type: string;
+  config?: Record<string, unknown>;
+}
+
 // Re-export monitoring types
 export * from './monitoring';

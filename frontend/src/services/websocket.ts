@@ -708,6 +708,28 @@ class WebSocketService {
     } as IncomingWSMessage);
   }
 
+  restoreFromHistory(historyId: string, createBackup = true) {
+    this.send({
+      type: 'file.history_restore',
+      conversation_id: '',
+      params: {
+        history_id: historyId,
+        create_backup: createBackup,
+      },
+    } as IncomingWSMessage);
+  }
+
+  batchRestoreFromHistory(historyIds: string[], createBackup = true) {
+    this.send({
+      type: 'file.history_batch_restore',
+      conversation_id: '',
+      params: {
+        history_ids: historyIds,
+        create_backup: createBackup,
+      },
+    } as IncomingWSMessage);
+  }
+
   disconnect() {
     this.intentionalDisconnect = true;
     this.isConnecting = false;

@@ -40,6 +40,32 @@ const (
 	PermManageSettings       Permission = "settings:manage"
 )
 
+// ResourceType represents a type of resource in the system
+type ResourceType string
+
+const (
+	ResourceConversation ResourceType = "conversation"
+	ResourceAgent        ResourceType = "agent"
+	ResourceWorkflow     ResourceType = "workflow"
+	ResourceTool         ResourceType = "tool"
+	ResourceUser         ResourceType = "user"
+	ResourceOrganization ResourceType = "organization"
+	ResourceTeam         ResourceType = "team"
+	ResourceSettings     ResourceType = "settings"
+	ResourceProvider     ResourceType = "provider"
+)
+
+// Action represents an action that can be performed on a resource
+type Action string
+
+const (
+	ActionView   Action = "view"
+	ActionCreate Action = "create"
+	ActionUpdate Action = "update"
+	ActionDelete Action = "delete"
+	ActionExecute Action = "execute"
+)
+
 // RolePermissions maps roles to their allowed permissions
 var RolePermissions = map[Role][]Permission{
 	RoleUser: {
