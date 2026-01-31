@@ -479,6 +479,87 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // Task Queue
+  async getTasks(params?: { status?: string; limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    if (params?.offset) searchParams.set('offset', params.offset.toString());
+    const query = searchParams.toString();
+    return this.request<{
+      tasks: Array<{
+        id: string;
+        user_id: string;
+        prompt: string;
+        context?: string;
+        priority: number;
+        status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+        agent_config?: Record<string, unknown>;
+        metadata?: Record<string, unknown>;
+        result?: Record<string, unknown>;
+        error?: string;
+        callback_url?: string;
+        created_at: number;
+        started_at?: number;
+        completed_at?: number;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+    }>(`/tasks${query ? `?${query}` : ''}`);
+  }
+
+  async getTask(taskId: string) {
+    return this.request<{
+      id: string;
+      user_id: string;
+      prompt: string;
+      context?: string;
+      priority: number;
+      status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+      agent_config?: Record<string, unknown>;
+      metadata?: Record<string, unknown>;
+      result?: Record<string, unknown>;
+      error?: string;
+      callback_url?: string;
+      created_at: number;
+      started_at?: number;
+      completed_at?: number;
+    }>(`/tasks/${taskId}`);
+  }
+
+  async cancelTask(taskId: string) {
+    return this.request<{ success: boolean; message: string }>(`/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async retryTask(taskId: string) {
+    return this.request<{
+      success: boolean;
+      message: string;
+      task: {
+        id: string;
+        user_id: string;
+        prompt: string;
+        status: string;
+        created_at: number;
+      };
+    }>(`/tasks/${taskId}/retry`, {
+      method: 'POST',
+    });
+  }
+
+  async getTaskStats() {
+    return this.request<{
+      total: number;
+      pending: number;
+      running: number;
+      completed: number;
+      failed: number;
+    }>('/tasks/stats');
+  }
 }
 
 export const apiService = new ApiService();

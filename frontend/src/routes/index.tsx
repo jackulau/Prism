@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '../layouts/AppLayout';
 import Dashboard from '../pages/Dashboard';
 import Workers from '../pages/Workers';
+import Tasks from '../pages/Tasks';
 import Integrations from '../pages/Integrations';
 import Usage from '../pages/Usage';
 import Organization from '../pages/Organization';
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
       {
         path: 'workers',
         element: <Workers />,
+      },
+      {
+        path: 'tasks',
+        element: <Tasks />,
       },
       {
         path: 'integrations',
