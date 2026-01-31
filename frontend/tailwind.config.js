@@ -31,6 +31,9 @@ export default {
         'bounce-dot': 'bounce-dot 1.4s ease-in-out infinite',
         'wave': 'wave 1.2s ease-in-out infinite',
         'typewriter-blink': 'typewriter-blink 1s step-end infinite',
+        'slide-in-right': 'slide-in-right 0.3s ease-out',
+        'slide-in-down': 'slide-in-down 0.2s ease-out',
+        'wiggle': 'wiggle 0.5s ease-in-out',
       },
       keyframes: {
         typing: {
@@ -57,6 +60,20 @@ export default {
         'typewriter-blink': {
           '0%, 50%': { opacity: '1' },
           '51%, 100%': { opacity: '0' },
+        },
+        'slide-in-right': {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        'slide-in-down': {
+          '0%': { transform: 'translateY(-10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        'wiggle': {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '25%': { transform: 'rotate(-10deg)' },
+          '50%': { transform: 'rotate(10deg)' },
+          '75%': { transform: 'rotate(-5deg)' },
         },
       },
       backgroundImage: {

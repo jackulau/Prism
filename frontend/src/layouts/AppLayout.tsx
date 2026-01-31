@@ -5,6 +5,7 @@ import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { ToastContainer } from '../components/Toast';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { FloatingEmergencyStop } from '../components/FloatingEmergencyStop';
+import { NotificationToastContainer } from '../components/notifications';
 import { AuthGuard } from '../components/auth/AuthGuard';
 import { AuthPage } from '../components/auth/AuthPage';
 import { TRPCProvider } from '../providers/TRPCProvider';
@@ -112,6 +113,9 @@ export function AppLayout() {
 
           {/* Emergency Stop Button (floating) */}
           <FloatingEmergencyStop />
+
+          {/* Notification Toasts */}
+          <NotificationToastContainer />
         </div>
       </AuthGuard>
     </TRPCProvider>

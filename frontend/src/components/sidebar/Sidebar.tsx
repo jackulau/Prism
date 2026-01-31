@@ -29,6 +29,7 @@ import {
 import { useAppStore } from '../../store';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { toast } from '../../store/toastStore';
+import { NotificationCenter } from '../notifications';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -160,12 +161,15 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
             <span className="font-semibold text-editor-text">Prism</span>
           </div>
         )}
-        <button
-          onClick={onToggle}
-          className="p-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-sidebar-hover transition-colors"
-        >
-          {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationCenter />
+          <button
+            onClick={onToggle}
+            className="p-1.5 rounded-md text-editor-muted hover:text-editor-text hover:bg-sidebar-hover transition-colors"
+          >
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        </div>
       </div>
 
       {/* Navigation */}
