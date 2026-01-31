@@ -19,6 +19,7 @@ import {
   Workflow,
   CheckSquare,
   Wrench,
+  Bell,
   type LucideIcon
 } from 'lucide-react';
 import { useAppStore } from '../../store';
@@ -47,6 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   // Resources
   { icon: CheckSquare, label: 'Tasks', path: '/tasks' },
   { icon: Wrench, label: 'Tools', path: '/tools' },
+  { icon: Bell, label: 'Approvals', path: '/approvals' },
   // Admin
   { icon: Plug, label: 'Integrations', path: '/integrations' },
   { icon: BarChart3, label: 'Usage', path: '/usage' },

@@ -15,6 +15,7 @@ import { AuthPage } from '../components/auth/AuthPage';
 import Workspace from '../pages/Workspace';
 import Onboarding from '../pages/Onboarding';
 import Activity from '../pages/Activity';
+import Approvals from '../pages/Approvals';
 
 export const router = createBrowserRouter([
   {
@@ -40,6 +41,10 @@ export const router = createBrowserRouter([
       {
         path: 'agents',
         element: <Agents />,
+      },
+      {
+        path: 'approvals',
+        element: <Approvals />,
       },
       {
         path: 'workers',
