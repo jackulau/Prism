@@ -197,3 +197,133 @@ func (r *FileHistoryRepository) GetDistinctFiles(userID string) ([]string, error
 
 	return files, nil
 }
+
+// RestoreConflict represents a conflict detected when attempting to restore a file
+type RestoreConflict struct {
+	FilePath          string    `json:"file_path"`
+	HistoryTimestamp  time.Time `json:"history_timestamp"`
+	CurrentModified   time.Time `json:"current_modified"`
+	HasNewerVersion   bool      `json:"has_newer_version"`
+}
+
+// CheckRestoreConflicts checks for potential conflicts before restoring files from history
+// Returns conflicts for files that have been modified after the history entry was created
+func (r *FileHistoryRepository) CheckRestoreConflicts(userID string, historyIDs []string) ([]RestoreConflict, error) {
+	if len(historyIDs) == 0 {
+		return nil, nil
+	}
+
+	// Build placeholders for IN clause
+	placeholders := ""
+	args := make([]interface{}, 0, len(historyIDs)+1)
+	args = append(args, userID)
+	for i, id := range historyIDs {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args = append(args, id)
+	}
+
+	// Get history entries and check if there are newer versions
+	query := fmt.Sprintf(`
+		SELECT h.file_path, h.created_at,
+			(SELECT MAX(h2.created_at) FROM file_history h2
+			 WHERE h2.user_id = h.user_id AND h2.file_path = h.file_path) as latest_modified
+		FROM file_history h
+		WHERE h.user_id = ? AND h.id IN (%s)
+	`, placeholders)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check restore conflicts: %w", err)
+	}
+	defer rows.Close()
+
+	var conflicts []RestoreConflict
+	for rows.Next() {
+		var conflict RestoreConflict
+		var latestModified time.Time
+		if err := rows.Scan(&conflict.FilePath, &conflict.HistoryTimestamp, &latestModified); err != nil {
+			return nil, fmt.Errorf("failed to scan conflict: %w", err)
+		}
+
+		// If the latest version is newer than the one being restored, there's a conflict
+		if latestModified.After(conflict.HistoryTimestamp) {
+			conflict.CurrentModified = latestModified
+			conflict.HasNewerVersion = true
+			conflicts = append(conflicts, conflict)
+		}
+	}
+
+	return conflicts, nil
+}
+
+// GetByIDs retrieves multiple file history entries by their IDs
+func (r *FileHistoryRepository) GetByIDs(userID string, ids []string) ([]*FileHistory, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	// Build placeholders for IN clause
+	placeholders := ""
+	args := make([]interface{}, 0, len(ids)+1)
+	args = append(args, userID)
+	for i, id := range ids {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT id, user_id, file_path, content, operation, created_at
+		FROM file_history
+		WHERE user_id = ? AND id IN (%s)
+	`, placeholders)
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file history by IDs: %w", err)
+	}
+	defer rows.Close()
+
+	var history []*FileHistory
+	for rows.Next() {
+		h := &FileHistory{}
+		err := rows.Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan file history: %w", err)
+		}
+		history = append(history, h)
+	}
+
+	return history, nil
+}
+
+// CreateRestoreEntry creates a new file history entry specifically for a restore operation
+// This allows tracking of restore operations for potential undo functionality
+func (r *FileHistoryRepository) CreateRestoreEntry(userID, filePath, content, sourceHistoryID string) (*FileHistory, error) {
+	id := uuid.New().String()
+	now := time.Now()
+	operation := "restore"
+
+	_, err := r.db.Exec(
+		`INSERT INTO file_history (id, user_id, file_path, content, operation, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		id, userID, filePath, content, operation, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create restore entry: %w", err)
+	}
+
+	return &FileHistory{
+		ID:        id,
+		UserID:    userID,
+		FilePath:  filePath,
+		Content:   content,
+		Operation: operation,
+		CreatedAt: now,
+	}, nil
+}

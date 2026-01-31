@@ -23,6 +23,22 @@ export interface FileHistoryEntry {
   created_at: string
 }
 
+// Restore types
+export interface RestoreConflict {
+  file_path: string
+  history_timestamp: string
+  current_modified: string
+  has_newer_version: boolean
+}
+
+export interface RestoreResult {
+  history_id: string
+  file_path: string
+  success: boolean
+  error?: string
+  backup_id?: string
+}
+
 // Vercel/Provider sandbox types
 export type SandboxProvider = 'docker' | 'vercel'
 export type SandboxStatus = 'creating' | 'ready' | 'deploying' | 'deployed' | 'failed' | 'deleted'
@@ -84,6 +100,18 @@ interface SandboxState {
   isLoadingHistory: boolean
   showHistoryPanel: boolean
 
+  // Restore state
+  pendingRestore: FileHistoryEntry | null
+  isRestoring: boolean
+  lastRestoreEntry: FileHistoryEntry | null
+  lastRestoreBackupId: string | null
+  restoreError: string | null
+  restoreConflicts: RestoreConflict[]
+  showRestorePreview: boolean
+  batchRestoreEntries: FileHistoryEntry[]
+  showBatchRestoreDialog: boolean
+  batchRestoreResults: RestoreResult[]
+
   // Vercel/Provider sandbox state
   provider: SandboxProvider
   currentSandbox: SandboxInfo | null
@@ -121,6 +149,23 @@ interface SandboxState {
   requestFileHistory: (path?: string) => void
   requestHistoryContent: (historyId: string) => void
 
+  // Restore actions
+  initiateRestore: (entry: FileHistoryEntry) => void
+  confirmRestore: (createBackup?: boolean) => void
+  cancelRestore: () => void
+  undoLastRestore: () => void
+  setRestoreError: (error: string | null) => void
+  setRestoreConflicts: (conflicts: RestoreConflict[]) => void
+  setIsRestoring: (restoring: boolean) => void
+  setShowRestorePreview: (show: boolean) => void
+  setBatchRestoreEntries: (entries: FileHistoryEntry[]) => void
+  setShowBatchRestoreDialog: (show: boolean) => void
+  initiateBatchRestore: (entries: FileHistoryEntry[]) => void
+  confirmBatchRestore: (historyIds: string[], createBackup?: boolean) => void
+  setBatchRestoreResults: (results: RestoreResult[]) => void
+  setLastRestoreEntry: (entry: FileHistoryEntry | null) => void
+  setLastRestoreBackupId: (backupId: string | null) => void
+
   // Vercel/Provider sandbox actions
   setProvider: (provider: SandboxProvider) => void
   setCurrentSandbox: (sandbox: SandboxInfo | null) => void
@@ -152,6 +197,17 @@ const initialState = {
   historyContent: null as string | null,
   isLoadingHistory: false,
   showHistoryPanel: false,
+  // Restore state
+  pendingRestore: null as FileHistoryEntry | null,
+  isRestoring: false,
+  lastRestoreEntry: null as FileHistoryEntry | null,
+  lastRestoreBackupId: null as string | null,
+  restoreError: null as string | null,
+  restoreConflicts: [] as RestoreConflict[],
+  showRestorePreview: false,
+  batchRestoreEntries: [] as FileHistoryEntry[],
+  showBatchRestoreDialog: false,
+  batchRestoreResults: [] as RestoreResult[],
   // Vercel/Provider sandbox state
   provider: 'docker' as SandboxProvider,
   currentSandbox: null as SandboxInfo | null,
@@ -253,6 +309,97 @@ export const useSandboxStore = create<SandboxState>((set, get) => ({
       }
     }, 10000)
   },
+
+  // Restore actions
+  initiateRestore: (entry: FileHistoryEntry) => {
+    set({
+      pendingRestore: entry,
+      showRestorePreview: true,
+      restoreError: null,
+      restoreConflicts: [],
+    })
+  },
+
+  confirmRestore: (createBackup = true) => {
+    const pending = get().pendingRestore
+    if (!pending) return
+
+    set({ isRestoring: true, restoreError: null })
+    wsService.restoreFromHistory(pending.id, createBackup)
+
+    // Timeout fallback
+    setTimeout(() => {
+      if (get().isRestoring) {
+        set({ isRestoring: false, restoreError: 'Restore request timed out' })
+      }
+    }, 15000)
+  },
+
+  cancelRestore: () => {
+    set({
+      pendingRestore: null,
+      showRestorePreview: false,
+      restoreError: null,
+      restoreConflicts: [],
+    })
+  },
+
+  undoLastRestore: () => {
+    const backupId = get().lastRestoreBackupId
+    if (!backupId) return
+
+    set({ isRestoring: true, restoreError: null })
+    wsService.restoreFromHistory(backupId, false)
+
+    // Timeout fallback
+    setTimeout(() => {
+      if (get().isRestoring) {
+        set({ isRestoring: false, restoreError: 'Undo restore request timed out' })
+      }
+    }, 15000)
+  },
+
+  setRestoreError: (error) => set({ restoreError: error }),
+
+  setRestoreConflicts: (conflicts) => set({ restoreConflicts: conflicts }),
+
+  setIsRestoring: (restoring) => set({ isRestoring: restoring }),
+
+  setShowRestorePreview: (show) => set({ showRestorePreview: show }),
+
+  setBatchRestoreEntries: (entries) => set({ batchRestoreEntries: entries }),
+
+  setShowBatchRestoreDialog: (show) => set({ showBatchRestoreDialog: show }),
+
+  initiateBatchRestore: (entries: FileHistoryEntry[]) => {
+    set({
+      batchRestoreEntries: entries,
+      showBatchRestoreDialog: true,
+      restoreError: null,
+      restoreConflicts: [],
+      batchRestoreResults: [],
+    })
+  },
+
+  confirmBatchRestore: (historyIds: string[], createBackup = true) => {
+    if (historyIds.length === 0) return
+
+    set({ isRestoring: true, restoreError: null })
+    wsService.batchRestoreFromHistory(historyIds, createBackup)
+
+    // Timeout fallback
+    setTimeout(() => {
+      if (get().isRestoring) {
+        set({ isRestoring: false, restoreError: 'Batch restore request timed out' })
+      }
+    }, 30000)
+  },
+
+  setBatchRestoreResults: (results) => set({ batchRestoreResults: results }),
+
+  setLastRestoreEntry: (entry) => set({ lastRestoreEntry: entry }),
+
+  setLastRestoreBackupId: (backupId) => set({ lastRestoreBackupId: backupId }),
 
   // Vercel/Provider sandbox actions
   setProvider: (provider) => set({ provider }),

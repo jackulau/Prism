@@ -278,6 +278,18 @@ class WebSocketService {
       case 'file.history_content':
         this.handleFileHistoryContent(message);
         break;
+
+      case 'file.history_restored':
+        this.handleFileHistoryRestored(message);
+        break;
+
+      case 'file.history_batch_restored':
+        this.handleFileHistoryBatchRestored(message);
+        break;
+
+      case 'file.history_conflicts':
+        this.handleFileHistoryConflicts(message);
+        break;
     }
   }
 
@@ -382,6 +394,65 @@ class WebSocketService {
     const sandboxStore = useSandboxStore.getState();
     sandboxStore.setHistoryContent(message.content || '');
     sandboxStore.setIsLoadingHistory(false);
+  }
+
+  private handleFileHistoryRestored(message: OutgoingWSMessage) {
+    const sandboxStore = useSandboxStore.getState();
+    sandboxStore.setIsRestoring(false);
+
+    if (message.success) {
+      const metadata = message.metadata as { history_id?: string; backup_id?: string } | undefined;
+      const backupId = metadata?.backup_id || null;
+
+      // Store backup ID for undo functionality
+      sandboxStore.setLastRestoreBackupId(backupId);
+      sandboxStore.setLastRestoreEntry(sandboxStore.pendingRestore);
+
+      // Close the preview dialog
+      sandboxStore.setShowRestorePreview(false);
+      sandboxStore.cancelRestore();
+
+      // Refresh file content if the file is selected
+      if (message.file_path) {
+        this.requestFile(message.file_path);
+      }
+    } else {
+      sandboxStore.setRestoreError(message.error || 'Restore failed');
+    }
+  }
+
+  private handleFileHistoryBatchRestored(message: OutgoingWSMessage) {
+    const sandboxStore = useSandboxStore.getState();
+    sandboxStore.setIsRestoring(false);
+
+    const metadata = message.metadata as {
+      results?: Array<{ history_id: string; file_path: string; success: boolean; error?: string; backup_id?: string }>;
+      total_success?: number;
+      total_failed?: number;
+    } | undefined;
+
+    const results = metadata?.results || [];
+    sandboxStore.setBatchRestoreResults(results);
+
+    if (message.success) {
+      // Close the batch restore dialog
+      sandboxStore.setShowBatchRestoreDialog(false);
+      sandboxStore.setBatchRestoreEntries([]);
+    } else {
+      sandboxStore.setRestoreError(`${metadata?.total_failed || 0} files failed to restore`);
+    }
+  }
+
+  private handleFileHistoryConflicts(message: OutgoingWSMessage) {
+    const sandboxStore = useSandboxStore.getState();
+    sandboxStore.setIsRestoring(false);
+
+    const metadata = message.metadata as {
+      conflicts?: Array<{ file_path: string; history_timestamp: string; current_modified: string; has_newer_version: boolean }>;
+    } | undefined;
+
+    const conflicts = metadata?.conflicts || [];
+    sandboxStore.setRestoreConflicts(conflicts);
   }
 
   // Helper to convert SandboxFile[] to FileNode[]
@@ -595,6 +666,29 @@ class WebSocketService {
       params: {
         action: 'get',
         history_id: historyId,
+      },
+    } as IncomingWSMessage);
+  }
+
+  restoreFromHistory(historyId: string, createBackup = true) {
+    this.send({
+      type: 'file.history_restore',
+      conversation_id: '',
+      params: {
+        history_id: historyId,
+        create_backup: createBackup,
+      },
+    } as IncomingWSMessage);
+  }
+
+  batchRestoreFromHistory(historyIds: string[], createBackup = true, checkConflicts = true) {
+    this.send({
+      type: 'file.history_batch_restore',
+      conversation_id: '',
+      params: {
+        history_ids: historyIds,
+        create_backup: createBackup,
+        check_conflicts: checkConflicts,
       },
     } as IncomingWSMessage);
   }
