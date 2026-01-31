@@ -247,3 +247,86 @@ func (r *OrgWorkspaceRepository) UpdateSlackInfo(id, channelID, messageTs string
 	}
 	return nil
 }
+
+// ListByOrganizationIDWithPagination retrieves workspaces for an organization with pagination
+func (r *OrgWorkspaceRepository) ListByOrganizationIDWithPagination(orgID string, limit, offset int) ([]*OrgWorkspace, error) {
+	rows, err := r.db.Query(
+		`SELECT id, name, organization_id, github_repository_name, worker_id, current_branch, slack_channel_id, slack_message_ts, created_at
+		 FROM org_workspaces WHERE organization_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		orgID, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list workspaces: %w", err)
+	}
+	defer rows.Close()
+
+	var workspaces []*OrgWorkspace
+	for rows.Next() {
+		ws, err := r.scanWorkspace(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan workspace: %w", err)
+		}
+		workspaces = append(workspaces, ws)
+	}
+
+	return workspaces, nil
+}
+
+// CountByOrganizationID returns the total count of workspaces for an organization
+func (r *OrgWorkspaceRepository) CountByOrganizationID(orgID string) (int, error) {
+	var count int
+	err := r.db.QueryRow(
+		`SELECT COUNT(*) FROM org_workspaces WHERE organization_id = ?`,
+		orgID,
+	).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count workspaces: %w", err)
+	}
+	return count, nil
+}
+
+// GetByName retrieves a workspace by name within an organization
+func (r *OrgWorkspaceRepository) GetByName(orgID, name string) (*OrgWorkspace, error) {
+	row := r.db.QueryRow(
+		`SELECT id, name, organization_id, github_repository_name, worker_id, current_branch, slack_channel_id, slack_message_ts, created_at
+		 FROM org_workspaces WHERE organization_id = ? AND name = ?`,
+		orgID, name,
+	)
+
+	ws, err := r.scanWorkspace(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get workspace by name: %w", err)
+	}
+
+	return ws, nil
+}
+
+// BulkDelete deletes multiple workspaces by IDs
+func (r *OrgWorkspaceRepository) BulkDelete(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	// Build placeholders for IN clause
+	placeholders := ""
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		if i > 0 {
+			placeholders += ","
+		}
+		placeholders += "?"
+		args[i] = id
+	}
+
+	_, err := r.db.Exec(
+		fmt.Sprintf(`DELETE FROM org_workspaces WHERE id IN (%s)`, placeholders),
+		args...,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to bulk delete workspaces: %w", err)
+	}
+	return nil
+}
