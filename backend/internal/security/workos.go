@@ -445,3 +445,273 @@ func (s *WorkOSService) GetOrganization(ctx context.Context, organizationID stri
 
 	return &org, nil
 }
+
+// ==================== Extended Connection Management ====================
+
+// SSOConnectionDetails contains detailed information about an SSO connection
+type SSOConnectionDetails struct {
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	ConnectionType   string   `json:"connection_type"`
+	State            string   `json:"state"`
+	OrganizationID   string   `json:"organization_id"`
+	Domains          []string `json:"domains,omitempty"`
+	SAMLEntityID     string   `json:"saml_entity_id,omitempty"`
+	SAMLSSOURL       string   `json:"saml_sso_url,omitempty"`
+	OIDCClientID     string   `json:"oidc_client_id,omitempty"`
+	OIDCDiscoveryURL string   `json:"oidc_discovery_url,omitempty"`
+}
+
+// GetConnection retrieves a specific SSO connection by ID
+func (s *WorkOSService) GetConnection(ctx context.Context, connectionID string) (*SSOConnectionDetails, error) {
+	if !s.configured {
+		return nil, errors.New("workos: not configured")
+	}
+
+	if connectionID == "" {
+		return nil, errors.New("workos: connection ID required")
+	}
+
+	conn, err := sso.GetConnection(ctx, sso.GetConnectionOpts{
+		Connection: connectionID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get connection: %w", err)
+	}
+
+	details := &SSOConnectionDetails{
+		ID:             conn.ID,
+		Name:           conn.Name,
+		ConnectionType: string(conn.ConnectionType),
+		State:          string(conn.State),
+		OrganizationID: conn.OrganizationID,
+	}
+
+	// Extract domains
+	for _, domain := range conn.Domains {
+		details.Domains = append(details.Domains, domain.Domain)
+	}
+
+	return details, nil
+}
+
+// DeleteConnection deletes an SSO connection
+func (s *WorkOSService) DeleteConnection(ctx context.Context, connectionID string) error {
+	if !s.configured {
+		return errors.New("workos: not configured")
+	}
+
+	if connectionID == "" {
+		return errors.New("workos: connection ID required")
+	}
+
+	if err := sso.DeleteConnection(ctx, sso.DeleteConnectionOpts{
+		Connection: connectionID,
+	}); err != nil {
+		return fmt.Errorf("failed to delete connection: %w", err)
+	}
+
+	return nil
+}
+
+// ConnectionTestResult contains the result of testing an SSO connection
+type ConnectionTestResult struct {
+	Success    bool              `json:"success"`
+	Message    string            `json:"message"`
+	Connection *SSOConnectionDetails `json:"connection,omitempty"`
+	AuthURL    string            `json:"auth_url,omitempty"`
+	TestedAt   time.Time         `json:"tested_at"`
+	Latency    int64             `json:"latency_ms"`
+}
+
+// TestConnection validates that an SSO connection is properly configured
+func (s *WorkOSService) TestConnection(ctx context.Context, connectionID string) (*ConnectionTestResult, error) {
+	if !s.configured {
+		return nil, errors.New("workos: not configured")
+	}
+
+	start := time.Now()
+	result := &ConnectionTestResult{
+		TestedAt: start,
+	}
+
+	// Get connection details
+	conn, err := s.GetConnection(ctx, connectionID)
+	if err != nil {
+		result.Success = false
+		result.Message = fmt.Sprintf("Failed to retrieve connection: %v", err)
+		result.Latency = time.Since(start).Milliseconds()
+		return result, nil
+	}
+
+	result.Connection = conn
+
+	// Check connection state
+	if conn.State != "active" {
+		result.Success = false
+		result.Message = fmt.Sprintf("Connection is not active (state: %s)", conn.State)
+		result.Latency = time.Since(start).Milliseconds()
+		return result, nil
+	}
+
+	// Try to generate an authorization URL
+	authURL, _, err := s.GenerateAuthorizationURL(AuthorizationOptions{
+		ConnectionID: connectionID,
+	})
+	if err != nil {
+		result.Success = false
+		result.Message = fmt.Sprintf("Failed to generate authorization URL: %v", err)
+		result.Latency = time.Since(start).Milliseconds()
+		return result, nil
+	}
+
+	result.Success = true
+	result.Message = "Connection is active and properly configured"
+	result.AuthURL = authURL
+	result.Latency = time.Since(start).Milliseconds()
+
+	return result, nil
+}
+
+// ==================== Attribute Mapping ====================
+
+// AttributeMappingConfig defines how to map SSO attributes to user fields
+type AttributeMappingConfig struct {
+	// Standard attribute names to look for
+	EmailAttributes     []string `json:"email_attributes"`
+	FirstNameAttributes []string `json:"first_name_attributes"`
+	LastNameAttributes  []string `json:"last_name_attributes"`
+	GroupsAttributes    []string `json:"groups_attributes"`
+
+	// Custom mappings (source -> target)
+	CustomMappings map[string]string `json:"custom_mappings,omitempty"`
+}
+
+// DefaultAttributeMapping returns the default attribute mapping configuration
+func DefaultAttributeMapping() *AttributeMappingConfig {
+	return &AttributeMappingConfig{
+		EmailAttributes:     []string{"email", "Email", "mail", "emailAddress"},
+		FirstNameAttributes: []string{"firstName", "first_name", "givenName", "given_name"},
+		LastNameAttributes:  []string{"lastName", "last_name", "surname", "sn", "familyName"},
+		GroupsAttributes:    []string{"groups", "memberOf", "roles"},
+	}
+}
+
+// ExtractUserInfo extracts user information from raw SSO attributes using mappings
+func (s *WorkOSService) ExtractUserInfo(rawAttributes map[string]interface{}, mappings *AttributeMappingConfig) map[string]string {
+	if mappings == nil {
+		mappings = DefaultAttributeMapping()
+	}
+
+	result := make(map[string]string)
+
+	// Helper to find first matching attribute
+	findAttribute := func(attributes []string) string {
+		for _, attr := range attributes {
+			if val, ok := rawAttributes[attr]; ok {
+				if str, ok := val.(string); ok {
+					return str
+				}
+			}
+		}
+		return ""
+	}
+
+	result["email"] = findAttribute(mappings.EmailAttributes)
+	result["first_name"] = findAttribute(mappings.FirstNameAttributes)
+	result["last_name"] = findAttribute(mappings.LastNameAttributes)
+	result["groups"] = findAttribute(mappings.GroupsAttributes)
+
+	// Apply custom mappings
+	for source, target := range mappings.CustomMappings {
+		if val, ok := rawAttributes[source]; ok {
+			if str, ok := val.(string); ok {
+				result[target] = str
+			}
+		}
+	}
+
+	return result
+}
+
+// ==================== Organization Management ====================
+
+// CreateOrganization creates a new organization in WorkOS
+func (s *WorkOSService) CreateOrganization(ctx context.Context, name string, domains []string) (*organizations.Organization, error) {
+	if !s.configured {
+		return nil, errors.New("workos: not configured")
+	}
+
+	org, err := organizations.CreateOrganization(ctx, organizations.CreateOrganizationOpts{
+		Name:    name,
+		Domains: domains,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create organization: %w", err)
+	}
+
+	return &org, nil
+}
+
+// UpdateOrganization updates an organization in WorkOS
+func (s *WorkOSService) UpdateOrganization(ctx context.Context, orgID, name string, domains []string) (*organizations.Organization, error) {
+	if !s.configured {
+		return nil, errors.New("workos: not configured")
+	}
+
+	org, err := organizations.UpdateOrganization(ctx, organizations.UpdateOrganizationOpts{
+		Organization: orgID,
+		Name:         name,
+		Domains:      domains,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to update organization: %w", err)
+	}
+
+	return &org, nil
+}
+
+// DeleteOrganization deletes an organization from WorkOS
+func (s *WorkOSService) DeleteOrganization(ctx context.Context, orgID string) error {
+	if !s.configured {
+		return errors.New("workos: not configured")
+	}
+
+	if err := organizations.DeleteOrganization(ctx, organizations.DeleteOrganizationOpts{
+		Organization: orgID,
+	}); err != nil {
+		return fmt.Errorf("failed to delete organization: %w", err)
+	}
+
+	return nil
+}
+
+// ListOrganizations lists all organizations
+func (s *WorkOSService) ListOrganizations(ctx context.Context, limit int) ([]organizations.Organization, error) {
+	if !s.configured {
+		return nil, errors.New("workos: not configured")
+	}
+
+	resp, err := organizations.ListOrganizations(ctx, organizations.ListOrganizationsOpts{
+		Limit: limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list organizations: %w", err)
+	}
+
+	return resp.Data, nil
+}
+
+// ==================== Portal Links ====================
+
+// GenerateAdminPortalLink generates a link for admins to configure SSO
+func (s *WorkOSService) GenerateAdminPortalLink(ctx context.Context, orgID string, returnURL string) (string, error) {
+	if !s.configured {
+		return "", errors.New("workos: not configured")
+	}
+
+	// WorkOS Admin Portal is typically generated via their dashboard or specific portal link endpoints
+	// This is a placeholder for when WorkOS provides a Go SDK method
+	// For now, return a formatted URL that can be used with the WorkOS Admin Portal
+	return fmt.Sprintf("https://api.workos.com/portal/organizations/%s/setup?return_url=%s", orgID, returnURL), nil
+}

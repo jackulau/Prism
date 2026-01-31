@@ -36,6 +36,8 @@ type Dependencies struct {
 	JWTService         *security.JWTService
 	EncryptionService  *security.EncryptionService
 	WorkOSService      *security.WorkOSService
+	OAuth2Service      *security.OAuth2Service
+	SSORegistry        *security.SSORegistry
 	UserRepo           *repository.UserRepository
 	SessionRepo        *repository.SessionRepository
 	ConversationRepo   *repository.ConversationRepository
@@ -46,6 +48,7 @@ type Dependencies struct {
 	FileHistoryRepo    *repository.FileHistoryRepository
 	OrgWorkspaceRepo   *repository.OrgWorkspaceRepository
 	CustomProviderRepo *repository.CustomProviderRepository
+	SSOConfigRepo      *repository.SSOConfigRepository
 	LLMManager         *llm.Manager
 	WSHub              *ws.Hub
 	SSEService         *sse.Service
@@ -478,6 +481,31 @@ func Setup(deps *Dependencies) *fiber.App {
 		orgWorkspaces.Put("/:id", orgWorkspaceHandler.Update)
 		orgWorkspaces.Delete("/:id", orgWorkspaceHandler.Delete)
 		orgWorkspaces.Patch("/:id/branch", orgWorkspaceHandler.UpdateBranch)
+	}
+
+	// SSO configuration routes (for organization admins)
+	if deps.SSORegistry != nil {
+		ssoHandler := handlers.NewSSOHandler(deps.SSORegistry, deps.WorkOSService, deps.OAuth2Service)
+
+		// Protected SSO admin routes (require auth and org context)
+		ssoAdmin := v1.Group("/org/sso", middleware.AuthMiddleware(deps.JWTService))
+		ssoAdmin.Get("/providers", ssoHandler.ListProviders)
+		ssoAdmin.Get("/providers/:id", ssoHandler.GetProvider)
+		ssoAdmin.Post("/providers", ssoHandler.CreateProvider)
+		ssoAdmin.Put("/providers/:id", ssoHandler.UpdateProvider)
+		ssoAdmin.Delete("/providers/:id", ssoHandler.DeleteProvider)
+		ssoAdmin.Post("/providers/:id/enable", ssoHandler.EnableProvider)
+		ssoAdmin.Post("/providers/:id/disable", ssoHandler.DisableProvider)
+		ssoAdmin.Post("/providers/:id/test", ssoHandler.TestProvider)
+		ssoAdmin.Post("/providers/reorder", ssoHandler.ReorderProviders)
+		ssoAdmin.Get("/summary", ssoHandler.GetProviderSummary)
+
+		// Public SSO routes (for login page)
+		ssoPublic := v1.Group("/sso")
+		ssoPublic.Get("/active", ssoHandler.GetActiveProviders)
+		ssoPublic.Post("/providers/:id/initiate", ssoHandler.InitiateSSO)
+
+		log.Println("SSO configuration routes registered")
 	}
 
 	return app
