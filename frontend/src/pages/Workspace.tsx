@@ -4,12 +4,15 @@ import {
   FolderTree as FolderTreeIcon,
   MessageSquare,
   Wifi,
-  WifiOff
+  WifiOff,
+  History,
+  ChevronDown
 } from 'lucide-react';
 import { SandboxPanel } from '../components/sandbox/SandboxPanel';
 import { FileTree } from '../components/FileTree';
 import { MetricsDropdown } from '../components/MetricsDropdown';
 import { EnhancedChatPanel } from '../components/chat/EnhancedChatPanel';
+import { BuildHistoryPanel } from '../components/builds/BuildHistoryPanel';
 import { useAppStore } from '../store';
 import { useSandboxStore, FileNode } from '../store/sandboxStore';
 import { apiService } from '../services/api';
@@ -37,6 +40,8 @@ function convertToFileNodes(files: Array<{
 export default function Workspace() {
   const { id } = useParams<{ id?: string }>();
   const [activeTab, setActiveTab] = useState<'preview' | 'code' | 'terminal'>('preview');
+  const [isBuildHistoryOpen, setIsBuildHistoryOpen] = useState(false);
+  const [buildHistoryHeight, setBuildHistoryHeight] = useState(300);
 
   const {
     isFileTreeOpen,
@@ -90,6 +95,18 @@ export default function Workspace() {
             title={isChatPanelOpen ? 'Hide chat' : 'Show chat'}
           >
             <MessageSquare size={20} />
+          </button>
+
+          <button
+            onClick={() => setIsBuildHistoryOpen(!isBuildHistoryOpen)}
+            className={`p-2 rounded-lg transition-colors ${
+              isBuildHistoryOpen
+                ? 'bg-editor-accent/20 text-editor-accent'
+                : 'hover:bg-editor-surface text-editor-muted hover:text-editor-text'
+            }`}
+            title={isBuildHistoryOpen ? 'Hide build history' : 'Show build history'}
+          >
+            <History size={20} />
           </button>
 
           <div className="h-6 w-px bg-editor-border mx-1" />
@@ -158,31 +175,79 @@ export default function Workspace() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* File Tree Panel */}
-        {isFileTreeOpen && (
-          <div className="w-64 flex-shrink-0 border-r border-editor-border">
-            <FileTree />
-          </div>
-        )}
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Chat Panel */}
-          {isChatPanelOpen && (
-            <div className="w-1/2 border-r border-editor-border flex flex-col min-w-0">
-              <EnhancedChatPanel />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Upper Section */}
+        <div className="flex-1 flex overflow-hidden min-h-0">
+          {/* File Tree Panel */}
+          {isFileTreeOpen && (
+            <div className="w-64 flex-shrink-0 border-r border-editor-border">
+              <FileTree />
             </div>
           )}
 
-          {/* Sandbox Preview Panel */}
-          <div className={`flex flex-col min-w-0 ${isChatPanelOpen ? 'w-1/2' : 'flex-1'}`}>
-            <SandboxPanel
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-            />
+          {/* Main Content Area */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Chat Panel */}
+            {isChatPanelOpen && (
+              <div className="w-1/2 border-r border-editor-border flex flex-col min-w-0">
+                <EnhancedChatPanel />
+              </div>
+            )}
+
+            {/* Sandbox Preview Panel */}
+            <div className={`flex flex-col min-w-0 ${isChatPanelOpen ? 'w-1/2' : 'flex-1'}`}>
+              <SandboxPanel
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+              />
+            </div>
           </div>
         </div>
+
+        {/* Build History Panel (collapsible bottom panel) */}
+        {isBuildHistoryOpen && (
+          <div
+            className="flex-shrink-0 border-t border-editor-border"
+            style={{ height: buildHistoryHeight }}
+          >
+            {/* Resize Handle */}
+            <div
+              className="h-1 bg-editor-border hover:bg-editor-accent cursor-row-resize"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const startY = e.clientY;
+                const startHeight = buildHistoryHeight;
+                const handleMouseMove = (moveEvent: MouseEvent) => {
+                  const delta = startY - moveEvent.clientY;
+                  const newHeight = Math.min(Math.max(startHeight + delta, 150), 600);
+                  setBuildHistoryHeight(newHeight);
+                };
+                const handleMouseUp = () => {
+                  document.removeEventListener('mousemove', handleMouseMove);
+                  document.removeEventListener('mouseup', handleMouseUp);
+                };
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+              }}
+            />
+            {/* Panel Header with collapse button */}
+            <div className="h-8 flex items-center justify-between px-3 bg-editor-bg border-b border-editor-border">
+              <span className="text-xs font-medium text-editor-muted uppercase tracking-wide">
+                Build History
+              </span>
+              <button
+                onClick={() => setIsBuildHistoryOpen(false)}
+                className="p-1 text-editor-muted hover:text-editor-text rounded transition-colors"
+                title="Close panel"
+              >
+                <ChevronDown size={14} />
+              </button>
+            </div>
+            <div className="h-[calc(100%-36px)]">
+              <BuildHistoryPanel />
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
