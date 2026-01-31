@@ -390,6 +390,23 @@ func (db *DB) Migrate() error {
 			FOREIGN KEY (api_key_id) REFERENCES user_api_keys(id) ON DELETE CASCADE
 		)`,
 
+		// Audit logs table for security event tracking
+		`CREATE TABLE IF NOT EXISTS audit_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id TEXT,
+			event_type TEXT NOT NULL,
+			event_category TEXT NOT NULL,
+			action TEXT NOT NULL,
+			resource_type TEXT,
+			resource_id TEXT,
+			ip_address TEXT,
+			user_agent TEXT,
+			details TEXT,
+			success INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+		)`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_id ON api_key_scopes(api_key_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
@@ -537,6 +554,13 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_approval_decisions_request ON approval_decisions(request_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_approval_decisions_approver ON approval_decisions(approver_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_approval_decisions_step ON approval_decisions(request_id, step_order)`,
+
+		// Audit log indexes
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_event_type ON audit_logs(event_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_event_category ON audit_logs(event_category)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_resource ON audit_logs(resource_type, resource_id)`,
 	}
 
 	for _, migration := range migrations {
