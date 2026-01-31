@@ -11,6 +11,11 @@ export {
   type ResultsMetricsSummaryProps,
 } from './ResultsMetricsSummary';
 
+export {
+  ResultsHeader,
+  type ResultsHeaderProps,
+} from './ResultsHeader';
+
 export { ResultsFilter } from './ResultsFilter';
 export { ResultsListItem } from './ResultsListItem';
 export { ResultsList } from './ResultsList';
