@@ -14,6 +14,7 @@ import { SettingsPage } from '../pages/Settings';
 import { AuthPage } from '../components/auth/AuthPage';
 import Workspace from '../pages/Workspace';
 import Onboarding from '../pages/Onboarding';
+import Activity from '../pages/Activity';
 
 export const router = createBrowserRouter([
   {
@@ -75,6 +76,10 @@ export const router = createBrowserRouter([
       {
         path: 'settings',
         element: <SettingsPage />,
+      },
+      {
+        path: 'activity',
+        element: <Activity />,
       },
     ],
   },

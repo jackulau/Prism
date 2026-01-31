@@ -529,3 +529,18 @@ export const useStore = useAppStore;
 
 // Export agent progress store
 export { useAgentProgressStore } from './agentProgressStore';
+
+// Re-export monitoring store
+export {
+  useMonitoringStore,
+  useUnreadNotificationCount,
+  useActiveAgentCount,
+  useRecentActivity,
+  useSystemHealthStatus,
+  useActiveAgents,
+  useUnreadNotifications,
+  useNotifications,
+  useConnectionStatus,
+  useMonitoringMetrics,
+  createNotification,
+} from './monitoringStore';
