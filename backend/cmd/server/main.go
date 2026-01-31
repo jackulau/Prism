@@ -88,6 +88,7 @@ func main() {
 	agentTaskRepo := repository.NewAgentTaskRepository(db.DB)
 	organizationRepo := repository.NewOrganizationRepository(db.DB)
 	userAPIKeyRepo := repository.NewUserAPIKeyRepository(db.DB)
+	dataConfigRepo := repository.NewDataConfigRepository(db.DB, encryptionService)
 
 	// Initialize code runner for GitHub webhook automation
 	var codeRunner *coderunner.Runner
@@ -274,6 +275,7 @@ func main() {
 		OrganizationRepo:   organizationRepo,
 		WorkOSClient:       workosClient,
 		UserAPIKeyRepo:     userAPIKeyRepo,
+		DataConfigRepo:     dataConfigRepo,
 	}
 
 	app := routes.Setup(deps)

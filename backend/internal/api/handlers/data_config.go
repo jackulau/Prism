@@ -183,3 +183,24 @@ func (h *DataConfigHandler) HasConfig(c *fiber.Ctx) error {
 		"exists": exists,
 	})
 }
+
+// ListConfigTypes handles GET /api/v1/config
+func (h *DataConfigHandler) ListConfigTypes(c *fiber.Ctx) error {
+	userID := middleware.GetUserID(c)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "unauthorized",
+		})
+	}
+
+	types, err := h.repo.ListConfigTypes(userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to list configuration types",
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"types": types,
+	})
+}

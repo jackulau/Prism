@@ -88,6 +88,9 @@ type Dependencies struct {
 	ExportService      *export.Service
 	GDPRExporter       *export.GDPRExporter
 	ComplianceReporter *export.ComplianceReporter
+
+	// Data configuration
+	DataConfigRepo     *repository.DataConfigRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -657,6 +660,18 @@ func Setup(deps *Dependencies) *fiber.App {
 		auditConfig := middleware.DefaultAuditConfig(deps.AuditLogger)
 		app.Use(middleware.AuditMiddleware(auditConfig))
 		log.Println("Audit middleware enabled for all API requests")
+	}
+
+	// Data configuration routes (encrypted config storage)
+	if deps.DataConfigRepo != nil {
+		dataConfigHandler := handlers.NewDataConfigHandler(deps.DataConfigRepo)
+		configRoutes := v1.Group("/config", middleware.AuthMiddleware(deps.JWTService))
+		configRoutes.Get("/", dataConfigHandler.ListConfigTypes)
+		configRoutes.Get("/:type", dataConfigHandler.ListConfigs)
+		configRoutes.Get("/:type/:key", dataConfigHandler.GetConfig)
+		configRoutes.Get("/:type/:key/exists", dataConfigHandler.HasConfig)
+		configRoutes.Post("/:type/:key", dataConfigHandler.SetConfig)
+		configRoutes.Delete("/:type/:key", dataConfigHandler.DeleteConfig)
 	}
 
 	return app

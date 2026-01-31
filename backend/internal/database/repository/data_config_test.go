@@ -331,3 +331,101 @@ func TestDataConfigRepository_UserIsolation(t *testing.T) {
 		t.Errorf("User1 should only see 1 config, got %d", len(configs))
 	}
 }
+
+func TestDataConfigRepository_ListConfigTypes(t *testing.T) {
+	db, crypto := setupTestDB(t)
+	repo := NewDataConfigRepository(db, crypto)
+
+	userID := "user-123"
+
+	// Create configs with different types
+	types := []string{"stripe", "github", "aws"}
+	for _, configType := range types {
+		data := map[string]interface{}{"type": configType}
+		err := repo.SetDataConfig(userID, configType, "default", data)
+		if err != nil {
+			t.Fatalf("SetDataConfig failed for type %s: %v", configType, err)
+		}
+	}
+
+	// Create multiple keys under one type to verify distinctness
+	data := map[string]interface{}{"key": "extra"}
+	err := repo.SetDataConfig(userID, "stripe", "extra_key", data)
+	if err != nil {
+		t.Fatalf("SetDataConfig for extra key failed: %v", err)
+	}
+
+	// List all types
+	resultTypes, err := repo.ListConfigTypes(userID)
+	if err != nil {
+		t.Fatalf("ListConfigTypes failed: %v", err)
+	}
+
+	if len(resultTypes) != 3 {
+		t.Errorf("Expected 3 distinct types, got %d", len(resultTypes))
+	}
+
+	// Verify ordering (should be alphabetical)
+	expectedTypes := []string{"aws", "github", "stripe"}
+	for i, typ := range resultTypes {
+		if typ != expectedTypes[i] {
+			t.Errorf("Expected type %s at index %d, got %s", expectedTypes[i], i, typ)
+		}
+	}
+}
+
+func TestDataConfigRepository_ListConfigTypesEmpty(t *testing.T) {
+	db, crypto := setupTestDB(t)
+	repo := NewDataConfigRepository(db, crypto)
+
+	types, err := repo.ListConfigTypes("nonexistent-user")
+	if err != nil {
+		t.Fatalf("ListConfigTypes failed: %v", err)
+	}
+	if types != nil && len(types) != 0 {
+		t.Errorf("Expected empty slice, got %v", types)
+	}
+}
+
+func TestDataConfigRepository_ListConfigTypesUserIsolation(t *testing.T) {
+	db, crypto := setupTestDB(t)
+	repo := NewDataConfigRepository(db, crypto)
+
+	// Create configs for user1
+	data := map[string]interface{}{"key": "value"}
+	err := repo.SetDataConfig("user1", "typeA", "key1", data)
+	if err != nil {
+		t.Fatalf("SetDataConfig failed: %v", err)
+	}
+	err = repo.SetDataConfig("user1", "typeB", "key1", data)
+	if err != nil {
+		t.Fatalf("SetDataConfig failed: %v", err)
+	}
+
+	// Create config for user2
+	err = repo.SetDataConfig("user2", "typeC", "key1", data)
+	if err != nil {
+		t.Fatalf("SetDataConfig failed: %v", err)
+	}
+
+	// Verify user1 only sees their types
+	types1, err := repo.ListConfigTypes("user1")
+	if err != nil {
+		t.Fatalf("ListConfigTypes for user1 failed: %v", err)
+	}
+	if len(types1) != 2 {
+		t.Errorf("User1 should see 2 types, got %d", len(types1))
+	}
+
+	// Verify user2 only sees their type
+	types2, err := repo.ListConfigTypes("user2")
+	if err != nil {
+		t.Fatalf("ListConfigTypes for user2 failed: %v", err)
+	}
+	if len(types2) != 1 {
+		t.Errorf("User2 should see 1 type, got %d", len(types2))
+	}
+	if types2[0] != "typeC" {
+		t.Errorf("User2's type should be 'typeC', got %s", types2[0])
+	}
+}
