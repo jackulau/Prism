@@ -46,6 +46,10 @@ export const router = createBrowserRouter([
         element: <Workers />,
       },
       {
+        path: 'agents/:id',
+        element: <Agents />,
+      },
+      {
         path: 'workflows',
         element: <Workflows />,
       },
