@@ -479,6 +479,21 @@ class ApiService {
       body: JSON.stringify({ code, state }),
     });
   }
+
+  // Task Queue
+  async getTaskStats() {
+    return this.request<{
+      stats: {
+        total: number;
+        pending: number;
+        running: number;
+        completed: number;
+        failed: number;
+        cancelled: number;
+        timestamp: string;
+      };
+    }>('/tasks/stats');
+  }
 }
 
 export const apiService = new ApiService();
