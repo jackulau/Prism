@@ -8,6 +8,7 @@ import Organization from '../pages/Organization';
 import { SettingsPage } from '../pages/Settings';
 import { AuthPage } from '../components/auth/AuthPage';
 import Workspace from '../pages/Workspace';
+import SwarmOrchestration from '../pages/SwarmOrchestration';
 
 export const router = createBrowserRouter([
   {
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
       {
         path: 'workers',
         element: <Workers />,
+      },
+      {
+        path: 'swarm',
+        element: <SwarmOrchestration />,
       },
       {
         path: 'integrations',
