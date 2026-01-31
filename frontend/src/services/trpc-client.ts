@@ -45,6 +45,20 @@ import {
   gitHubStatusResponseSchema,
   gitHubReposResponseSchema,
   successResponseSchema,
+  agentDTOSchema,
+  agentListResponseSchema,
+  agentResultsResponseSchema,
+  taskResponseSchema,
+  taskListResponseSchema,
+  taskStatsResponseSchema,
+  taskActionResponseSchema,
+  type AgentDTO,
+  type AgentListResponse,
+  type AgentResultsResponse,
+  type TaskResponse,
+  type TaskListResponse,
+  type TaskStatsResponse,
+  type TaskActionResponse,
 } from '../schemas/api';
 
 // ============================================================================
@@ -769,6 +783,140 @@ class TypedApiClient {
         API_PATHS.INTEGRATIONS_POSTHOG,
         successResponseSchema,
         { method: 'DELETE', ...options }
+      );
+    },
+  };
+
+  // ==========================================================================
+  // Agent Procedures
+  // ==========================================================================
+
+  agents = {
+    /** List all agents with pagination */
+    list: async (
+      params?: { limit?: number; offset?: number },
+      options?: RequestOptions
+    ): Promise<ApiResult<AgentListResponse>> => {
+      const limit = params?.limit ?? 50;
+      const offset = params?.offset ?? 0;
+      return this.request(
+        `${API_PATHS.AGENTS_LIST}?limit=${limit}&offset=${offset}`,
+        agentListResponseSchema,
+        options
+      );
+    },
+
+    /** Get a single agent by ID */
+    get: async (
+      id: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<AgentDTO>> => {
+      return this.request(
+        API_PATHS.AGENT_GET(id),
+        agentDTOSchema,
+        options
+      );
+    },
+
+    /** Get agents for a conversation */
+    getByConversation: async (
+      conversationId: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<{ agents: AgentDTO[] }>> => {
+      return this.request(
+        API_PATHS.AGENTS_BY_CONVERSATION(conversationId),
+        z.object({ agents: z.array(agentDTOSchema) }),
+        options
+      );
+    },
+
+    /** Delete an agent record */
+    delete: async (
+      id: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<SuccessResponse & { message: string }>> => {
+      return this.request(
+        API_PATHS.AGENT_DELETE(id),
+        successResponseSchema.extend({ message: z.string() }),
+        { method: 'DELETE', ...options }
+      );
+    },
+
+    /** Get agent results */
+    getResults: async (
+      id: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<AgentResultsResponse>> => {
+      return this.request(
+        API_PATHS.AGENT_RESULTS(id),
+        agentResultsResponseSchema,
+        options
+      );
+    },
+  };
+
+  // ==========================================================================
+  // Task Procedures
+  // ==========================================================================
+
+  tasks = {
+    /** List tasks with optional status filter and pagination */
+    list: async (
+      params?: { status?: string; limit?: number; offset?: number },
+      options?: RequestOptions
+    ): Promise<ApiResult<TaskListResponse>> => {
+      const limit = params?.limit ?? 20;
+      const offset = params?.offset ?? 0;
+      const statusParam = params?.status ? `&status=${encodeURIComponent(params.status)}` : '';
+      return this.request(
+        `${API_PATHS.TASKS_LIST}?limit=${limit}&offset=${offset}${statusParam}`,
+        taskListResponseSchema,
+        options
+      );
+    },
+
+    /** Get a single task by ID */
+    get: async (
+      id: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<TaskResponse>> => {
+      return this.request(
+        API_PATHS.TASK_GET(id),
+        taskResponseSchema,
+        options
+      );
+    },
+
+    /** Get task statistics */
+    stats: async (options?: RequestOptions): Promise<ApiResult<TaskStatsResponse>> => {
+      return this.request(
+        API_PATHS.TASKS_STATS,
+        taskStatsResponseSchema,
+        options
+      );
+    },
+
+    /** Cancel a running or pending task */
+    cancel: async (
+      id: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<TaskActionResponse>> => {
+      return this.request(
+        API_PATHS.TASK_CANCEL(id),
+        taskActionResponseSchema,
+        { method: 'DELETE', ...options }
+      );
+    },
+
+    /** Retry a failed or cancelled task */
+    retry: async (
+      id: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<TaskActionResponse>> => {
+      return this.request(
+        API_PATHS.TASK_RETRY(id),
+        taskActionResponseSchema,
+        { method: 'POST', ...options }
       );
     },
   };
