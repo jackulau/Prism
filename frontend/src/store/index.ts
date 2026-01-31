@@ -526,3 +526,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 // Alias for convenience
 export const useStore = useAppStore;
+
+// Export agent progress store
+export { useAgentProgressStore } from './agentProgressStore';

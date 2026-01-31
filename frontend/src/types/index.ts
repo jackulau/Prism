@@ -1,3 +1,13 @@
+// Re-export agent progress types
+export type {
+  AgentStatus,
+  SwarmStatus,
+  ProgressEvent,
+  ProgressMetrics,
+  AgentProgress,
+  SwarmProgress,
+} from './agentProgress';
+
 // WebSocket message types
 export type MessageType =
   | 'chat.message'
@@ -11,6 +21,14 @@ export type MessageType =
   | 'error'
   | 'agent.check_in'
   | 'agent.continue'
+  // Agent progress message types
+  | 'agent.progress'
+  | 'agent.step_started'
+  | 'agent.step_completed'
+  | 'agent.thinking_start'
+  | 'agent.thinking_end'
+  | 'agent.estimate'
+  | 'swarm.progress'
   // Preview/Sandbox message types
   | 'preview.ready'
   | 'preview.content'
@@ -325,3 +343,67 @@ export interface CloudMessageChunk {
   finishReason?: string;
   error?: string;
 }
+
+// Agent Progress WebSocket Message Types
+export interface AgentProgressMessage {
+  type: 'agent.progress';
+  agent_id: string;
+  current_step: number;
+  total_steps: number;
+  percent_complete: number;
+  step_name: string;
+  message: string;
+  timestamp: number;
+}
+
+export interface AgentStepStartedMessage {
+  type: 'agent.step_started';
+  agent_id: string;
+  step_number: number;
+  step_name: string;
+  timestamp: number;
+}
+
+export interface AgentStepCompletedMessage {
+  type: 'agent.step_completed';
+  agent_id: string;
+  step_number: number;
+  step_name: string;
+  result?: unknown;
+  timestamp: number;
+}
+
+export interface AgentThinkingMessage {
+  type: 'agent.thinking_start' | 'agent.thinking_end';
+  agent_id: string;
+  timestamp: number;
+}
+
+export interface AgentEstimateMessage {
+  type: 'agent.estimate';
+  agent_id: string;
+  estimated_tokens_remaining: number;
+  estimated_time_ms: number;
+  confidence: number;
+  timestamp: number;
+}
+
+export interface SwarmProgressMessage {
+  type: 'swarm.progress';
+  swarm_id: string;
+  overall_percent: number;
+  completed_agents: number;
+  total_agents: number;
+  agent_progress: Record<string, number>;
+  status: string;
+  timestamp: number;
+}
+
+// Union type for all progress messages
+export type ProgressWSMessage =
+  | AgentProgressMessage
+  | AgentStepStartedMessage
+  | AgentStepCompletedMessage
+  | AgentThinkingMessage
+  | AgentEstimateMessage
+  | SwarmProgressMessage;
