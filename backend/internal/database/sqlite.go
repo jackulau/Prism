@@ -407,8 +407,12 @@ func (db *DB) Migrate() error {
 			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 		)`,
 
+		// Add RBAC role field to users table
+		`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`,
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_id ON api_key_scopes(api_key_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)`,

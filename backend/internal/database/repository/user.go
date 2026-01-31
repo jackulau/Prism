@@ -13,6 +13,7 @@ type User struct {
 	ID                string
 	Email             string
 	PasswordHash      string
+	Role              string // "user" or "admin"
 	GitHubToken       string
 	GitHubUsername    string
 	GitHubConnectedAt *time.Time
@@ -62,14 +63,14 @@ func (r *UserRepository) GetByID(id string) (*User, error) {
 	user := &User{}
 	var githubToken, githubUsername sql.NullString
 	var githubConnectedAt sql.NullTime
-	var workosID, organizationID, ssoConnectionID, ssoProvider sql.NullString
+	var workosID, organizationID, ssoConnectionID, ssoProvider, role sql.NullString
 
 	err := r.db.QueryRow(
-		`SELECT id, email, password_hash, github_token, github_username, github_connected_at,
+		`SELECT id, email, password_hash, role, github_token, github_username, github_connected_at,
 		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
 		 FROM users WHERE id = ?`,
 		id,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt,
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &role, &githubToken, &githubUsername, &githubConnectedAt,
 		&workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -79,6 +80,10 @@ func (r *UserRepository) GetByID(id string) (*User, error) {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
+	user.Role = role.String
+	if user.Role == "" {
+		user.Role = "user" // Default role
+	}
 	user.GitHubToken = githubToken.String
 	user.GitHubUsername = githubUsername.String
 	if githubConnectedAt.Valid {
@@ -97,14 +102,14 @@ func (r *UserRepository) GetByEmail(email string) (*User, error) {
 	user := &User{}
 	var githubToken, githubUsername sql.NullString
 	var githubConnectedAt sql.NullTime
-	var workosID, organizationID, ssoConnectionID, ssoProvider sql.NullString
+	var workosID, organizationID, ssoConnectionID, ssoProvider, role sql.NullString
 
 	err := r.db.QueryRow(
-		`SELECT id, email, password_hash, github_token, github_username, github_connected_at,
+		`SELECT id, email, password_hash, role, github_token, github_username, github_connected_at,
 		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
 		 FROM users WHERE email = ?`,
 		email,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt,
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &role, &githubToken, &githubUsername, &githubConnectedAt,
 		&workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -114,6 +119,10 @@ func (r *UserRepository) GetByEmail(email string) (*User, error) {
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
+	user.Role = role.String
+	if user.Role == "" {
+		user.Role = "user" // Default role
+	}
 	user.GitHubToken = githubToken.String
 	user.GitHubUsername = githubUsername.String
 	if githubConnectedAt.Valid {
@@ -254,14 +263,14 @@ func (r *UserRepository) GetByWorkOSID(workosID string) (*User, error) {
 	user := &User{}
 	var githubToken, githubUsername sql.NullString
 	var githubConnectedAt sql.NullTime
-	var workosIDVal, organizationID, ssoConnectionID, ssoProvider sql.NullString
+	var workosIDVal, organizationID, ssoConnectionID, ssoProvider, role sql.NullString
 
 	err := r.db.QueryRow(
-		`SELECT id, email, password_hash, github_token, github_username, github_connected_at,
+		`SELECT id, email, password_hash, role, github_token, github_username, github_connected_at,
 		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
 		 FROM users WHERE workos_id = ?`,
 		workosID,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt,
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &role, &githubToken, &githubUsername, &githubConnectedAt,
 		&workosIDVal, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -271,6 +280,10 @@ func (r *UserRepository) GetByWorkOSID(workosID string) (*User, error) {
 		return nil, fmt.Errorf("failed to get user by WorkOS ID: %w", err)
 	}
 
+	user.Role = role.String
+	if user.Role == "" {
+		user.Role = "user" // Default role
+	}
 	user.GitHubToken = githubToken.String
 	user.GitHubUsername = githubUsername.String
 	if githubConnectedAt.Valid {
@@ -326,7 +339,7 @@ func (r *UserRepository) LinkWorkOSAccount(userID, workosID, orgID, connectionID
 // GetByOrganization returns all users in an organization
 func (r *UserRepository) GetByOrganization(orgID string) ([]*User, error) {
 	rows, err := r.db.Query(
-		`SELECT id, email, password_hash, github_token, github_username, github_connected_at,
+		`SELECT id, email, password_hash, role, github_token, github_username, github_connected_at,
 		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
 		 FROM users WHERE organization_id = ?`,
 		orgID,
@@ -341,14 +354,141 @@ func (r *UserRepository) GetByOrganization(orgID string) ([]*User, error) {
 		user := &User{}
 		var githubToken, githubUsername sql.NullString
 		var githubConnectedAt sql.NullTime
-		var workosID, organizationID, ssoConnectionID, ssoProvider sql.NullString
+		var workosID, organizationID, ssoConnectionID, ssoProvider, role sql.NullString
 
-		err := rows.Scan(&user.ID, &user.Email, &user.PasswordHash, &githubToken, &githubUsername, &githubConnectedAt,
+		err := rows.Scan(&user.ID, &user.Email, &user.PasswordHash, &role, &githubToken, &githubUsername, &githubConnectedAt,
 			&workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
 		}
 
+		user.Role = role.String
+		if user.Role == "" {
+			user.Role = "user" // Default role
+		}
+		user.GitHubToken = githubToken.String
+		user.GitHubUsername = githubUsername.String
+		if githubConnectedAt.Valid {
+			user.GitHubConnectedAt = &githubConnectedAt.Time
+		}
+		user.WorkOSID = workosID.String
+		user.OrganizationID = organizationID.String
+		user.SSOConnectionID = ssoConnectionID.String
+		user.SSOProvider = ssoProvider.String
+
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
+// GetUserRole retrieves just the role for a user by ID
+func (r *UserRepository) GetUserRole(userID string) (string, error) {
+	var role sql.NullString
+	err := r.db.QueryRow(`SELECT role FROM users WHERE id = ?`, userID).Scan(&role)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get user role: %w", err)
+	}
+	if role.String == "" {
+		return "user", nil // Default role
+	}
+	return role.String, nil
+}
+
+// SetUserRole updates the role for a user
+func (r *UserRepository) SetUserRole(userID string, role string) error {
+	now := time.Now()
+	result, err := r.db.Exec(
+		`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`,
+		role, now, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set user role: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+	return nil
+}
+
+// GetUsersByRole retrieves all users with a specific role
+func (r *UserRepository) GetUsersByRole(role string) ([]*User, error) {
+	rows, err := r.db.Query(
+		`SELECT id, email, password_hash, role, github_token, github_username, github_connected_at,
+		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
+		 FROM users WHERE role = ?`,
+		role,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users by role: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanUsers(rows)
+}
+
+// GetAllUsers retrieves all users with pagination
+func (r *UserRepository) GetAllUsers(limit, offset int) ([]*User, error) {
+	rows, err := r.db.Query(
+		`SELECT id, email, password_hash, role, github_token, github_username, github_connected_at,
+		 workos_id, organization_id, sso_connection_id, sso_provider, created_at, updated_at
+		 FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all users: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanUsers(rows)
+}
+
+// CountUsersByRole counts users with a specific role
+func (r *UserRepository) CountUsersByRole(role string) (int, error) {
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM users WHERE role = ?`, role).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count users by role: %w", err)
+	}
+	return count, nil
+}
+
+// CountAllUsers counts all users
+func (r *UserRepository) CountAllUsers() (int, error) {
+	var count int
+	err := r.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count all users: %w", err)
+	}
+	return count, nil
+}
+
+// scanUsers is a helper to scan user rows
+func (r *UserRepository) scanUsers(rows *sql.Rows) ([]*User, error) {
+	var users []*User
+	for rows.Next() {
+		user := &User{}
+		var githubToken, githubUsername sql.NullString
+		var githubConnectedAt sql.NullTime
+		var workosID, organizationID, ssoConnectionID, ssoProvider, role sql.NullString
+
+		err := rows.Scan(&user.ID, &user.Email, &user.PasswordHash, &role, &githubToken, &githubUsername, &githubConnectedAt,
+			&workosID, &organizationID, &ssoConnectionID, &ssoProvider, &user.CreatedAt, &user.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan user: %w", err)
+		}
+
+		user.Role = role.String
+		if user.Role == "" {
+			user.Role = "user" // Default role
+		}
 		user.GitHubToken = githubToken.String
 		user.GitHubUsername = githubUsername.String
 		if githubConnectedAt.Valid {

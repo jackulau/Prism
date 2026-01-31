@@ -10,6 +10,11 @@ import (
 
 // AuthMiddleware creates a middleware for JWT authentication
 func AuthMiddleware(jwtService *security.JWTService) fiber.Handler {
+	return AuthMiddlewareWithRole(jwtService, nil)
+}
+
+// AuthMiddlewareWithRole creates a middleware for JWT authentication that also fetches user role
+func AuthMiddlewareWithRole(jwtService *security.JWTService, userRepo *repository.UserRepository) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Get Authorization header
 		authHeader := c.Get("Authorization")
@@ -41,12 +46,28 @@ func AuthMiddleware(jwtService *security.JWTService) fiber.Handler {
 		c.Locals("userID", claims.UserID)
 		c.Locals("email", claims.Email)
 
+		// Fetch and set user role if repository is provided
+		if userRepo != nil {
+			role, err := userRepo.GetUserRole(claims.UserID)
+			if err == nil {
+				SetUserRole(c, role)
+			} else {
+				// Default to "user" role if role fetch fails
+				SetUserRole(c, "user")
+			}
+		}
+
 		return c.Next()
 	}
 }
 
 // OptionalAuthMiddleware creates a middleware that allows both authenticated and unauthenticated requests
 func OptionalAuthMiddleware(jwtService *security.JWTService) fiber.Handler {
+	return OptionalAuthMiddlewareWithRole(jwtService, nil)
+}
+
+// OptionalAuthMiddlewareWithRole creates optional auth middleware that also fetches user role
+func OptionalAuthMiddlewareWithRole(jwtService *security.JWTService, userRepo *repository.UserRepository) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {
@@ -66,6 +87,16 @@ func OptionalAuthMiddleware(jwtService *security.JWTService) fiber.Handler {
 
 		c.Locals("userID", claims.UserID)
 		c.Locals("email", claims.Email)
+
+		// Fetch and set user role if repository is provided
+		if userRepo != nil {
+			role, err := userRepo.GetUserRole(claims.UserID)
+			if err == nil {
+				SetUserRole(c, role)
+			} else {
+				SetUserRole(c, "user")
+			}
+		}
 
 		return c.Next()
 	}
