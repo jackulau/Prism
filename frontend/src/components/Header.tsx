@@ -4,10 +4,9 @@ import {
   PanelLeft,
   FolderTree,
   BarChart3,
-  Wifi,
-  WifiOff,
 } from 'lucide-react';
 import { useAppStore } from '../store';
+import { ConnectionStatusBar } from './ConnectionStatusBar';
 
 export const Header: React.FC = () => {
   const {
@@ -17,11 +16,8 @@ export const Header: React.FC = () => {
     toggleFileTree,
     isMetricsPanelOpen,
     toggleMetricsPanel,
-    connectionStatus,
     metrics,
   } = useAppStore();
-
-  const isConnected = connectionStatus === 'connected';
 
   return (
     <header className="h-12 bg-editor-bg border-b border-editor-border flex items-center justify-between px-4">
@@ -85,20 +81,7 @@ export const Header: React.FC = () => {
       {/* Right section */}
       <div className="flex items-center gap-2">
         {/* Connection status */}
-        <div
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs ${
-            isConnected
-              ? 'bg-editor-success/20 text-editor-success'
-              : 'bg-editor-error/20 text-editor-error'
-          }`}
-        >
-          {isConnected ? (
-            <Wifi className="w-3.5 h-3.5" />
-          ) : (
-            <WifiOff className="w-3.5 h-3.5" />
-          )}
-          <span className="capitalize">{connectionStatus}</span>
-        </div>
+        <ConnectionStatusBar compact />
 
         <div className="h-6 w-px bg-editor-border mx-1" />
 
