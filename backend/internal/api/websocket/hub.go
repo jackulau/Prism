@@ -152,9 +152,14 @@ const (
 	TypeFilesUpdated       = "files.updated"
 	TypeFileContent        = "file.content"
 	TypeFileRequest        = "file.request"
-	TypeFileHistoryRequest = "file.history_request"
-	TypeFileHistoryList    = "file.history_list"
-	TypeFileHistoryContent = "file.history_content"
+	TypeFileHistoryRequest      = "file.history_request"
+	TypeFileHistoryList         = "file.history_list"
+	TypeFileHistoryContent      = "file.history_content"
+	TypeFileHistoryRestore      = "file.history_restore"
+	TypeFileHistoryRestored     = "file.history_restored"
+	TypeFileHistoryBatchRestore = "file.history_batch_restore"
+	TypeFileHistoryBatchRestored = "file.history_batch_restored"
+	TypeFileHistoryConflicts    = "file.history_conflicts"
 
 	// Swarm/Multi-agent message types
 	TypeSwarmCreate          = "swarm.create"
@@ -883,6 +888,61 @@ func NewFileHistoryContent(historyID, filePath, content, operation, createdAt st
 			"history_id": historyID,
 			"operation":  operation,
 			"created_at": createdAt,
+		},
+	}
+}
+
+// RestoreResult represents the result of a single file restore operation
+type RestoreResult struct {
+	HistoryID   string `json:"history_id"`
+	FilePath    string `json:"file_path"`
+	Success     bool   `json:"success"`
+	Error       string `json:"error,omitempty"`
+	BackupID    string `json:"backup_id,omitempty"`
+}
+
+// RestoreConflictInfo represents conflict information for WebSocket messages
+type RestoreConflictInfo struct {
+	FilePath         string `json:"file_path"`
+	HistoryTimestamp string `json:"history_timestamp"`
+	CurrentModified  string `json:"current_modified"`
+	HasNewerVersion  bool   `json:"has_newer_version"`
+}
+
+// NewFileHistoryRestored creates a message for single file restore completion
+func NewFileHistoryRestored(historyID, filePath string, success bool, backupID string, err string) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:     TypeFileHistoryRestored,
+		FilePath: filePath,
+		Success:  success,
+		Error:    err,
+		Metadata: map[string]interface{}{
+			"history_id": historyID,
+			"backup_id":  backupID,
+		},
+	}
+}
+
+// NewFileHistoryBatchRestored creates a message for batch restore completion
+func NewFileHistoryBatchRestored(results []RestoreResult, totalSuccess, totalFailed int) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeFileHistoryBatchRestored,
+		Success: totalFailed == 0,
+		Metadata: map[string]interface{}{
+			"results":       results,
+			"total_success": totalSuccess,
+			"total_failed":  totalFailed,
+		},
+	}
+}
+
+// NewFileHistoryConflicts creates a message with restore conflicts
+func NewFileHistoryConflicts(conflicts []RestoreConflictInfo) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type: TypeFileHistoryConflicts,
+		Metadata: map[string]interface{}{
+			"conflicts": conflicts,
+			"count":     len(conflicts),
 		},
 	}
 }

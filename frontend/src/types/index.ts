@@ -27,6 +27,11 @@ export type MessageType =
   | 'file.history_request'
   | 'file.history_list'
   | 'file.history_content'
+  | 'file.history_restore'
+  | 'file.history_restored'
+  | 'file.history_batch_restore'
+  | 'file.history_batch_restored'
+  | 'file.history_conflicts'
   // CloudProvider message types
   | 'cloud_agent.created'
   | 'cloud_agent.message'

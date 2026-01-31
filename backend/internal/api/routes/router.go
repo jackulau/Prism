@@ -554,6 +554,12 @@ func handleWebSocketMessage(deps *Dependencies, client *ws.Client, msg *ws.Incom
 	case ws.TypeFileHistoryRequest:
 		handleFileHistoryRequest(deps, client, msg)
 
+	case ws.TypeFileHistoryRestore:
+		handleFileHistoryRestore(deps, client, msg)
+
+	case ws.TypeFileHistoryBatchRestore:
+		handleFileHistoryBatchRestore(deps, client, msg)
+
 	// Workflow message handlers
 	case ws.TypeWorkflowRun:
 		handleWorkflowRun(deps, client, msg)
@@ -1497,6 +1503,204 @@ func handleFileHistoryRequest(deps *Dependencies, client *ws.Client, msg *ws.Inc
 
 		client.SendMessage(ws.NewFileHistoryList(filePath, entries))
 	}
+}
+
+// handleFileHistoryRestore handles a single file restore request via WebSocket
+func handleFileHistoryRestore(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.FileHistoryRepo == nil {
+		client.SendMessage(ws.NewError("history_unavailable", "file history not available"))
+		return
+	}
+	if deps.SandboxService == nil {
+		client.SendMessage(ws.NewError("sandbox_unavailable", "sandbox service not available"))
+		return
+	}
+
+	// Get history ID from params
+	historyID := ""
+	createBackup := true
+	if msg.Params != nil {
+		if id, ok := msg.Params["history_id"].(string); ok {
+			historyID = id
+		}
+		if backup, ok := msg.Params["create_backup"].(bool); ok {
+			createBackup = backup
+		}
+	}
+
+	if historyID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "history_id is required"))
+		return
+	}
+
+	// Get the history entry
+	entry, err := deps.FileHistoryRepo.GetByID(historyID)
+	if err != nil {
+		client.SendMessage(ws.NewError("history_error", err.Error()))
+		return
+	}
+	if entry == nil || entry.UserID != client.UserID {
+		client.SendMessage(ws.NewError("history_error", "history entry not found"))
+		return
+	}
+
+	// Check for conflicts
+	conflicts, err := deps.FileHistoryRepo.CheckRestoreConflicts(client.UserID, []string{historyID})
+	if err != nil {
+		client.SendMessage(ws.NewError("history_error", err.Error()))
+		return
+	}
+
+	// Send conflicts if any
+	if len(conflicts) > 0 {
+		conflictInfos := make([]ws.RestoreConflictInfo, len(conflicts))
+		for i, c := range conflicts {
+			conflictInfos[i] = ws.RestoreConflictInfo{
+				FilePath:         c.FilePath,
+				HistoryTimestamp: c.HistoryTimestamp.Format("2006-01-02 15:04:05"),
+				CurrentModified:  c.CurrentModified.Format("2006-01-02 15:04:05"),
+				HasNewerVersion:  c.HasNewerVersion,
+			}
+		}
+		client.SendMessage(ws.NewFileHistoryConflicts(conflictInfos))
+		return
+	}
+
+	backupID := ""
+	// Create backup of current file if requested
+	if createBackup {
+		currentContent, err := deps.SandboxService.GetFileContent(client.UserID, entry.FilePath)
+		if err == nil && currentContent != "" {
+			backup, err := deps.FileHistoryRepo.CreateRestoreEntry(client.UserID, entry.FilePath, currentContent, historyID)
+			if err == nil {
+				backupID = backup.ID
+			}
+		}
+	}
+
+	// Write the restored content to the file
+	if err := deps.SandboxService.WriteFile(client.UserID, entry.FilePath, entry.Content); err != nil {
+		client.SendMessage(ws.NewFileHistoryRestored(historyID, entry.FilePath, false, backupID, err.Error()))
+		return
+	}
+
+	// Record the restore operation in history
+	_, err = deps.FileHistoryRepo.Create(client.UserID, entry.FilePath, entry.Content, "restore")
+	if err != nil {
+		log.Printf("Failed to record restore operation: %v", err)
+	}
+
+	client.SendMessage(ws.NewFileHistoryRestored(historyID, entry.FilePath, true, backupID, ""))
+}
+
+// handleFileHistoryBatchRestore handles batch file restore request via WebSocket
+func handleFileHistoryBatchRestore(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.FileHistoryRepo == nil {
+		client.SendMessage(ws.NewError("history_unavailable", "file history not available"))
+		return
+	}
+	if deps.SandboxService == nil {
+		client.SendMessage(ws.NewError("sandbox_unavailable", "sandbox service not available"))
+		return
+	}
+
+	// Get history IDs from params
+	var historyIDs []string
+	createBackup := true
+	checkConflicts := true
+
+	if msg.Params != nil {
+		if ids, ok := msg.Params["history_ids"].([]interface{}); ok {
+			for _, id := range ids {
+				if idStr, ok := id.(string); ok {
+					historyIDs = append(historyIDs, idStr)
+				}
+			}
+		}
+		if backup, ok := msg.Params["create_backup"].(bool); ok {
+			createBackup = backup
+		}
+		if check, ok := msg.Params["check_conflicts"].(bool); ok {
+			checkConflicts = check
+		}
+	}
+
+	if len(historyIDs) == 0 {
+		client.SendMessage(ws.NewError("invalid_request", "history_ids is required"))
+		return
+	}
+
+	// Check for conflicts if requested
+	if checkConflicts {
+		conflicts, err := deps.FileHistoryRepo.CheckRestoreConflicts(client.UserID, historyIDs)
+		if err != nil {
+			client.SendMessage(ws.NewError("history_error", err.Error()))
+			return
+		}
+
+		if len(conflicts) > 0 {
+			conflictInfos := make([]ws.RestoreConflictInfo, len(conflicts))
+			for i, c := range conflicts {
+				conflictInfos[i] = ws.RestoreConflictInfo{
+					FilePath:         c.FilePath,
+					HistoryTimestamp: c.HistoryTimestamp.Format("2006-01-02 15:04:05"),
+					CurrentModified:  c.CurrentModified.Format("2006-01-02 15:04:05"),
+					HasNewerVersion:  c.HasNewerVersion,
+				}
+			}
+			client.SendMessage(ws.NewFileHistoryConflicts(conflictInfos))
+			return
+		}
+	}
+
+	// Get all history entries
+	entries, err := deps.FileHistoryRepo.GetByIDs(client.UserID, historyIDs)
+	if err != nil {
+		client.SendMessage(ws.NewError("history_error", err.Error()))
+		return
+	}
+
+	// Process each restore
+	results := make([]ws.RestoreResult, 0, len(entries))
+	totalSuccess := 0
+	totalFailed := 0
+
+	for _, entry := range entries {
+		result := ws.RestoreResult{
+			HistoryID: entry.ID,
+			FilePath:  entry.FilePath,
+			Success:   true,
+		}
+
+		// Create backup if requested
+		if createBackup {
+			currentContent, err := deps.SandboxService.GetFileContent(client.UserID, entry.FilePath)
+			if err == nil && currentContent != "" {
+				backup, err := deps.FileHistoryRepo.CreateRestoreEntry(client.UserID, entry.FilePath, currentContent, entry.ID)
+				if err == nil {
+					result.BackupID = backup.ID
+				}
+			}
+		}
+
+		// Write restored content
+		if err := deps.SandboxService.WriteFile(client.UserID, entry.FilePath, entry.Content); err != nil {
+			result.Success = false
+			result.Error = err.Error()
+			totalFailed++
+		} else {
+			// Record restore operation
+			_, err = deps.FileHistoryRepo.Create(client.UserID, entry.FilePath, entry.Content, "restore")
+			if err != nil {
+				log.Printf("Failed to record restore operation: %v", err)
+			}
+			totalSuccess++
+		}
+
+		results = append(results, result)
+	}
+
+	client.SendMessage(ws.NewFileHistoryBatchRestored(results, totalSuccess, totalFailed))
 }
 
 // ==================== Workflow Handlers ====================
