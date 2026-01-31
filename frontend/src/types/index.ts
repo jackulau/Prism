@@ -325,3 +325,6 @@ export interface CloudMessageChunk {
   finishReason?: string;
   error?: string;
 }
+
+// Re-export workflow types
+export * from './workflow';
