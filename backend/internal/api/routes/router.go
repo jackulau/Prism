@@ -69,6 +69,7 @@ type Dependencies struct {
 	SandboxManager     *sandbox.Manager
 	ToolRegistry       *tools.Registry
 	ToolRepo           *repository.ToolRepository
+	ToolExecutionRepo  *repository.ToolExecutionRepository
 	MCPServer          *mcp.Server
 	MCPClient          *mcp.Client
 	MCPRepository      *mcp.Repository
@@ -502,6 +503,15 @@ func Setup(deps *Dependencies) *fiber.App {
 		toolsCatalog.Post("/", toolsCatalogHandler.CreateTool)
 		toolsCatalog.Put("/:id", toolsCatalogHandler.UpdateTool)
 		toolsCatalog.Delete("/:id", toolsCatalogHandler.DeleteTool)
+	}
+
+	// Tool execution logs routes (auth required)
+	if deps.ToolExecutionRepo != nil {
+		toolExecHandler := handlers.NewToolExecutionsHandler(deps.ToolExecutionRepo)
+		toolExec := v1.Group("/tools/executions", middleware.AuthMiddleware(deps.JWTService))
+		toolExec.Get("/", toolExecHandler.ListExecutions)
+		toolExec.Get("/tool-names", toolExecHandler.GetDistinctToolNames)
+		toolExec.Get("/:id", toolExecHandler.GetExecution)
 	}
 
 	// Integrations routes (for Settings page)
