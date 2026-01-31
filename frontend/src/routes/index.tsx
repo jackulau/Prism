@@ -1,7 +1,11 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '../layouts/AppLayout';
 import Dashboard from '../pages/Dashboard';
+import Agents from '../pages/Agents';
 import Workers from '../pages/Workers';
+import Workflows from '../pages/Workflows';
+import Tasks from '../pages/Tasks';
+import Tools from '../pages/Tools';
 import Integrations from '../pages/Integrations';
 import Usage from '../pages/Usage';
 import Organization from '../pages/Organization';
@@ -32,8 +36,24 @@ export const router = createBrowserRouter([
         element: <Workspace />,
       },
       {
+        path: 'agents',
+        element: <Agents />,
+      },
+      {
         path: 'workers',
         element: <Workers />,
+      },
+      {
+        path: 'workflows',
+        element: <Workflows />,
+      },
+      {
+        path: 'tasks',
+        element: <Tasks />,
+      },
+      {
+        path: 'tools',
+        element: <Tools />,
       },
       {
         path: 'integrations',
