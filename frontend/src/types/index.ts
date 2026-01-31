@@ -1,3 +1,13 @@
+// Re-export agent progress types
+export type {
+  AgentStatus,
+  SwarmStatus,
+  ProgressEvent,
+  ProgressMetrics,
+  AgentProgress,
+  SwarmProgress,
+} from './agentProgress';
+
 // WebSocket message types
 export type MessageType =
   | 'chat.message'
