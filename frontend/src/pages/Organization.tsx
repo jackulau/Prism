@@ -1,6 +1,7 @@
 import { OrgNameEditor } from '../components/organization/OrgNameEditor';
 import { MemberList } from '../components/organization/MemberList';
 import { SubscriptionInfo } from '../components/organization/SubscriptionInfo';
+import { SSOSettings } from '../components/settings/SSOSettings';
 
 export default function Organization() {
   return (
@@ -19,6 +20,11 @@ export default function Organization() {
 
         {/* Subscription Info */}
         <SubscriptionInfo />
+
+        {/* SSO Settings */}
+        <section className="bg-editor-surface border border-editor-border rounded-lg p-6">
+          <SSOSettings />
+        </section>
 
         {/* Member List */}
         <MemberList />
