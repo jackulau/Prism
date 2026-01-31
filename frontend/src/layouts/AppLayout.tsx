@@ -6,12 +6,15 @@ import { ToastContainer } from '../components/Toast';
 import { AuthGuard } from '../components/auth/AuthGuard';
 import { AuthPage } from '../components/auth/AuthPage';
 import { TRPCProvider } from '../providers/TRPCProvider';
+import { CommandPalette } from '../components/CommandPalette';
 import { useAppStore } from '../store';
+import { useCommandPaletteStore } from '../store/commandPaletteStore';
 import { applyTheme } from '../config/themes';
 
 export function AppLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { theme, loadProviders } = useAppStore();
+  const { open: openCommandPalette } = useCommandPaletteStore();
 
   // Apply theme on mount and when it changes
   useEffect(() => {
@@ -22,6 +25,19 @@ export function AppLayout() {
   useEffect(() => {
     loadProviders();
   }, [loadProviders]);
+
+  // Global keyboard shortcut for command palette (Cmd/Ctrl + K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        openCommandPalette();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [openCommandPalette]);
 
   return (
     <TRPCProvider>
@@ -43,6 +59,9 @@ export function AppLayout() {
 
           {/* Toast Notifications */}
           <ToastContainer />
+
+          {/* Command Palette */}
+          <CommandPalette />
         </div>
       </AuthGuard>
     </TRPCProvider>
