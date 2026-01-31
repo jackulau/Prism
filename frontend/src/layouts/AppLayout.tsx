@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/sidebar/Sidebar';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { ToastContainer } from '../components/Toast';
+import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
 import { AuthGuard } from '../components/auth/AuthGuard';
 import { AuthPage } from '../components/auth/AuthPage';
 import { TRPCProvider } from '../providers/TRPCProvider';
 import { useAppStore } from '../store';
+import { useShortcutsStore } from '../store/shortcutsStore';
 import { applyTheme } from '../config/themes';
+import { useWorkspaceShortcuts } from '../hooks/useWorkspaceShortcuts';
 
 export function AppLayout() {
+  const navigate = useNavigate();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const { theme, loadProviders } = useAppStore();
+  const { theme, loadProviders, createNewConversation } = useAppStore();
+  const { closeHelpModal, isHelpModalOpen } = useShortcutsStore();
 
   // Apply theme on mount and when it changes
   useEffect(() => {
@@ -22,6 +27,34 @@ export function AppLayout() {
   useEffect(() => {
     loadProviders();
   }, [loadProviders]);
+
+  // Shortcut handlers
+  const handleNewConversation = useCallback(async () => {
+    const id = await createNewConversation();
+    if (id) {
+      navigate(`/workspace/${id}`);
+    }
+  }, [createNewConversation, navigate]);
+
+  const handleNewWorker = useCallback(() => {
+    navigate('/workers?action=new');
+  }, [navigate]);
+
+  const handleCloseModal = useCallback(() => {
+    // Close help modal if open, otherwise close settings
+    if (isHelpModalOpen) {
+      closeHelpModal();
+    } else {
+      // Other modals can be closed via their own escape handlers
+    }
+  }, [isHelpModalOpen, closeHelpModal]);
+
+  // Register global keyboard shortcuts
+  useWorkspaceShortcuts({
+    onNewConversation: handleNewConversation,
+    onNewWorker: handleNewWorker,
+    onClosePreview: handleCloseModal,
+  });
 
   return (
     <TRPCProvider>
@@ -40,6 +73,9 @@ export function AppLayout() {
 
           {/* Settings Panel (slide-out) */}
           <SettingsPanel />
+
+          {/* Keyboard Shortcuts Help Modal */}
+          <KeyboardShortcutsHelp />
 
           {/* Toast Notifications */}
           <ToastContainer />
