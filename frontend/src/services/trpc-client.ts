@@ -26,6 +26,14 @@ import {
   type SuccessResponse,
 } from '../types/api.generated';
 
+import type {
+  Tool,
+  ToolListResponse,
+  ToolListParams,
+  ToolCreateInput,
+  ToolUpdateInput,
+} from '../types/tools';
+
 import {
   authResponseSchema,
   userDTOSchema,
@@ -46,6 +54,11 @@ import {
   gitHubReposResponseSchema,
   successResponseSchema,
 } from '../schemas/api';
+
+import {
+  toolSchema,
+  toolListResponseSchema,
+} from '../schemas/tools';
 
 // ============================================================================
 // Types
@@ -768,6 +781,90 @@ class TypedApiClient {
       return this.request(
         API_PATHS.INTEGRATIONS_POSTHOG,
         successResponseSchema,
+        { method: 'DELETE', ...options }
+      );
+    },
+  };
+
+  // ==========================================================================
+  // Tools Catalog Procedures
+  // ==========================================================================
+
+  tools = {
+    /** List all tools with optional filters */
+    list: async (
+      params?: ToolListParams,
+      options?: RequestOptions
+    ): Promise<ApiResult<ToolListResponse>> => {
+      const queryParams = new URLSearchParams();
+      if (params?.provider_id) {
+        queryParams.set('provider_id', params.provider_id);
+      }
+      if (params?.models_only) {
+        queryParams.set('models_only', 'true');
+      }
+      const queryString = queryParams.toString();
+      const endpoint = queryString ? `${API_PATHS.TOOLS_LIST}?${queryString}` : API_PATHS.TOOLS_LIST;
+      return this.request(endpoint, toolListResponseSchema, options);
+    },
+
+    /** Get a tool by ID */
+    get: async (
+      id: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<Tool>> => {
+      return this.request(API_PATHS.TOOLS_GET(id), toolSchema, options);
+    },
+
+    /** Get a tool by slug name */
+    getBySlug: async (
+      slug: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<Tool>> => {
+      return this.request(API_PATHS.TOOLS_GET_BY_SLUG(slug), toolSchema, options);
+    },
+
+    /** Create a new tool */
+    create: async (
+      input: ToolCreateInput,
+      options?: RequestOptions
+    ): Promise<ApiResult<Tool>> => {
+      return this.request(
+        API_PATHS.TOOLS_CREATE,
+        toolSchema,
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+          ...options,
+        }
+      );
+    },
+
+    /** Update an existing tool */
+    update: async (
+      id: string,
+      input: ToolUpdateInput,
+      options?: RequestOptions
+    ): Promise<ApiResult<Tool>> => {
+      return this.request(
+        API_PATHS.TOOLS_UPDATE(id),
+        toolSchema,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(input),
+          ...options,
+        }
+      );
+    },
+
+    /** Delete a tool */
+    delete: async (
+      id: string,
+      options?: RequestOptions
+    ): Promise<ApiResult<SuccessResponse>> => {
+      return this.request(
+        API_PATHS.TOOLS_DELETE(id),
+        successResponseSchema.extend({ message: z.string().optional() }),
         { method: 'DELETE', ...options }
       );
     },

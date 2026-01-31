@@ -374,6 +374,14 @@ export const API_PATHS = {
   INTEGRATIONS_SLACK: '/api/v1/integrations/slack',
   INTEGRATIONS_POSTHOG: '/api/v1/integrations/posthog',
 
+  // Tools Catalog
+  TOOLS_LIST: '/api/v1/tools',
+  TOOLS_CREATE: '/api/v1/tools',
+  TOOLS_GET: (id: string) => `/api/v1/tools/${id}`,
+  TOOLS_GET_BY_SLUG: (slug: string) => `/api/v1/tools/slug/${slug}`,
+  TOOLS_UPDATE: (id: string) => `/api/v1/tools/${id}`,
+  TOOLS_DELETE: (id: string) => `/api/v1/tools/${id}`,
+
   // WebSocket
   WEBSOCKET: '/api/v1/ws',
 } as const;
