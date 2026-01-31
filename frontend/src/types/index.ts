@@ -32,7 +32,12 @@ export type MessageType =
   | 'cloud_agent.message'
   | 'cloud_agent.chunk'
   | 'cloud_agent.complete'
-  | 'cloud_agent.error';
+  | 'cloud_agent.error'
+  // Swarm message types
+  | 'swarm.event'
+  | 'swarm.progress'
+  | 'swarm.complete'
+  | 'swarm.error';
 
 export interface Attachment {
   name: string;
@@ -325,3 +330,6 @@ export interface CloudMessageChunk {
   finishReason?: string;
   error?: string;
 }
+
+// Swarm types
+export * from './swarm';
