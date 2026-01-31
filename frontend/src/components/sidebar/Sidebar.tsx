@@ -7,6 +7,7 @@ import {
   Plug,
   BarChart3,
   Building,
+  Users,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -50,6 +51,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Plug, label: 'Integrations', path: '/integrations' },
   { icon: BarChart3, label: 'Usage', path: '/usage' },
   { icon: Building, label: 'Organization', path: '/organization' },
+  { icon: Users, label: 'Teams', path: '/teams' },
   { icon: Settings, label: 'Settings', path: '/settings' },
 ];
 
