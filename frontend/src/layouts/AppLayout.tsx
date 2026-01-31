@@ -4,6 +4,7 @@ import { Sidebar } from '../components/sidebar/Sidebar';
 import { SettingsPanel } from '../components/settings/SettingsPanel';
 import { ToastContainer } from '../components/Toast';
 import { KeyboardShortcutsHelp } from '../components/KeyboardShortcutsHelp';
+import { FloatingEmergencyStop } from '../components/FloatingEmergencyStop';
 import { AuthGuard } from '../components/auth/AuthGuard';
 import { AuthPage } from '../components/auth/AuthPage';
 import { TRPCProvider } from '../providers/TRPCProvider';
@@ -108,6 +109,9 @@ export function AppLayout() {
 
           {/* Command Palette */}
           <CommandPalette />
+
+          {/* Emergency Stop Button (floating) */}
+          <FloatingEmergencyStop />
         </div>
       </AuthGuard>
     </TRPCProvider>

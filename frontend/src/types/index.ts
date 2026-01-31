@@ -21,16 +21,28 @@ export type MessageType =
   | 'agent.check_in'
   | 'agent.continue'
   // Agent lifecycle message types
+  | 'agent.run'
+  | 'agent.stop'
   | 'agent.started'
   | 'agent.completed'
   | 'agent.failed'
   | 'agent.cancelled'
+  // Workflow message types
+  | 'workflow.run'
+  | 'workflow.stop'
+  | 'workflow.started'
+  | 'workflow.completed'
+  | 'workflow.failed'
+  | 'workflow.cancelled'
   // Swarm message types
+  | 'swarm.run'
+  | 'swarm.stop'
   | 'swarm.started'
   | 'swarm.agent_started'
   | 'swarm.agent_completed'
   | 'swarm.completed'
   | 'swarm.failed'
+  | 'swarm.cancelled'
   // Heartbeat message types
   | 'heartbeat'
   | 'heartbeat.ack'
@@ -75,7 +87,7 @@ export interface Attachment {
 
 export interface IncomingWSMessage {
   type: MessageType;
-  conversation_id: string;
+  conversation_id?: string;
   content?: string;
   attachments?: Attachment[];
   execution_id?: string;
@@ -85,6 +97,10 @@ export interface IncomingWSMessage {
   mode?: ChatMode;
   extended_thinking?: boolean;
   file_context?: FileContext | null;
+  // Agent/Workflow/Swarm stop fields
+  agent_id?: string;
+  workflow_id?: string;
+  swarm_id?: string;
 }
 
 export interface OutgoingWSMessage {
