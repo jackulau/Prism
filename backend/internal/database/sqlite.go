@@ -410,6 +410,33 @@ func (db *DB) Migrate() error {
 		// Add RBAC role field to users table
 		`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`,
 
+		// Build history for tracking build/sandbox executions
+		`CREATE TABLE IF NOT EXISTS build_history (
+			id TEXT PRIMARY KEY,
+			workspace_id TEXT,
+			org_workspace_id TEXT,
+			user_id TEXT NOT NULL,
+			command TEXT NOT NULL,
+			status TEXT NOT NULL,
+			exit_code INTEGER,
+			started_at DATETIME NOT NULL,
+			completed_at DATETIME,
+			duration_ms INTEGER,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		)`,
+
+		// Build logs for storing stdout/stderr output
+		`CREATE TABLE IF NOT EXISTS build_logs (
+			id TEXT PRIMARY KEY,
+			build_id TEXT NOT NULL,
+			stream TEXT NOT NULL,
+			content TEXT NOT NULL,
+			timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (build_id) REFERENCES build_history(id) ON DELETE CASCADE
+		)`,
+
+
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_id ON api_key_scopes(api_key_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`,
@@ -610,6 +637,12 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_build_configs_user ON build_configs(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_build_commands_config ON build_commands(config_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_build_env_vars_config ON build_env_vars(config_id)`,
+
+		// Build history indexes
+		`CREATE INDEX IF NOT EXISTS idx_build_history_user ON build_history(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_history_workspace ON build_history(workspace_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_history_org_workspace ON build_history(org_workspace_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_build_logs_build ON build_logs(build_id)`,
 	}
 
 	for _, migration := range migrations {
