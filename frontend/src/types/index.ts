@@ -32,7 +32,26 @@ export type MessageType =
   | 'cloud_agent.message'
   | 'cloud_agent.chunk'
   | 'cloud_agent.complete'
-  | 'cloud_agent.error';
+  | 'cloud_agent.error'
+  // Workflow execution message types
+  | 'workflow.run'
+  | 'workflow.started'
+  | 'workflow.pause'
+  | 'workflow.paused'
+  | 'workflow.resume'
+  | 'workflow.resumed'
+  | 'workflow.stop'
+  | 'workflow.cancelled'
+  | 'workflow.status'
+  | 'workflow.progress'
+  | 'workflow.step_started'
+  | 'workflow.step_completed'
+  | 'workflow.step_failed'
+  | 'workflow.step_skipped'
+  | 'workflow.completed'
+  | 'workflow.failed'
+  | 'workflow.waiting_input'
+  | 'workflow.provide_input';
 
 export interface Attachment {
   name: string;
@@ -324,4 +343,52 @@ export interface CloudMessageChunk {
   toolCalls?: ToolCall[];
   finishReason?: string;
   error?: string;
+}
+
+// Workflow Execution Types
+export type WorkflowExecutionStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled' | 'waiting_input';
+
+export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'retrying';
+
+export interface WorkflowStepResult {
+  stepId: string;
+  stepName: string;
+  stepType: string;
+  status: WorkflowStepStatus;
+  startedAt?: number;
+  completedAt?: number;
+  duration?: number;
+  output?: unknown;
+  error?: string;
+  retryCount?: number;
+}
+
+export interface WorkflowInfo {
+  id: string;
+  name?: string;
+  description?: string;
+  status: string;
+  currentStep: number;
+  totalSteps: number;
+  startedAt?: number;
+  completedAt?: number;
+  error?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface WorkflowWSMessage {
+  type: MessageType;
+  workflow_id?: string;
+  step_id?: string;
+  step_name?: string;
+  step_type?: string;
+  current_step?: number;
+  total_steps?: number;
+  status?: string;
+  state?: Record<string, unknown>;
+  result?: unknown;
+  error?: string;
+  duration?: number;
+  message?: string;
+  workflow_info?: WorkflowInfo;
 }
