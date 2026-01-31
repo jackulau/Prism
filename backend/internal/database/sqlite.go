@@ -475,6 +475,68 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_organizations_workos ON organizations(workos_organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_organization_members_org ON organization_members(organization_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_organization_members_user ON organization_members(user_id)`,
+
+		// Approval workflows
+		`CREATE TABLE IF NOT EXISTS approval_workflows (
+			id TEXT PRIMARY KEY,
+			organization_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			description TEXT,
+			operation_type TEXT NOT NULL,
+			steps TEXT NOT NULL,
+			conditions TEXT,
+			metadata TEXT,
+			active INTEGER DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			created_by TEXT NOT NULL
+		)`,
+
+		// Approval requests
+		`CREATE TABLE IF NOT EXISTS approval_requests (
+			id TEXT PRIMARY KEY,
+			workflow_id TEXT NOT NULL REFERENCES approval_workflows(id) ON DELETE CASCADE,
+			organization_id TEXT NOT NULL,
+			requester_id TEXT NOT NULL,
+			requester_email TEXT,
+			operation_type TEXT NOT NULL,
+			operation_details TEXT,
+			current_step INTEGER DEFAULT 0,
+			total_steps INTEGER NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			priority INTEGER DEFAULT 0,
+			expires_at DATETIME,
+			metadata TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			completed_at DATETIME
+		)`,
+
+		// Approval decisions (audit trail)
+		`CREATE TABLE IF NOT EXISTS approval_decisions (
+			id TEXT PRIMARY KEY,
+			request_id TEXT NOT NULL REFERENCES approval_requests(id) ON DELETE CASCADE,
+			step_order INTEGER NOT NULL,
+			approver_id TEXT NOT NULL,
+			approver_email TEXT,
+			decision TEXT NOT NULL,
+			comment TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			metadata TEXT
+		)`,
+
+		// Approval workflow indexes
+		`CREATE INDEX IF NOT EXISTS idx_approval_workflows_org ON approval_workflows(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_workflows_operation ON approval_workflows(organization_id, operation_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_workflows_active ON approval_workflows(organization_id, active)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_requests_org ON approval_requests(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_requests_workflow ON approval_requests(workflow_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_requests_requester ON approval_requests(requester_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_requests_status ON approval_requests(organization_id, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_requests_expires ON approval_requests(status, expires_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_decisions_request ON approval_decisions(request_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_decisions_approver ON approval_decisions(approver_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_approval_decisions_step ON approval_decisions(request_id, step_order)`,
 	}
 
 	for _, migration := range migrations {

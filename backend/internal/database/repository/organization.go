@@ -297,3 +297,19 @@ func (r *OrganizationRepository) GetMemberRole(orgID, userID string) (string, er
 	}
 	return role, nil
 }
+
+// GetMember retrieves a specific member of an organization
+func (r *OrganizationRepository) GetMember(orgID, userID string) (*OrganizationMember, error) {
+	member := &OrganizationMember{}
+	err := r.db.QueryRow(
+		`SELECT id, organization_id, user_id, role, created_at FROM organization_members WHERE organization_id = ? AND user_id = ?`,
+		orgID, userID,
+	).Scan(&member.ID, &member.OrganizationID, &member.UserID, &member.Role, &member.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get organization member: %w", err)
+	}
+	return member, nil
+}
