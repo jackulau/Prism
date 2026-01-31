@@ -17,9 +17,10 @@ type JWTService struct {
 // Claims represents the JWT claims
 type Claims struct {
 	jwt.RegisteredClaims
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
-	Type   string `json:"type"` // "access" or "refresh"
+	UserID    string `json:"user_id"`
+	Email     string `json:"email"`
+	SessionID string `json:"session_id,omitempty"` // Session ID for activity tracking
+	Type      string `json:"type"`                 // "access" or "refresh"
 }
 
 // TokenPair represents an access and refresh token pair
@@ -40,12 +41,17 @@ func NewJWTService(secretKey string, accessExpiry, refreshExpiry time.Duration) 
 
 // GenerateTokenPair generates both access and refresh tokens
 func (s *JWTService) GenerateTokenPair(userID, email string) (*TokenPair, error) {
-	accessToken, accessExpiry, err := s.generateToken(userID, email, "access", s.accessExpiry)
+	return s.GenerateTokenPairWithSession(userID, email, "")
+}
+
+// GenerateTokenPairWithSession generates both access and refresh tokens with session ID
+func (s *JWTService) GenerateTokenPairWithSession(userID, email, sessionID string) (*TokenPair, error) {
+	accessToken, accessExpiry, err := s.generateTokenWithSession(userID, email, sessionID, "access", s.accessExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, _, err := s.generateToken(userID, email, "refresh", s.refreshExpiry)
+	refreshToken, _, err := s.generateTokenWithSession(userID, email, sessionID, "refresh", s.refreshExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -59,6 +65,11 @@ func (s *JWTService) GenerateTokenPair(userID, email string) (*TokenPair, error)
 
 // generateToken generates a single JWT token
 func (s *JWTService) generateToken(userID, email, tokenType string, expiry time.Duration) (string, time.Time, error) {
+	return s.generateTokenWithSession(userID, email, "", tokenType, expiry)
+}
+
+// generateTokenWithSession generates a single JWT token with session ID
+func (s *JWTService) generateTokenWithSession(userID, email, sessionID, tokenType string, expiry time.Duration) (string, time.Time, error) {
 	expiresAt := time.Now().Add(expiry)
 
 	claims := &Claims{
@@ -67,9 +78,10 @@ func (s *JWTService) generateToken(userID, email, tokenType string, expiry time.
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "prism",
 		},
-		UserID: userID,
-		Email:  email,
-		Type:   tokenType,
+		UserID:    userID,
+		Email:     email,
+		SessionID: sessionID,
+		Type:      tokenType,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

@@ -29,6 +29,7 @@ import (
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/coderunner"
+	"github.com/jacklau/prism/internal/services/session"
 	"github.com/jacklau/prism/internal/tools"
 	"github.com/jacklau/prism/internal/tools/builtin"
 )
@@ -75,6 +76,10 @@ func main() {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db.DB)
 	sessionRepo := repository.NewSessionRepository(db.DB)
+
+	// Initialize session service
+	sessionService := session.NewService(sessionRepo, cfg.Session)
+	sessionService.Start()
 	conversationRepo := repository.NewConversationRepository(db.DB)
 	messageRepo := repository.NewMessageRepository(db.DB)
 	webhookRepo := repository.NewWebhookRepository(db.DB, encryptionService)
@@ -246,6 +251,7 @@ func main() {
 	deps := &routes.Dependencies{
 		Config:             cfg,
 		JWTService:         jwtService,
+		SessionService:     sessionService,
 		EncryptionService:  encryptionService,
 		WorkOSService:      workosService,
 		UserRepo:           userRepo,
@@ -287,6 +293,10 @@ func main() {
 	go func() {
 		<-c
 		log.Println("Gracefully shutting down...")
+
+		// Stop session service
+		sessionService.Stop()
+		log.Println("Session service stopped")
 
 		// Stop agent manager
 		agentManager.Stop()

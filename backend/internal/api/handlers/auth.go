@@ -9,44 +9,27 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jacklau/prism/internal/api/middleware"
-	"github.com/jacklau/prism/internal/audit"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/security"
+	"github.com/jacklau/prism/internal/services/session"
 )
 
 // AuthHandler handles authentication endpoints
 type AuthHandler struct {
-	userRepo     *repository.UserRepository
-	sessionRepo  *repository.SessionRepository
-	jwtService   *security.JWTService
-	auditService *audit.Service
-	mfaRepo      *repository.MFARepository
+	userRepo       *repository.UserRepository
+	sessionService *session.Service
+	jwtService     *security.JWTService
+	refreshExpiry  time.Duration
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(userRepo *repository.UserRepository, sessionRepo *repository.SessionRepository, jwtService *security.JWTService) *AuthHandler {
+func NewAuthHandler(userRepo *repository.UserRepository, sessionService *session.Service, jwtService *security.JWTService, refreshExpiry time.Duration) *AuthHandler {
 	return &AuthHandler{
-		userRepo:    userRepo,
-		sessionRepo: sessionRepo,
-		jwtService:  jwtService,
+		userRepo:       userRepo,
+		sessionService: sessionService,
+		jwtService:     jwtService,
+		refreshExpiry:  refreshExpiry,
 	}
-}
-
-// SetAuditService sets the audit service for the auth handler
-func (h *AuthHandler) SetAuditService(auditService *audit.Service) {
-	h.auditService = auditService
-}
-
-// logAuditEvent logs an audit event if the audit service is configured
-func (h *AuthHandler) logAuditEvent(c *fiber.Ctx, entry audit.Entry) {
-	if h.auditService != nil {
-		h.auditService.LogFromRequestAsync(c, entry)
-	}
-}
-
-// SetMFARepository sets the MFA repository for MFA-aware login
-func (h *AuthHandler) SetMFARepository(mfaRepo *repository.MFARepository) {
-	h.mfaRepo = mfaRepo
 }
 
 // RegisterRequest represents a registration request
@@ -72,12 +55,6 @@ type AuthResponse struct {
 	RefreshToken string    `json:"refresh_token"`
 	ExpiresAt    time.Time `json:"expires_at"`
 	User         UserDTO   `json:"user"`
-}
-
-// MFARequiredResponse is returned when MFA verification is needed
-type MFARequiredResponse struct {
-	MFARequired bool   `json:"mfa_required"`
-	MFAToken    string `json:"mfa_token"`
 }
 
 // UserDTO represents a user data transfer object
@@ -140,34 +117,34 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		})
 	}
 
-	// Generate tokens
-	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to generate tokens",
-		})
-	}
-
-	// Create session
-	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
+	// Create session with metadata first to get session ID
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	// Use a placeholder token hash initially, we'll update it after generating the real tokens
+	session, err := h.sessionService.Create(user.ID, "placeholder", time.Now().Add(h.refreshExpiry), ipAddress, userAgent)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create session",
 		})
 	}
 
-	// Log successful registration
-	h.logAuditEvent(c, audit.Entry{
-		UserID:    &user.ID,
-		EventType: audit.EventRegister,
-		Category:  audit.CategoryAuth,
-		Action:    "user_registered",
-		Details: map[string]interface{}{
-			"email": user.Email,
-		},
-		Success: true,
-	})
+	// Generate tokens with session ID
+	tokens, err := h.jwtService.GenerateTokenPairWithSession(user.ID, user.Email, session.ID)
+	if err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to generate tokens",
+		})
+	}
+
+	// Update session with actual refresh token hash
+	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
+	if err := h.sessionService.UpdateTokenHash(session.ID, refreshTokenHash); err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to update session",
+		})
+	}
 
 	return c.Status(fiber.StatusCreated).JSON(AuthResponse{
 		AccessToken:  tokens.AccessToken,
@@ -200,17 +177,6 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		})
 	}
 	if user == nil {
-		// Log failed login attempt (user not found)
-		h.logAuditEvent(c, audit.Entry{
-			EventType: audit.EventLoginFailed,
-			Category:  audit.CategoryAuth,
-			Action:    "login_failed",
-			Details: map[string]interface{}{
-				"email":  req.Email,
-				"reason": "user_not_found",
-			},
-			Success: false,
-		})
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "invalid email or password",
 		})
@@ -218,76 +184,38 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 
 	// Verify password
 	if !security.VerifyPassword(req.Password, user.PasswordHash) {
-		// Log failed login attempt (wrong password)
-		h.logAuditEvent(c, audit.Entry{
-			UserID:    &user.ID,
-			EventType: audit.EventLoginFailed,
-			Category:  audit.CategoryAuth,
-			Action:    "login_failed",
-			Details: map[string]interface{}{
-				"email":  req.Email,
-				"reason": "invalid_password",
-			},
-			Success: false,
-		})
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "invalid email or password",
 		})
 	}
 
-	// Check if MFA is enabled for this user
-	if h.mfaRepo != nil {
-		mfaEnabled, err := h.mfaRepo.IsMFAEnabled(user.ID)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "failed to check MFA status",
-			})
-		}
-
-		if mfaEnabled {
-			// Generate short-lived MFA token for the verification step
-			mfaToken, err := h.jwtService.GenerateMFAToken(user.ID, user.Email)
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": "failed to generate MFA token",
-				})
-			}
-
-			return c.JSON(MFARequiredResponse{
-				MFARequired: true,
-				MFAToken:    mfaToken,
-			})
-		}
-	}
-
-	// Generate tokens (no MFA required)
-	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to generate tokens",
-		})
-	}
-
-	// Create session
-	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
+	// Create session with metadata first to get session ID
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	session, err := h.sessionService.Create(user.ID, "placeholder", time.Now().Add(h.refreshExpiry), ipAddress, userAgent)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create session",
 		})
 	}
 
-	// Log successful login
-	h.logAuditEvent(c, audit.Entry{
-		UserID:    &user.ID,
-		EventType: audit.EventLogin,
-		Category:  audit.CategoryAuth,
-		Action:    "user_logged_in",
-		Details: map[string]interface{}{
-			"email": user.Email,
-		},
-		Success: true,
-	})
+	// Generate tokens with session ID
+	tokens, err := h.jwtService.GenerateTokenPairWithSession(user.ID, user.Email, session.ID)
+	if err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to generate tokens",
+		})
+	}
+
+	// Update session with actual refresh token hash
+	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
+	if err := h.sessionService.UpdateTokenHash(session.ID, refreshTokenHash); err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to update session",
+		})
+	}
 
 	return c.JSON(AuthResponse{
 		AccessToken:  tokens.AccessToken,
@@ -310,25 +238,30 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 		})
 	}
 
-	// Delete all sessions for user
-	if err := h.sessionRepo.DeleteByUserID(userID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to logout",
-		})
+	// Delete the current session only (not all sessions)
+	sessionID := middleware.GetSessionID(c)
+	if sessionID != "" {
+		if err := h.sessionService.Terminate(userID, sessionID); err != nil {
+			// Log but don't fail - session might already be deleted
+		}
+	} else {
+		// Fallback: delete all sessions for user if no session ID
+		if err := h.sessionService.TerminateAll(userID); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to logout",
+			})
+		}
 	}
-
-	// Log successful logout
-	h.logAuditEvent(c, audit.Entry{
-		UserID:    &userID,
-		EventType: audit.EventLogout,
-		Category:  audit.CategoryAuth,
-		Action:    "user_logged_out",
-		Success:   true,
-	})
 
 	return c.JSON(fiber.Map{
 		"message": "logged out successfully",
 	})
+}
+
+// RefreshResponse extends AuthResponse with session expiration info
+type RefreshResponse struct {
+	AuthResponse
+	SessionExpired bool `json:"session_expired,omitempty"`
 }
 
 // Refresh handles token refresh
@@ -350,7 +283,7 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 
 	// Check if session exists
 	refreshTokenHash := security.HashAPIKey(req.RefreshToken)
-	session, err := h.sessionRepo.GetByRefreshTokenHash(refreshTokenHash)
+	session, err := h.sessionService.GetByTokenHash(refreshTokenHash)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to verify session",
@@ -362,27 +295,60 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 		})
 	}
 
+	// Check if session is idle (exceeded idle timeout)
+	if h.sessionService.IsSessionIdle(session) {
+		// Delete the idle session
+		_ = h.sessionService.Delete(session.ID)
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error":           "session expired due to inactivity",
+			"session_expired": true,
+		})
+	}
+
+	// Check if session is valid (not expired)
+	if !h.sessionService.IsValid(session) {
+		_ = h.sessionService.Delete(session.ID)
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error":           "session expired",
+			"session_expired": true,
+		})
+	}
+
 	// Delete old session
-	if err := h.sessionRepo.Delete(session.ID); err != nil {
+	if err := h.sessionService.Delete(session.ID); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to invalidate old session",
 		})
 	}
 
-	// Generate new tokens
-	tokens, err := h.jwtService.GenerateTokenPair(claims.UserID, claims.Email)
+	// Create new session first to get session ID
+	ipAddress := c.IP()
+	userAgent := session.UserAgent // Keep original user agent
+	if userAgent == "" {
+		userAgent = c.Get("User-Agent")
+	}
+	newSession, err := h.sessionService.Create(claims.UserID, "placeholder", time.Now().Add(h.refreshExpiry), ipAddress, userAgent)
 	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to create session",
+		})
+	}
+
+	// Generate new tokens with session ID
+	tokens, err := h.jwtService.GenerateTokenPairWithSession(claims.UserID, claims.Email, newSession.ID)
+	if err != nil {
+		_ = h.sessionService.Terminate(claims.UserID, newSession.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to generate tokens",
 		})
 	}
 
-	// Create new session
+	// Update session with actual refresh token hash
 	newRefreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(claims.UserID, newRefreshTokenHash, time.Now().Add(7*24*time.Hour))
-	if err != nil {
+	if err := h.sessionService.UpdateTokenHash(newSession.ID, newRefreshTokenHash); err != nil {
+		_ = h.sessionService.Terminate(claims.UserID, newSession.ID)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to create session",
+			"error": "failed to update session",
 		})
 	}
 
@@ -393,15 +359,6 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 			"error": "failed to get user",
 		})
 	}
-
-	// Log token refresh
-	h.logAuditEvent(c, audit.Entry{
-		UserID:    &claims.UserID,
-		EventType: audit.EventTokenRefresh,
-		Category:  audit.CategoryAuth,
-		Action:    "token_refreshed",
-		Success:   true,
-	})
 
 	return c.JSON(AuthResponse{
 		AccessToken:  tokens.AccessToken,
@@ -472,35 +429,33 @@ func (h *AuthHandler) GuestLogin(c *fiber.Ctx) error {
 		})
 	}
 
-	// Generate tokens
-	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to generate tokens",
-		})
-	}
-
-	// Create session
-	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
-	_, err = h.sessionRepo.Create(user.ID, refreshTokenHash, time.Now().Add(7*24*time.Hour))
+	// Create session with metadata first to get session ID
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	session, err := h.sessionService.Create(user.ID, "placeholder", time.Now().Add(h.refreshExpiry), ipAddress, userAgent)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to create session",
 		})
 	}
 
-	// Log guest login
-	h.logAuditEvent(c, audit.Entry{
-		UserID:    &user.ID,
-		EventType: audit.EventLogin,
-		Category:  audit.CategoryAuth,
-		Action:    "guest_login",
-		Details: map[string]interface{}{
-			"guest": true,
-			"email": user.Email,
-		},
-		Success: true,
-	})
+	// Generate tokens with session ID
+	tokens, err := h.jwtService.GenerateTokenPairWithSession(user.ID, user.Email, session.ID)
+	if err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to generate tokens",
+		})
+	}
+
+	// Update session with actual refresh token hash
+	refreshTokenHash := security.HashAPIKey(tokens.RefreshToken)
+	if err := h.sessionService.UpdateTokenHash(session.ID, refreshTokenHash); err != nil {
+		_ = h.sessionService.Terminate(user.ID, session.ID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to update session",
+		})
+	}
 
 	return c.JSON(AuthResponse{
 		AccessToken:  tokens.AccessToken,

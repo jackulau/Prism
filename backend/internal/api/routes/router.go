@@ -32,6 +32,7 @@ import (
 	"github.com/jacklau/prism/internal/security"
 	"github.com/jacklau/prism/internal/services/attribution"
 	"github.com/jacklau/prism/internal/services/coderunner"
+	"github.com/jacklau/prism/internal/services/session"
 	"github.com/jacklau/prism/internal/tools"
 )
 
@@ -39,6 +40,7 @@ import (
 type Dependencies struct {
 	Config             *config.Config
 	JWTService         *security.JWTService
+	SessionService     *session.Service
 	EncryptionService  *security.EncryptionService
 	WorkOSService      *security.WorkOSService
 	OAuth2Service      *security.OAuth2Service
@@ -128,7 +130,7 @@ func Setup(deps *Dependencies) *fiber.App {
 	v1 := app.Group("/api/v1")
 
 	// Auth routes (no auth required)
-	authHandler := handlers.NewAuthHandler(deps.UserRepo, deps.SessionRepo, deps.JWTService)
+	authHandler := handlers.NewAuthHandler(deps.UserRepo, deps.SessionService, deps.JWTService, deps.Config.JWTRefreshExpiry)
 	// Set MFA repository for MFA-aware login
 	if deps.MFARepo != nil {
 		authHandler.SetMFARepository(deps.MFARepo)
@@ -151,8 +153,11 @@ func Setup(deps *Dependencies) *fiber.App {
 		})
 	}
 
-	// Auth routes (auth required)
+	// Auth routes (auth required) with activity tracking
 	authProtected := auth.Group("", middleware.AuthMiddleware(deps.JWTService))
+	if deps.SessionService != nil {
+		authProtected.Use(middleware.ActivityMiddleware(deps.SessionService))
+	}
 	authProtected.Post("/logout", authHandler.Logout)
 	authProtected.Get("/me", authHandler.Me)
 
@@ -173,6 +178,19 @@ func Setup(deps *Dependencies) *fiber.App {
 		mfa.Post("/backup-codes", mfaHandler.RegenerateBackupCodes)
 
 		log.Println("MFA routes registered")
+	}
+
+	// Session management routes
+	if deps.SessionService != nil {
+		sessionHandler := handlers.NewSessionHandler(deps.SessionService)
+		sessions := v1.Group("/sessions", middleware.AuthMiddleware(deps.JWTService))
+		if deps.SessionService != nil {
+			sessions.Use(middleware.ActivityMiddleware(deps.SessionService))
+		}
+		sessions.Get("/", sessionHandler.ListSessions)
+		sessions.Delete("/others", sessionHandler.TerminateOtherSessions)
+		sessions.Delete("/:id", sessionHandler.TerminateSession)
+		sessions.Delete("/", sessionHandler.TerminateAllSessions)
 	}
 
 	// SSO routes (WorkOS)

@@ -45,6 +45,9 @@ func AuthMiddlewareWithRole(jwtService *security.JWTService, userRepo *repositor
 		// Set user info in context
 		c.Locals("userID", claims.UserID)
 		c.Locals("email", claims.Email)
+		if claims.SessionID != "" {
+			c.Locals("sessionID", claims.SessionID)
+		}
 
 		// Fetch and set user role if repository is provided
 		if userRepo != nil {
@@ -87,6 +90,9 @@ func OptionalAuthMiddlewareWithRole(jwtService *security.JWTService, userRepo *r
 
 		c.Locals("userID", claims.UserID)
 		c.Locals("email", claims.Email)
+		if claims.SessionID != "" {
+			c.Locals("sessionID", claims.SessionID)
+		}
 
 		// Fetch and set user role if repository is provided
 		if userRepo != nil {
