@@ -20,6 +20,7 @@ import Approvals from '../pages/Approvals';
 import AuditLogs from '../pages/settings/AuditLogs';
 import DataExport from '../pages/settings/DataExport';
 import ComplianceReports from '../pages/settings/ComplianceReports';
+import ToolCatalog from '../pages/ToolCatalog';
 
 export const router = createBrowserRouter([
   {
@@ -73,6 +74,10 @@ export const router = createBrowserRouter([
       {
         path: 'integrations',
         element: <Integrations />,
+      },
+      {
+        path: 'tool-catalog',
+        element: <ToolCatalog />,
       },
       {
         path: 'usage',

@@ -507,6 +507,22 @@ func (db *DB) Migrate() error {
 			FOREIGN KEY (build_id) REFERENCES build_history(id) ON DELETE CASCADE
 		)`,
 
+		// Tools catalog
+		`CREATE TABLE IF NOT EXISTS tools (
+			id TEXT PRIMARY KEY,
+			display_name TEXT NOT NULL,
+			slug_name TEXT UNIQUE NOT NULL,
+			description TEXT,
+			is_model INTEGER DEFAULT 0,
+			is_builtin INTEGER DEFAULT 0,
+			provider_id TEXT,
+			parameters_schema TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Add is_builtin field to tools table if not exists
+		`ALTER TABLE tools ADD COLUMN is_builtin INTEGER DEFAULT 0`,
 
 		// Indexes
 		`CREATE INDEX IF NOT EXISTS idx_api_key_scopes_key_id ON api_key_scopes(api_key_id)`,

@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"encoding/json"
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/jacklau/prism/internal/api/middleware"
 	"github.com/jacklau/prism/internal/database/repository"
@@ -25,6 +28,7 @@ type ToolResponse struct {
 	SlugName         string `json:"slug_name"`
 	Description      string `json:"description,omitempty"`
 	IsModel          bool   `json:"is_model"`
+	IsBuiltin        bool   `json:"is_builtin"`
 	ProviderID       string `json:"provider_id,omitempty"`
 	ParametersSchema string `json:"parameters_schema,omitempty"`
 	CreatedAt        string `json:"created_at"`
@@ -59,6 +63,7 @@ func toolToResponse(tool *repository.Tool) ToolResponse {
 		SlugName:         tool.SlugName,
 		Description:      tool.Description,
 		IsModel:          tool.IsModel,
+		IsBuiltin:        tool.IsBuiltin,
 		ProviderID:       tool.ProviderID,
 		ParametersSchema: tool.ParametersSchema,
 		CreatedAt:        tool.CreatedAt.Format("2006-01-02T15:04:05Z"),
@@ -177,6 +182,35 @@ func (h *ToolsCatalogHandler) CreateTool(c *fiber.Ctx) error {
 		})
 	}
 
+	// Validate slug format
+	if !isValidSlug(req.SlugName) {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "slug_name must contain only lowercase letters, numbers, and hyphens",
+		})
+	}
+
+	// Validate JSON schema if provided
+	if req.ParametersSchema != "" {
+		if err := validateJSONSchema(req.ParametersSchema); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid parameters_schema: " + err.Error(),
+			})
+		}
+	}
+
+	// Check for duplicate slug
+	existing, err := h.toolRepo.GetBySlug(req.SlugName)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to check slug uniqueness",
+		})
+	}
+	if existing != nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+			"error": "a tool with this slug_name already exists",
+		})
+	}
+
 	tool := &repository.Tool{
 		DisplayName:      req.DisplayName,
 		SlugName:         req.SlugName,
@@ -225,11 +259,48 @@ func (h *ToolsCatalogHandler) UpdateTool(c *fiber.Ctx) error {
 		})
 	}
 
+	// Prevent editing builtin tools
+	if tool.IsBuiltin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "cannot edit builtin tools",
+		})
+	}
+
 	var req UpdateToolRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "invalid request body",
 		})
+	}
+
+	// Validate slug if being updated
+	if req.SlugName != nil && *req.SlugName != tool.SlugName {
+		if !isValidSlug(*req.SlugName) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "slug_name must contain only lowercase letters, numbers, and hyphens",
+			})
+		}
+		// Check for duplicate slug
+		existing, err := h.toolRepo.GetBySlug(*req.SlugName)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "failed to check slug uniqueness",
+			})
+		}
+		if existing != nil {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error": "a tool with this slug_name already exists",
+			})
+		}
+	}
+
+	// Validate JSON schema if being updated
+	if req.ParametersSchema != nil && *req.ParametersSchema != "" {
+		if err := validateJSONSchema(*req.ParametersSchema); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "invalid parameters_schema: " + err.Error(),
+			})
+		}
 	}
 
 	// Apply updates
@@ -277,6 +348,27 @@ func (h *ToolsCatalogHandler) DeleteTool(c *fiber.Ctx) error {
 		})
 	}
 
+	// Get the tool to check if it's builtin
+	tool, err := h.toolRepo.GetByID(id)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "failed to get tool",
+		})
+	}
+
+	if tool == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "tool not found",
+		})
+	}
+
+	// Prevent deleting builtin tools
+	if tool.IsBuiltin {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "cannot delete builtin tools",
+		})
+	}
+
 	if err := h.toolRepo.Delete(id); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "failed to delete tool",
@@ -286,4 +378,27 @@ func (h *ToolsCatalogHandler) DeleteTool(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "tool deleted successfully",
 	})
+}
+
+// isValidSlug checks if a slug contains only lowercase letters, numbers, and hyphens
+func isValidSlug(slug string) bool {
+	if slug == "" {
+		return false
+	}
+	for _, c := range slug {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// validateJSONSchema validates that the provided string is valid JSON
+func validateJSONSchema(schema string) error {
+	schema = strings.TrimSpace(schema)
+	if schema == "" {
+		return nil
+	}
+	var js map[string]interface{}
+	return json.Unmarshal([]byte(schema), &js)
 }
