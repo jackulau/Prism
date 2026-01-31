@@ -212,6 +212,13 @@ const (
 	TypeWorkflowFailed       = "workflow.failed"
 	TypeWorkflowWaitingInput = "workflow.waiting_input"
 	TypeWorkflowProvideInput = "workflow.provide_input"
+
+	// Attribution message types
+	TypeAttributionSummary   = "attribution.summary"
+	TypeAttributionByAgent   = "attribution.by_agent"
+	TypeAttributionTimeline  = "attribution.timeline"
+	TypeAttributionByConversation = "attribution.by_conversation"
+	TypeAttributionByWorkflow     = "attribution.by_workflow"
 )
 
 // FileContext represents file context for chat messages
@@ -1303,5 +1310,106 @@ func NewWorkflowWaitingInput(workflowID, stepID, stepName, promptText string) *O
 		StepName:   stepName,
 		Message:    promptText,
 		Status:     "waiting_input",
+	}
+}
+
+// Attribution message constructors
+
+// AttributionSummaryData represents attribution summary response data
+type AttributionSummaryData struct {
+	TotalChanges    int            `json:"total_changes"`
+	ByAgent         map[string]int `json:"by_agent"`
+	ByTool          map[string]int `json:"by_tool"`
+	ByOperation     map[string]int `json:"by_operation"`
+	TimelineByDay   map[string]int `json:"timeline_by_day"`
+	MostActiveAgent string         `json:"most_active_agent"`
+	MostUsedTool    string         `json:"most_used_tool"`
+}
+
+// AgentActivityData represents agent activity report response data
+type AgentActivityData struct {
+	AgentID        string         `json:"agent_id"`
+	AgentName      string         `json:"agent_name"`
+	TotalChanges   int            `json:"total_changes"`
+	OperationStats map[string]int `json:"operation_stats"`
+	TopFiles       []FileActivityData `json:"top_files"`
+	FirstChange    *int64         `json:"first_change,omitempty"`
+	LastChange     *int64         `json:"last_change,omitempty"`
+}
+
+// FileActivityData represents file activity information
+type FileActivityData struct {
+	FilePath    string `json:"file_path"`
+	ChangeCount int    `json:"change_count"`
+}
+
+// FileChangeData represents a single file change
+type FileChangeData struct {
+	ID             string `json:"id"`
+	FilePath       string `json:"file_path"`
+	Operation      string `json:"operation"`
+	ToolName       string `json:"tool_name,omitempty"`
+	AgentID        string `json:"agent_id,omitempty"`
+	AgentName      string `json:"agent_name,omitempty"`
+	ConversationID string `json:"conversation_id,omitempty"`
+	WorkflowID     string `json:"workflow_id,omitempty"`
+	Timestamp      int64  `json:"timestamp"`
+	Size           int    `json:"size"`
+}
+
+// NewAttributionSummary creates a new attribution summary message
+func NewAttributionSummary(summary *AttributionSummaryData) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type: TypeAttributionSummary,
+		Metadata: map[string]interface{}{
+			"summary": summary,
+		},
+	}
+}
+
+// NewAttributionByAgent creates a new attribution by agent message
+func NewAttributionByAgent(activity *AgentActivityData, changes []FileChangeData) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:    TypeAttributionByAgent,
+		AgentID: activity.AgentID,
+		Metadata: map[string]interface{}{
+			"activity": activity,
+			"changes":  changes,
+		},
+	}
+}
+
+// NewAttributionTimeline creates a new attribution timeline message
+func NewAttributionTimeline(timelineByDay map[string]int, changes []FileChangeData) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type: TypeAttributionTimeline,
+		Metadata: map[string]interface{}{
+			"timeline": timelineByDay,
+			"changes":  changes,
+		},
+	}
+}
+
+// NewAttributionByConversation creates a new attribution by conversation message
+func NewAttributionByConversation(conversationID string, changes []FileChangeData) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:           TypeAttributionByConversation,
+		ConversationID: conversationID,
+		Metadata: map[string]interface{}{
+			"changes":       changes,
+			"total_changes": len(changes),
+		},
+	}
+}
+
+// NewAttributionByWorkflow creates a new attribution by workflow message
+func NewAttributionByWorkflow(workflowID string, changes []FileChangeData) *OutgoingMessage {
+	return &OutgoingMessage{
+		Type:       TypeAttributionByWorkflow,
+		WorkflowID: workflowID,
+		Metadata: map[string]interface{}{
+			"changes":       changes,
+			"total_changes": len(changes),
+		},
 	}
 }

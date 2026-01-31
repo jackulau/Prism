@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/jacklau/prism/internal/agent"
 	"github.com/jacklau/prism/internal/api/websocket"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/llm"
@@ -274,6 +275,11 @@ func handleToolConfirm(deps *Dependencies, client *websocket.Client, msg *websoc
 	}
 
 	ctx := context.WithValue(context.Background(), builtin.UserIDKey, client.UserID)
+	// Add attribution context for confirmed tool executions
+	ctx = agent.WithMessageContext(ctx, pending.MessageID, pending.ConversationID)
+	ctx = agent.WithToolContext(ctx, pending.ToolName, "")
+	ctx = agent.WithAgentContext(ctx, "", "", agent.AgentTypeAssistant)
+
 	var result interface{}
 	var status string
 
@@ -601,8 +607,15 @@ func handleToolCall(ctx context.Context, deps *Dependencies, client *websocket.C
 	// Execute tool immediately (no confirmation needed)
 	client.SendMessage(websocket.NewToolStarted(conversationID, executionID, tc.Name, tc.Parameters))
 
-	// Add user ID to context
+	// Add user ID and attribution context
 	toolCtx := context.WithValue(ctx, builtin.UserIDKey, client.UserID)
+	// Add conversation/message context for attribution tracking
+	toolCtx = agent.WithMessageContext(toolCtx, messageID, conversationID)
+	// Add tool context for attribution
+	toolCtx = agent.WithToolContext(toolCtx, tc.Name, "")
+	// Mark as assistant type (chat-based tool execution)
+	toolCtx = agent.WithAgentContext(toolCtx, "", "", agent.AgentTypeAssistant)
+
 	result, err := deps.ToolRegistry.Execute(toolCtx, tc.Name, tc.Parameters)
 	if err != nil {
 		client.SendMessage(websocket.NewError("tool_error", err.Error()))
@@ -685,8 +698,15 @@ func handleToolCallWithAllMCP(ctx context.Context, deps *Dependencies, client *w
 	// Execute tool immediately (no confirmation needed)
 	client.SendMessage(websocket.NewToolStarted(conversationID, executionID, tc.Name, tc.Parameters))
 
-	// Add user ID to context
+	// Add user ID and attribution context
 	toolCtx := context.WithValue(ctx, builtin.UserIDKey, client.UserID)
+	// Add conversation/message context for attribution tracking
+	toolCtx = agent.WithMessageContext(toolCtx, messageID, conversationID)
+	// Add tool context for attribution
+	toolCtx = agent.WithToolContext(toolCtx, tc.Name, "")
+	// Mark as assistant type (chat-based tool execution)
+	toolCtx = agent.WithAgentContext(toolCtx, "", "", agent.AgentTypeAssistant)
+
 	result, err := deps.ToolRegistry.Execute(toolCtx, tc.Name, tc.Parameters)
 	if err != nil {
 		client.SendMessage(websocket.NewError("tool_error", err.Error()))

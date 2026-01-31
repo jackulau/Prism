@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jacklau/prism/internal/agent"
 	"github.com/jacklau/prism/internal/database/repository"
 	"github.com/jacklau/prism/internal/llm"
 	"github.com/jacklau/prism/internal/sandbox"
+	"github.com/jacklau/prism/internal/services/attribution"
 )
 
 // userIDKey is the context key for user ID
@@ -73,13 +75,18 @@ func (t *FileReadTool) RequiresConfirmation() bool {
 
 // FileWriteTool writes content to a file in the user's sandbox
 type FileWriteTool struct {
-	sandbox     *sandbox.Service
-	historyRepo *repository.FileHistoryRepository
+	sandbox            *sandbox.Service
+	historyRepo        *repository.FileHistoryRepository
+	attributionService *attribution.Service
 }
 
 // NewFileWriteTool creates a new file write tool
 func NewFileWriteTool(sandbox *sandbox.Service, historyRepo *repository.FileHistoryRepository) *FileWriteTool {
-	return &FileWriteTool{sandbox: sandbox, historyRepo: historyRepo}
+	tool := &FileWriteTool{sandbox: sandbox, historyRepo: historyRepo}
+	if historyRepo != nil {
+		tool.attributionService = attribution.NewService(historyRepo)
+	}
+	return tool
 }
 
 func (t *FileWriteTool) Name() string {
@@ -123,14 +130,22 @@ func (t *FileWriteTool) Execute(ctx context.Context, params map[string]interface
 		return nil, fmt.Errorf("content parameter is required")
 	}
 
-	// Save file history before writing (for existing files)
-	if t.historyRepo != nil {
+	// Save file history before writing (for existing files) with attribution
+	if t.attributionService != nil {
 		existingContent, err := t.sandbox.GetFileContent(userID, path)
 		if err == nil && existingContent != "" {
-			// File exists, save its current content to history
+			// File exists, save its current content to history with attribution
+			_, _ = t.attributionService.RecordFileChange(userID, path, existingContent, "update", ctx, "file_write")
+		} else {
+			// New file, record creation with attribution
+			_, _ = t.attributionService.RecordFileChange(userID, path, "", "create", ctx, "file_write")
+		}
+	} else if t.historyRepo != nil {
+		// Fallback to basic history recording without attribution
+		existingContent, err := t.sandbox.GetFileContent(userID, path)
+		if err == nil && existingContent != "" {
 			_, _ = t.historyRepo.Create(userID, path, existingContent, "update")
 		} else {
-			// New file, record creation
 			_, _ = t.historyRepo.Create(userID, path, "", "create")
 		}
 	}
@@ -198,13 +213,18 @@ func (t *FileListTool) RequiresConfirmation() bool {
 
 // FileDeleteTool deletes a file from the user's sandbox
 type FileDeleteTool struct {
-	sandbox     *sandbox.Service
-	historyRepo *repository.FileHistoryRepository
+	sandbox            *sandbox.Service
+	historyRepo        *repository.FileHistoryRepository
+	attributionService *attribution.Service
 }
 
 // NewFileDeleteTool creates a new file delete tool
 func NewFileDeleteTool(sandbox *sandbox.Service, historyRepo *repository.FileHistoryRepository) *FileDeleteTool {
-	return &FileDeleteTool{sandbox: sandbox, historyRepo: historyRepo}
+	tool := &FileDeleteTool{sandbox: sandbox, historyRepo: historyRepo}
+	if historyRepo != nil {
+		tool.attributionService = attribution.NewService(historyRepo)
+	}
+	return tool
 }
 
 func (t *FileDeleteTool) Name() string {
@@ -239,11 +259,15 @@ func (t *FileDeleteTool) Execute(ctx context.Context, params map[string]interfac
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	// Save file history before deleting
-	if t.historyRepo != nil {
+	// Save file history before deleting with attribution
+	if t.attributionService != nil {
 		existingContent, err := t.sandbox.GetFileContent(userID, path)
 		if err == nil {
-			// Save the file content before deletion
+			_, _ = t.attributionService.RecordFileChange(userID, path, existingContent, "delete", ctx, "file_delete")
+		}
+	} else if t.historyRepo != nil {
+		existingContent, err := t.sandbox.GetFileContent(userID, path)
+		if err == nil {
 			_, _ = t.historyRepo.Create(userID, path, existingContent, "delete")
 		}
 	}
@@ -368,13 +392,18 @@ func (t *FileHistoryListTool) RequiresConfirmation() bool {
 
 // FileHistoryRestoreTool restores a file from history
 type FileHistoryRestoreTool struct {
-	sandbox     *sandbox.Service
-	historyRepo *repository.FileHistoryRepository
+	sandbox            *sandbox.Service
+	historyRepo        *repository.FileHistoryRepository
+	attributionService *attribution.Service
 }
 
 // NewFileHistoryRestoreTool creates a new file history restore tool
 func NewFileHistoryRestoreTool(sandbox *sandbox.Service, historyRepo *repository.FileHistoryRepository) *FileHistoryRestoreTool {
-	return &FileHistoryRestoreTool{sandbox: sandbox, historyRepo: historyRepo}
+	tool := &FileHistoryRestoreTool{sandbox: sandbox, historyRepo: historyRepo}
+	if historyRepo != nil {
+		tool.attributionService = attribution.NewService(historyRepo)
+	}
+	return tool
 }
 
 func (t *FileHistoryRestoreTool) Name() string {
@@ -427,10 +456,17 @@ func (t *FileHistoryRestoreTool) Execute(ctx context.Context, params map[string]
 		return nil, fmt.Errorf("history entry not found")
 	}
 
-	// Save current file content to history before restoring
+	// Save current file content to history before restoring with attribution
 	existingContent, err := t.sandbox.GetFileContent(userID, historyEntry.FilePath)
 	if err == nil && existingContent != "" {
-		_, _ = t.historyRepo.Create(userID, historyEntry.FilePath, existingContent, "update")
+		if t.attributionService != nil {
+			attr := agent.BuildAttributionFromContext(ctx)
+			attr.WithTool("file_history_restore", "")
+			attr.SetMetadata("restored_from", historyID)
+			_, _ = t.attributionService.RecordFileChangeWithAttribution(userID, historyEntry.FilePath, existingContent, "update", attr)
+		} else {
+			_, _ = t.historyRepo.Create(userID, historyEntry.FilePath, existingContent, "update")
+		}
 	}
 
 	// Restore the file content
@@ -526,13 +562,18 @@ func (t *FileHistoryGetTool) RequiresConfirmation() bool {
 
 // FileRenameTool renames or moves a file in the user's sandbox
 type FileRenameTool struct {
-	sandbox     *sandbox.Service
-	historyRepo *repository.FileHistoryRepository
+	sandbox            *sandbox.Service
+	historyRepo        *repository.FileHistoryRepository
+	attributionService *attribution.Service
 }
 
 // NewFileRenameTool creates a new file rename tool
 func NewFileRenameTool(sandbox *sandbox.Service, historyRepo *repository.FileHistoryRepository) *FileRenameTool {
-	return &FileRenameTool{sandbox: sandbox, historyRepo: historyRepo}
+	tool := &FileRenameTool{sandbox: sandbox, historyRepo: historyRepo}
+	if historyRepo != nil {
+		tool.attributionService = attribution.NewService(historyRepo)
+	}
+	return tool
 }
 
 func (t *FileRenameTool) Name() string {
@@ -576,8 +617,14 @@ func (t *FileRenameTool) Execute(ctx context.Context, params map[string]interfac
 		return nil, fmt.Errorf("dest_path parameter is required")
 	}
 
-	// Record in history before rename
-	if t.historyRepo != nil {
+	// Record in history before rename with attribution
+	if t.attributionService != nil {
+		// Build attribution and add rename metadata
+		attr := agent.BuildAttributionFromContext(ctx)
+		attr.WithTool("file_rename", "")
+		attr.SetMetadata("dest_path", destPath)
+		_, _ = t.attributionService.RecordFileChangeWithAttribution(userID, sourcePath, "", "rename", attr)
+	} else if t.historyRepo != nil {
 		_, _ = t.historyRepo.Create(userID, sourcePath, "", "rename")
 	}
 

@@ -28,6 +28,7 @@ import (
 	"github.com/jacklau/prism/internal/mcp"
 	"github.com/jacklau/prism/internal/sandbox"
 	"github.com/jacklau/prism/internal/security"
+	"github.com/jacklau/prism/internal/services/attribution"
 	"github.com/jacklau/prism/internal/services/coderunner"
 	"github.com/jacklau/prism/internal/tools"
 )
@@ -78,6 +79,7 @@ type Dependencies struct {
 	AuditService       *audit.Service
 	BuildConfigRepo    *repository.BuildConfigRepository
 	BuildHistoryRepo   *repository.BuildHistoryRepository
+	AttributionService *attribution.Service
 }
 
 // Setup sets up the Fiber app with all routes
@@ -727,6 +729,22 @@ func handleWebSocketMessage(deps *Dependencies, client *ws.Client, msg *ws.Incom
 
 	case ws.TypeWorkflowProvideInput:
 		handleWorkflowProvideInput(deps, client, msg)
+
+	// Attribution handlers
+	case ws.TypeAttributionSummary:
+		handleAttributionSummary(deps, client, msg)
+
+	case ws.TypeAttributionByAgent:
+		handleAttributionByAgent(deps, client, msg)
+
+	case ws.TypeAttributionTimeline:
+		handleAttributionTimeline(deps, client, msg)
+
+	case ws.TypeAttributionByConversation:
+		handleAttributionByConversation(deps, client, msg)
+
+	case ws.TypeAttributionByWorkflow:
+		handleAttributionByWorkflow(deps, client, msg)
 
 	default:
 		client.SendMessage(ws.NewError("unknown_type", "unknown message type: "+msg.Type))
@@ -2308,6 +2326,235 @@ func forwardWorkflowEvents(deps *Dependencies, client *ws.Client, workflowID str
 			}
 		}
 	}
+}
+
+// ==================== Attribution Handlers ====================
+
+// handleAttributionSummary returns an aggregated attribution summary for a date range
+func handleAttributionSummary(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.AttributionService == nil {
+		client.SendMessage(ws.NewError("attribution_unavailable", "attribution service not available"))
+		return
+	}
+
+	// Get date range from params (default to last 30 days)
+	days := 30
+	if msg.Params != nil {
+		if d, ok := msg.Params["days"].(float64); ok {
+			days = int(d)
+		}
+	}
+
+	summary, err := deps.AttributionService.GetRecentActivityTimeline(client.UserID, days)
+	if err != nil {
+		client.SendMessage(ws.NewError("attribution_error", err.Error()))
+		return
+	}
+
+	summaryData := &ws.AttributionSummaryData{
+		TotalChanges:    summary.TotalChanges,
+		ByAgent:         summary.ByAgent,
+		ByTool:          summary.ByTool,
+		ByOperation:     summary.ByOperation,
+		TimelineByDay:   summary.TimelineByDay,
+		MostActiveAgent: summary.MostActiveAgent,
+		MostUsedTool:    summary.MostUsedTool,
+	}
+
+	client.SendMessage(ws.NewAttributionSummary(summaryData))
+}
+
+// handleAttributionByAgent returns attribution data for a specific agent
+func handleAttributionByAgent(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.AttributionService == nil {
+		client.SendMessage(ws.NewError("attribution_unavailable", "attribution service not available"))
+		return
+	}
+
+	agentID := ""
+	if msg.Params != nil {
+		if id, ok := msg.Params["agent_id"].(string); ok {
+			agentID = id
+		}
+	}
+	if agentID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "agent_id is required"))
+		return
+	}
+
+	report, err := deps.AttributionService.GetAgentActivityReport(client.UserID, agentID)
+	if err != nil {
+		client.SendMessage(ws.NewError("attribution_error", err.Error()))
+		return
+	}
+
+	// Convert to websocket types
+	activityData := &ws.AgentActivityData{
+		AgentID:        report.AgentID,
+		AgentName:      report.AgentName,
+		TotalChanges:   report.TotalChanges,
+		OperationStats: report.OperationStats,
+		TopFiles:       make([]ws.FileActivityData, len(report.TopFiles)),
+	}
+
+	if report.ActivePeriod != nil {
+		first := report.ActivePeriod.FirstChange.UnixMilli()
+		last := report.ActivePeriod.LastChange.UnixMilli()
+		activityData.FirstChange = &first
+		activityData.LastChange = &last
+	}
+
+	for i, f := range report.TopFiles {
+		activityData.TopFiles[i] = ws.FileActivityData{
+			FilePath:    f.FilePath,
+			ChangeCount: f.ChangeCount,
+		}
+	}
+
+	// Convert file changes
+	changes := make([]ws.FileChangeData, len(report.FileChanges))
+	for i, c := range report.FileChanges {
+		changes[i] = ws.FileChangeData{
+			FilePath:       c.FilePath,
+			Operation:      c.Operation,
+			ToolName:       c.ToolName,
+			ConversationID: c.ConversationID,
+			Timestamp:      c.Timestamp.UnixMilli(),
+		}
+	}
+
+	client.SendMessage(ws.NewAttributionByAgent(activityData, changes))
+}
+
+// handleAttributionTimeline returns attribution data organized by time
+func handleAttributionTimeline(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.AttributionService == nil {
+		client.SendMessage(ws.NewError("attribution_unavailable", "attribution service not available"))
+		return
+	}
+
+	days := 30
+	if msg.Params != nil {
+		if d, ok := msg.Params["days"].(float64); ok {
+			days = int(d)
+		}
+	}
+
+	summary, err := deps.AttributionService.GetRecentActivityTimeline(client.UserID, days)
+	if err != nil {
+		client.SendMessage(ws.NewError("attribution_error", err.Error()))
+		return
+	}
+
+	// For timeline, we just return the summary with timeline data
+	client.SendMessage(ws.NewAttributionTimeline(summary.TimelineByDay, nil))
+}
+
+// handleAttributionByConversation returns all file changes made in a specific conversation
+func handleAttributionByConversation(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.AttributionService == nil {
+		client.SendMessage(ws.NewError("attribution_unavailable", "attribution service not available"))
+		return
+	}
+
+	conversationID := ""
+	if msg.Params != nil {
+		if id, ok := msg.Params["conversation_id"].(string); ok {
+			conversationID = id
+		}
+	}
+	if msg.ConversationID != "" {
+		conversationID = msg.ConversationID
+	}
+	if conversationID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "conversation_id is required"))
+		return
+	}
+
+	history, err := deps.AttributionService.GetConversationChanges(client.UserID, conversationID)
+	if err != nil {
+		client.SendMessage(ws.NewError("attribution_error", err.Error()))
+		return
+	}
+
+	// Convert to websocket types
+	changes := make([]ws.FileChangeData, len(history))
+	for i, h := range history {
+		change := ws.FileChangeData{
+			ID:        h.ID,
+			FilePath:  h.FilePath,
+			Operation: h.Operation,
+			Timestamp: h.CreatedAt.UnixMilli(),
+			Size:      len(h.Content),
+		}
+		if h.ToolName != nil {
+			change.ToolName = *h.ToolName
+		}
+		if h.AgentID != nil {
+			change.AgentID = *h.AgentID
+		}
+		if h.AgentName != nil {
+			change.AgentName = *h.AgentName
+		}
+		changes[i] = change
+	}
+
+	client.SendMessage(ws.NewAttributionByConversation(conversationID, changes))
+}
+
+// handleAttributionByWorkflow returns all file changes made in a specific workflow
+func handleAttributionByWorkflow(deps *Dependencies, client *ws.Client, msg *ws.IncomingMessage) {
+	if deps.AttributionService == nil {
+		client.SendMessage(ws.NewError("attribution_unavailable", "attribution service not available"))
+		return
+	}
+
+	workflowID := ""
+	if msg.Params != nil {
+		if id, ok := msg.Params["workflow_id"].(string); ok {
+			workflowID = id
+		}
+	}
+	if msg.WorkflowID != "" {
+		workflowID = msg.WorkflowID
+	}
+	if workflowID == "" {
+		client.SendMessage(ws.NewError("invalid_request", "workflow_id is required"))
+		return
+	}
+
+	history, err := deps.AttributionService.GetWorkflowChanges(client.UserID, workflowID)
+	if err != nil {
+		client.SendMessage(ws.NewError("attribution_error", err.Error()))
+		return
+	}
+
+	// Convert to websocket types
+	changes := make([]ws.FileChangeData, len(history))
+	for i, h := range history {
+		change := ws.FileChangeData{
+			ID:        h.ID,
+			FilePath:  h.FilePath,
+			Operation: h.Operation,
+			Timestamp: h.CreatedAt.UnixMilli(),
+			Size:      len(h.Content),
+		}
+		if h.ToolName != nil {
+			change.ToolName = *h.ToolName
+		}
+		if h.AgentID != nil {
+			change.AgentID = *h.AgentID
+		}
+		if h.AgentName != nil {
+			change.AgentName = *h.AgentName
+		}
+		if h.StepID != nil {
+			change.WorkflowID = workflowID
+		}
+		changes[i] = change
+	}
+
+	client.SendMessage(ws.NewAttributionByWorkflow(workflowID, changes))
 }
 
 // errorHandler handles errors globally
