@@ -2,8 +2,9 @@ import { useAppStore } from '../store';
 import { useSandboxStore } from '../store/sandboxStore';
 import { useWorkspaceStore } from '../store/workspaceStore';
 import { useEmergencyStopStore } from '../store/emergencyStopStore';
-import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext } from '../types';
-import type { FileNode, AttributionSummary, AgentInfo, FileHistoryEntry } from '../store/sandboxStore';
+import { useFileHistoryStore } from '../store/fileHistoryStore';
+import type { OutgoingWSMessage, IncomingWSMessage, Message, SandboxFile, ToolCall, ChatMode, FileContext, FileHistoryEntry, FileHistoryStats } from '../types';
+import type { FileNode, AttributionSummary, AgentInfo } from '../store/sandboxStore';
 
 interface PendingFileRequest {
   resolve: (content: string) => void;
@@ -378,16 +379,42 @@ class WebSocketService {
 
   private handleFileHistoryList(message: OutgoingWSMessage) {
     const sandboxStore = useSandboxStore.getState();
-    const metadata = message.metadata as { entries?: Array<{ id: string; file_path: string; operation: string; size: number; created_at: string }> } | undefined;
+    const fileHistoryStore = useFileHistoryStore.getState();
+
+    const metadata = message.metadata as {
+      entries?: FileHistoryEntry[];
+      stats?: FileHistoryStats;
+      total?: number;
+      page?: number;
+    } | undefined;
+
     const entries = metadata?.entries || [];
+
+    // Update sandbox store (legacy)
     sandboxStore.setFileHistory(entries);
     sandboxStore.setIsLoadingHistory(false);
+
+    // Update new file history store
+    fileHistoryStore.setEntries(entries);
+    if (metadata?.stats) {
+      fileHistoryStore.setStats(metadata.stats);
+    }
+    fileHistoryStore.setIsLoading(false);
   }
 
   private handleFileHistoryContent(message: OutgoingWSMessage) {
     const sandboxStore = useSandboxStore.getState();
-    sandboxStore.setHistoryContent(message.content || '');
+    const fileHistoryStore = useFileHistoryStore.getState();
+
+    const content = message.content || '';
+
+    // Update sandbox store (legacy)
+    sandboxStore.setHistoryContent(content);
     sandboxStore.setIsLoadingHistory(false);
+
+    // Update new file history store
+    fileHistoryStore.setHistoryContent(content);
+    fileHistoryStore.setIsLoadingContent(false);
   }
 
   private handleAttributionSummary(message: OutgoingWSMessage) {
@@ -622,19 +649,27 @@ class WebSocketService {
     });
   }
 
-  requestFileHistory(path?: string) {
+  requestFileHistory(path?: string, options?: { limit?: number; offset?: number; operations?: string[] }) {
+    // Update the file history store loading state
+    useFileHistoryStore.getState().setIsLoading(true);
+
     this.send({
       type: 'file.history_request',
       conversation_id: '',
       params: {
         action: 'list',
         path: path || '',
-        limit: 50,
+        limit: options?.limit || 50,
+        offset: options?.offset || 0,
+        operations: options?.operations,
       },
     } as IncomingWSMessage);
   }
 
   requestHistoryContent(historyId: string) {
+    // Update the file history store loading state
+    useFileHistoryStore.getState().setIsLoadingContent(true);
+
     this.send({
       type: 'file.history_request',
       conversation_id: '',
@@ -659,6 +694,16 @@ class WebSocketService {
       conversation_id: '',
       params: {
         agent_id: agentId,
+      },
+    } as IncomingWSMessage);
+  }
+
+  requestFileHistoryStats() {
+    this.send({
+      type: 'file.history_request',
+      conversation_id: '',
+      params: {
+        action: 'stats',
       },
     } as IncomingWSMessage);
   }
