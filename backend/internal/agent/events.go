@@ -2,26 +2,8 @@ package agent
 
 import "time"
 
-// Extended AgentEventType constants for progress tracking
-const (
-	// AgentEventProgress indicates a progress update with percentage and step info
-	AgentEventProgress AgentEventType = "progress"
-
-	// AgentEventStepStarted indicates a step in a multi-step process has started
-	AgentEventStepStarted AgentEventType = "step_started"
-
-	// AgentEventStepCompleted indicates a step has completed successfully
-	AgentEventStepCompleted AgentEventType = "step_completed"
-
-	// AgentEventThinkingStart indicates the thinking/inference phase has begun
-	AgentEventThinkingStart AgentEventType = "thinking_start"
-
-	// AgentEventThinkingEnd indicates the thinking/inference phase has ended
-	AgentEventThinkingEnd AgentEventType = "thinking_end"
-
-	// AgentEventEstimate provides estimated time/tokens remaining
-	AgentEventEstimate AgentEventType = "estimate"
-)
+// Note: AgentEventType constants (AgentEventProgress, AgentEventStepStarted, etc.)
+// are defined in agent.go to avoid redeclaration errors
 
 // ProgressData contains information about execution progress
 type ProgressData struct {
