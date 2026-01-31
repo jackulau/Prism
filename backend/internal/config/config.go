@@ -151,6 +151,11 @@ type Config struct {
 	WorkOSClientID       string
 	WorkOSRedirectURI    string
 	WorkOSCookiePassword string
+
+	// Compliance and Audit
+	AuditAllRequests      bool
+	AuditRetentionDays    int
+	ExportDir             string
 }
 
 func Load() (*Config, error) {
@@ -269,6 +274,11 @@ func Load() (*Config, error) {
 		WorkOSClientID:       getEnv("WORKOS_CLIENT_ID", ""),
 		WorkOSRedirectURI:    getEnv("WORKOS_REDIRECT_URI", "http://localhost:8080/api/v1/auth/sso/callback"),
 		WorkOSCookiePassword: getEnv("WORKOS_COOKIE_PASSWORD", ""),
+
+		// Compliance and Audit
+		AuditAllRequests:   getBoolEnv("AUDIT_ALL_REQUESTS", false),
+		AuditRetentionDays: getIntEnv("AUDIT_RETENTION_DAYS", 365),
+		ExportDir:          getEnv("EXPORT_DIR", "./data/exports"),
 	}
 
 	// Validate configuration

@@ -367,6 +367,77 @@ func (db *DB) Migrate() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// Audit logs for compliance tracking
+		`CREATE TABLE IF NOT EXISTS audit_logs (
+			id TEXT PRIMARY KEY,
+			timestamp DATETIME NOT NULL,
+			actor_id TEXT NOT NULL,
+			actor_email TEXT,
+			actor_type TEXT NOT NULL,
+			action TEXT NOT NULL,
+			resource_type TEXT NOT NULL,
+			resource_id TEXT,
+			resource_name TEXT,
+			ip_address TEXT,
+			user_agent TEXT,
+			session_id TEXT,
+			organization_id TEXT,
+			metadata TEXT,
+			before_state TEXT,
+			after_state TEXT,
+			success INTEGER NOT NULL DEFAULT 1,
+			error_message TEXT,
+			legal_hold INTEGER NOT NULL DEFAULT 0
+		)`,
+
+		// Export jobs for tracking async exports
+		`CREATE TABLE IF NOT EXISTS export_jobs (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			organization_id TEXT,
+			type TEXT NOT NULL,
+			format TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'pending',
+			progress INTEGER DEFAULT 0,
+			file_path TEXT,
+			file_size INTEGER,
+			download_url TEXT,
+			download_key TEXT,
+			expires_at DATETIME,
+			error_message TEXT,
+			parameters TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			started_at DATETIME,
+			completed_at DATETIME
+		)`,
+
+		// Data retention policies
+		`CREATE TABLE IF NOT EXISTS data_retention_policies (
+			id TEXT PRIMARY KEY,
+			organization_id TEXT,
+			name TEXT NOT NULL,
+			retention_days INTEGER NOT NULL,
+			resource_types TEXT,
+			action_types TEXT,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_executed_at DATETIME
+		)`,
+
+		// Legal holds
+		`CREATE TABLE IF NOT EXISTS legal_holds (
+			id TEXT PRIMARY KEY,
+			organization_id TEXT,
+			name TEXT NOT NULL,
+			description TEXT,
+			start_date DATETIME NOT NULL,
+			end_date DATETIME NOT NULL,
+			created_by TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			active INTEGER NOT NULL DEFAULT 1
+		)`,
+
 		// Add GitHub fields to users table (safe migrations with ALTER TABLE)
 		`ALTER TABLE users ADD COLUMN github_token TEXT`,
 		`ALTER TABLE users ADD COLUMN github_username TEXT`,
@@ -662,6 +733,25 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_file_history_conversation_id ON file_history(user_id, conversation_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_workflow_id ON file_history(user_id, workflow_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_tool_name ON file_history(user_id, tool_name)`,
+
+		// Audit log indexes for efficient querying (compliance)
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_id ON audit_logs(actor_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_organization_id ON audit_logs(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_legal_hold ON audit_logs(legal_hold)`,
+		`CREATE INDEX IF NOT EXISTS idx_audit_logs_org_timestamp ON audit_logs(organization_id, timestamp)`,
+
+		// Export job indexes
+		`CREATE INDEX IF NOT EXISTS idx_export_jobs_user_id ON export_jobs(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_export_jobs_status ON export_jobs(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_export_jobs_download_key ON export_jobs(download_key)`,
+		`CREATE INDEX IF NOT EXISTS idx_export_jobs_expires_at ON export_jobs(expires_at)`,
+
+		// Retention policy indexes
+		`CREATE INDEX IF NOT EXISTS idx_retention_policies_org ON data_retention_policies(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_legal_holds_org ON legal_holds(organization_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_legal_holds_active ON legal_holds(active)`,
 	}
 
 	for _, migration := range migrations {
