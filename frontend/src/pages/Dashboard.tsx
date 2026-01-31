@@ -1,6 +1,7 @@
 import { RecentWorkspaces } from '../components/dashboard/RecentWorkspaces';
 import { QuickActions } from '../components/dashboard/QuickActions';
 import { UsageSummary } from '../components/dashboard/UsageSummary';
+import { SystemStatusDashboard } from '../components/monitoring';
 
 export default function Dashboard() {
   return (
@@ -13,6 +14,9 @@ export default function Dashboard() {
             Welcome to Prism. Start a new workspace or continue where you left off.
           </p>
         </div>
+
+        {/* System Status */}
+        <SystemStatusDashboard />
 
         {/* Quick Actions */}
         <QuickActions />
