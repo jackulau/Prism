@@ -67,6 +67,7 @@ type Dependencies struct {
 	GitHubApp          *github.GitHubApp
 	GitHubInstallationRepo *repository.GitHubInstallationRepo
 	WorkflowEngine     *workflow.Engine
+	AgentExecutionRepo *repository.AgentExecutionRepository
 }
 
 // Setup sets up the Fiber app with all routes
@@ -310,6 +311,17 @@ func Setup(deps *Dependencies) *fiber.App {
 		tasks.Get("/:id", tasksHandler.GetTask)
 		tasks.Delete("/:id", tasksHandler.CancelTask)
 		tasks.Post("/:id/retry", tasksHandler.RetryTask)
+	}
+
+	// Results aggregation routes (auth required)
+	if deps.AgentExecutionRepo != nil {
+		resultsHandler := handlers.NewResultsHandler(deps.AgentExecutionRepo)
+		results := v1.Group("/results", middleware.AuthMiddleware(deps.JWTService))
+		results.Get("/batch", resultsHandler.ListBatchResults)
+		results.Get("/swarm", resultsHandler.ListSwarmResults)
+		results.Get("/metrics", resultsHandler.GetAggregatedMetrics)
+		results.Get("/timeline", resultsHandler.GetResultsTimeline)
+		results.Get("/:executionId", resultsHandler.GetExecutionResults)
 	}
 
 	// GitHub webhook routes
