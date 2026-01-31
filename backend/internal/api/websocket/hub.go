@@ -103,39 +103,33 @@ const (
 	TypeChatStop      = "chat.stop"
 
 	// Agent message types
-	TypeAgentRun             = "agent.run"
-	TypeAgentRunParallel     = "agent.run_parallel"
-	TypeAgentStarted         = "agent.started"
-	TypeAgentThinking        = "agent.thinking"
-	TypeAgentStreamChunk     = "agent.stream_chunk"
-	TypeAgentToolCall        = "agent.tool_call"
-	TypeAgentToolResult      = "agent.tool_result"
-	TypeAgentCompleted       = "agent.completed"
-	TypeAgentFailed          = "agent.failed"
-	TypeAgentCancelled       = "agent.cancelled"
-	TypeAgentStop            = "agent.stop"
-	TypeAgentStatus          = "agent.status"
-	TypeAgentList            = "agent.list"
-	TypeAgentBatchProgress   = "agent.batch_progress"
-	TypeAgentBatchCompleted  = "agent.batch_completed"
-	TypeAgentCheckIn         = "agent.check_in"      // Pause point for user confirmation after max iterations
-	TypeAgentContinue        = "agent.continue"      // User confirms to continue the agentic loop
-	TypeAgentProgress        = "agent.progress"      // Agent progress update with step info
-	TypeAgentStepStarted     = "agent.step_started"  // Agent workflow step started
-	TypeAgentStepCompleted   = "agent.step_completed" // Agent workflow step completed
-	TypeAgentThinkingStart   = "agent.thinking_start" // Agent started thinking/reasoning
-	TypeAgentThinkingEnd     = "agent.thinking_end"   // Agent finished thinking/reasoning
-	TypeAgentEstimate        = "agent.estimate"       // Agent time/work estimate update
+	TypeAgentRun            = "agent.run"
+	TypeAgentRunParallel    = "agent.run_parallel"
+	TypeAgentStarted        = "agent.started"
+	TypeAgentThinking       = "agent.thinking"
+	TypeAgentStreamChunk    = "agent.stream_chunk"
+	TypeAgentToolCall       = "agent.tool_call"
+	TypeAgentToolResult     = "agent.tool_result"
+	TypeAgentCompleted      = "agent.completed"
+	TypeAgentFailed         = "agent.failed"
+	TypeAgentCancelled      = "agent.cancelled"
+	TypeAgentStop           = "agent.stop"
+	TypeAgentStatus         = "agent.status"
+	TypeAgentList           = "agent.list"
+	TypeAgentBatchProgress  = "agent.batch_progress"
+	TypeAgentBatchCompleted = "agent.batch_completed"
+	TypeAgentCheckIn        = "agent.check_in" // Pause point for user confirmation after max iterations
+	TypeAgentContinue       = "agent.continue" // User confirms to continue the agentic loop
 
 	// Preview/Sandbox message types
-	TypePreviewReady    = "preview.ready"
-	TypePreviewContent  = "preview.content"
-	TypePreviewError    = "preview.error"
-	TypeBuildStart      = "build.start"
-	TypeBuildStarted    = "build.started"
-	TypeBuildOutput     = "build.output"
-	TypeBuildCompleted  = "build.completed"
-	TypeBuildStop       = "build.stop"
+	TypePreviewReady   = "preview.ready"
+	TypePreviewContent = "preview.content"
+	TypePreviewError   = "preview.error"
+	TypeBuildStart     = "build.start"
+	TypeBuildStarted   = "build.started"
+	TypeBuildOutput    = "build.output"
+	TypeBuildCompleted = "build.completed"
+	TypeBuildStop      = "build.stop"
 
 	// Sandbox lifecycle message types
 	TypeSandboxCreate    = "sandbox.create"
@@ -150,40 +144,38 @@ const (
 	TypeSandboxStatus    = "sandbox.status"
 
 	// Shell execution message types
-	TypeShellStart     = "shell.start"
-	TypeShellOutput    = "shell.output"
-	TypeShellCompleted = "shell.completed"
-	TypeShellFailed    = "shell.failed"
-	TypeShellStop      = "shell.stop"
-	TypeFilesUpdated       = "files.updated"
-	TypeFileContent        = "file.content"
-	TypeFileRequest        = "file.request"
-	TypeFileHistoryRequest      = "file.history_request"
-	TypeFileHistoryList         = "file.history_list"
-	TypeFileHistoryContent      = "file.history_content"
-	TypeFileHistoryRestore      = "file.history_restore"
-	TypeFileHistoryRestored     = "file.history_restored"
-	TypeFileHistoryBatchRestore = "file.history_batch_restore"
-	TypeFileHistoryBatchRestored = "file.history_batch_restored"
-	TypeFileHistoryConflicts    = "file.history_conflicts"
+	TypeShellStart          = "shell.start"
+	TypeShellOutput         = "shell.output"
+	TypeShellCompleted      = "shell.completed"
+	TypeShellFailed         = "shell.failed"
+	TypeShellStop           = "shell.stop"
+	TypeFilesUpdated        = "files.updated"
+	TypeFileContent         = "file.content"
+	TypeFileRequest         = "file.request"
+	TypeFileHistoryRequest  = "file.history_request"
+	TypeFileHistoryList     = "file.history_list"
+	TypeFileHistoryContent  = "file.history_content"
+	TypeFileHistoryTimeline = "file.history_timeline"
+	TypeFileHistoryDiff     = "file.history_diff"
+	TypeFileHistoryStats    = "file.history_stats"
 
 	// Swarm/Multi-agent message types
-	TypeSwarmCreate          = "swarm.create"
-	TypeSwarmRun             = "swarm.run"
-	TypeSwarmStarted         = "swarm.started"
-	TypeSwarmAgentStarted    = "swarm.agent_started"
-	TypeSwarmAgentOutput     = "swarm.agent_output"
-	TypeSwarmAgentCompleted  = "swarm.agent_completed"
-	TypeSwarmAgentFailed     = "swarm.agent_failed"
-	TypeSwarmMessage         = "swarm.message"
-	TypeSwarmSynthesizing    = "swarm.synthesizing"
-	TypeSwarmProgress        = "swarm.progress"
-	TypeSwarmCompleted       = "swarm.completed"
-	TypeSwarmFailed          = "swarm.failed"
-	TypeSwarmCancelled       = "swarm.cancelled"
-	TypeSwarmStop            = "swarm.stop"
-	TypeSwarmStatus          = "swarm.status"
-	TypeSwarmList            = "swarm.list"
+	TypeSwarmCreate         = "swarm.create"
+	TypeSwarmRun            = "swarm.run"
+	TypeSwarmStarted        = "swarm.started"
+	TypeSwarmAgentStarted   = "swarm.agent_started"
+	TypeSwarmAgentOutput    = "swarm.agent_output"
+	TypeSwarmAgentCompleted = "swarm.agent_completed"
+	TypeSwarmAgentFailed    = "swarm.agent_failed"
+	TypeSwarmMessage        = "swarm.message"
+	TypeSwarmSynthesizing   = "swarm.synthesizing"
+	TypeSwarmProgress       = "swarm.progress"
+	TypeSwarmCompleted      = "swarm.completed"
+	TypeSwarmFailed         = "swarm.failed"
+	TypeSwarmCancelled      = "swarm.cancelled"
+	TypeSwarmStop           = "swarm.stop"
+	TypeSwarmStatus         = "swarm.status"
+	TypeSwarmList           = "swarm.list"
 
 	// Task queue message types
 	TypeTaskQueued    = "task.queued"
@@ -194,31 +186,24 @@ const (
 	TypeTaskCancelled = "task.cancelled"
 
 	// Workflow message types
-	TypeWorkflowRun          = "workflow.run"
-	TypeWorkflowStarted      = "workflow.started"
-	TypeWorkflowPause        = "workflow.pause"
-	TypeWorkflowPaused       = "workflow.paused"
-	TypeWorkflowResume       = "workflow.resume"
-	TypeWorkflowResumed      = "workflow.resumed"
-	TypeWorkflowStop         = "workflow.stop"
-	TypeWorkflowCancelled    = "workflow.cancelled"
-	TypeWorkflowStatus       = "workflow.status"
-	TypeWorkflowProgress     = "workflow.progress"
-	TypeWorkflowStepStarted  = "workflow.step_started"
+	TypeWorkflowRun           = "workflow.run"
+	TypeWorkflowStarted       = "workflow.started"
+	TypeWorkflowPause         = "workflow.pause"
+	TypeWorkflowPaused        = "workflow.paused"
+	TypeWorkflowResume        = "workflow.resume"
+	TypeWorkflowResumed       = "workflow.resumed"
+	TypeWorkflowStop          = "workflow.stop"
+	TypeWorkflowCancelled     = "workflow.cancelled"
+	TypeWorkflowStatus        = "workflow.status"
+	TypeWorkflowProgress      = "workflow.progress"
+	TypeWorkflowStepStarted   = "workflow.step_started"
 	TypeWorkflowStepCompleted = "workflow.step_completed"
-	TypeWorkflowStepFailed   = "workflow.step_failed"
-	TypeWorkflowStepSkipped  = "workflow.step_skipped"
-	TypeWorkflowCompleted    = "workflow.completed"
-	TypeWorkflowFailed       = "workflow.failed"
-	TypeWorkflowWaitingInput = "workflow.waiting_input"
-	TypeWorkflowProvideInput = "workflow.provide_input"
-
-	// Attribution message types
-	TypeAttributionSummary   = "attribution.summary"
-	TypeAttributionByAgent   = "attribution.by_agent"
-	TypeAttributionTimeline  = "attribution.timeline"
-	TypeAttributionByConversation = "attribution.by_conversation"
-	TypeAttributionByWorkflow     = "attribution.by_workflow"
+	TypeWorkflowStepFailed    = "workflow.step_failed"
+	TypeWorkflowStepSkipped   = "workflow.step_skipped"
+	TypeWorkflowCompleted     = "workflow.completed"
+	TypeWorkflowFailed        = "workflow.failed"
+	TypeWorkflowWaitingInput  = "workflow.waiting_input"
+	TypeWorkflowProvideInput  = "workflow.provide_input"
 )
 
 // FileContext represents file context for chat messages
@@ -246,46 +231,46 @@ type IncomingMessage struct {
 	Params         map[string]interface{} `json:"params,omitempty"`
 
 	// Chat options
-	Mode             string       `json:"mode,omitempty"`              // plan, ask-before-edits, edit-automatically
+	Mode             string       `json:"mode,omitempty"` // plan, ask-before-edits, edit-automatically
 	ExtendedThinking bool         `json:"extended_thinking,omitempty"`
 	FileContext      *FileContext `json:"file_context,omitempty"`
 
 	// Agent-related fields
-	AgentID     string        `json:"agent_id,omitempty"`
-	Tasks       []AgentTask   `json:"tasks,omitempty"`       // For parallel execution
-	AgentConfig *AgentConfig  `json:"agent_config,omitempty"`
-	Context     string        `json:"context,omitempty"`
-	Priority    int           `json:"priority,omitempty"`
+	AgentID     string       `json:"agent_id,omitempty"`
+	Tasks       []AgentTask  `json:"tasks,omitempty"` // For parallel execution
+	AgentConfig *AgentConfig `json:"agent_config,omitempty"`
+	Context     string       `json:"context,omitempty"`
+	Priority    int          `json:"priority,omitempty"`
 
 	// Swarm/Multi-agent fields
-	SwarmID      string            `json:"swarm_id,omitempty"`
-	SwarmConfig  *SwarmConfig      `json:"swarm_config,omitempty"`
-	Strategy     string            `json:"strategy,omitempty"`     // parallel, pipeline, debate, consensus, map_reduce, specialist
-	AgentRoles   []AgentRoleConfig `json:"agent_roles,omitempty"`  // Roles for multi-agent swarm
+	SwarmID     string            `json:"swarm_id,omitempty"`
+	SwarmConfig *SwarmConfig      `json:"swarm_config,omitempty"`
+	Strategy    string            `json:"strategy,omitempty"`    // parallel, pipeline, debate, consensus, map_reduce, specialist
+	AgentRoles  []AgentRoleConfig `json:"agent_roles,omitempty"` // Roles for multi-agent swarm
 
 	// Workflow fields
-	WorkflowID   string                 `json:"workflow_id,omitempty"`
-	TemplateID   string                 `json:"template_id,omitempty"`
-	StepID       string                 `json:"step_id,omitempty"`
-	State        map[string]interface{} `json:"state,omitempty"`
-	Input        interface{}            `json:"input,omitempty"`
+	WorkflowID string                 `json:"workflow_id,omitempty"`
+	TemplateID string                 `json:"template_id,omitempty"`
+	StepID     string                 `json:"step_id,omitempty"`
+	State      map[string]interface{} `json:"state,omitempty"`
+	Input      interface{}            `json:"input,omitempty"`
 }
 
 // SwarmConfig represents configuration for a multi-agent swarm
 type SwarmConfig struct {
-	Name         string            `json:"name,omitempty"`
-	Strategy     string            `json:"strategy"`       // parallel, pipeline, debate, consensus, map_reduce, specialist
-	MaxAgents    int               `json:"max_agents,omitempty"`
-	TimeoutSecs  int               `json:"timeout_secs,omitempty"`
-	AgentRoles   []AgentRoleConfig `json:"agent_roles"`
-	Synthesizer  *AgentConfig      `json:"synthesizer,omitempty"` // Config for result synthesizer
+	Name        string            `json:"name,omitempty"`
+	Strategy    string            `json:"strategy"` // parallel, pipeline, debate, consensus, map_reduce, specialist
+	MaxAgents   int               `json:"max_agents,omitempty"`
+	TimeoutSecs int               `json:"timeout_secs,omitempty"`
+	AgentRoles  []AgentRoleConfig `json:"agent_roles"`
+	Synthesizer *AgentConfig      `json:"synthesizer,omitempty"` // Config for result synthesizer
 }
 
 // AgentRoleConfig represents an agent with a specific role
 type AgentRoleConfig struct {
-	Role         string       `json:"role"`         // general, planner, coder, reviewer, researcher, writer, analyst, debugger, tester, synthesizer
+	Role         string       `json:"role"` // general, planner, coder, reviewer, researcher, writer, analyst, debugger, tester, synthesizer
 	Config       *AgentConfig `json:"config,omitempty"`
-	Count        int          `json:"count,omitempty"`        // Number of agents with this role
+	Count        int          `json:"count,omitempty"`         // Number of agents with this role
 	SystemPrompt string       `json:"system_prompt,omitempty"` // Override default role prompt
 }
 
@@ -324,34 +309,34 @@ type OutgoingMessage struct {
 	Message        string      `json:"message,omitempty"`
 
 	// Agent-related fields
-	AgentID       string                 `json:"agent_id,omitempty"`
-	TaskID        string                 `json:"task_id,omitempty"`
-	Output        string                 `json:"output,omitempty"`
-	Agents        []AgentInfo            `json:"agents,omitempty"`       // For agent list
-	Results       []AgentResultInfo      `json:"results,omitempty"`      // For batch results
-	Progress      *BatchProgressInfo     `json:"progress,omitempty"`     // For batch progress
-	Error         string                 `json:"error,omitempty"`
-	Duration      int64                  `json:"duration,omitempty"`     // Duration in milliseconds
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	AgentID  string                 `json:"agent_id,omitempty"`
+	TaskID   string                 `json:"task_id,omitempty"`
+	Output   string                 `json:"output,omitempty"`
+	Agents   []AgentInfo            `json:"agents,omitempty"`   // For agent list
+	Results  []AgentResultInfo      `json:"results,omitempty"`  // For batch results
+	Progress *BatchProgressInfo     `json:"progress,omitempty"` // For batch progress
+	Error    string                 `json:"error,omitempty"`
+	Duration int64                  `json:"duration,omitempty"` // Duration in milliseconds
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 
 	// Preview/Sandbox-related fields
-	URL         string     `json:"url,omitempty"`
-	Content     string     `json:"content,omitempty"`
-	FilePath    string     `json:"file_path,omitempty"`
-	Files       []FileInfo `json:"files,omitempty"`
-	Stream      string     `json:"stream,omitempty"`       // "stdout" or "stderr"
-	Success     bool       `json:"success,omitempty"`
-	PreviewURL  string     `json:"preview_url,omitempty"`
-	BuildID     string     `json:"build_id,omitempty"`
+	URL        string     `json:"url,omitempty"`
+	Content    string     `json:"content,omitempty"`
+	FilePath   string     `json:"file_path,omitempty"`
+	Files      []FileInfo `json:"files,omitempty"`
+	Stream     string     `json:"stream,omitempty"` // "stdout" or "stderr"
+	Success    bool       `json:"success,omitempty"`
+	PreviewURL string     `json:"preview_url,omitempty"`
+	BuildID    string     `json:"build_id,omitempty"`
 
 	// Swarm/Multi-agent fields
-	SwarmID       string           `json:"swarm_id,omitempty"`
-	SwarmStatus   string           `json:"swarm_status,omitempty"`
-	FinalOutput   string           `json:"final_output,omitempty"`
-	SwarmAgents   []SwarmAgentInfo `json:"swarm_agents,omitempty"`
+	SwarmID       string             `json:"swarm_id,omitempty"`
+	SwarmStatus   string             `json:"swarm_status,omitempty"`
+	FinalOutput   string             `json:"final_output,omitempty"`
+	SwarmAgents   []SwarmAgentInfo   `json:"swarm_agents,omitempty"`
 	SwarmProgress *SwarmProgressInfo `json:"swarm_progress,omitempty"`
-	AgentRole     string           `json:"agent_role,omitempty"`
-	Input         string           `json:"input,omitempty"`
+	AgentRole     string             `json:"agent_role,omitempty"`
+	Input         string             `json:"input,omitempty"`
 
 	// MCP-related fields
 	IsMCPTool     bool   `json:"is_mcp_tool,omitempty"`
@@ -363,14 +348,14 @@ type OutgoingMessage struct {
 	IterationCount int `json:"iteration_count,omitempty"`
 
 	// Workflow-related fields
-	WorkflowID   string                  `json:"workflow_id,omitempty"`
-	StepID       string                  `json:"step_id,omitempty"`
-	StepName     string                  `json:"step_name,omitempty"`
-	StepType     string                  `json:"step_type,omitempty"`
-	CurrentStep  int                     `json:"current_step,omitempty"`
-	TotalSteps   int                     `json:"total_steps,omitempty"`
-	State        map[string]interface{}  `json:"state,omitempty"`
-	WorkflowInfo *WorkflowInfo           `json:"workflow_info,omitempty"`
+	WorkflowID   string                 `json:"workflow_id,omitempty"`
+	StepID       string                 `json:"step_id,omitempty"`
+	StepName     string                 `json:"step_name,omitempty"`
+	StepType     string                 `json:"step_type,omitempty"`
+	CurrentStep  int                    `json:"current_step,omitempty"`
+	TotalSteps   int                    `json:"total_steps,omitempty"`
+	State        map[string]interface{} `json:"state,omitempty"`
+	WorkflowInfo *WorkflowInfo          `json:"workflow_info,omitempty"`
 }
 
 // SwarmAgentInfo represents information about an agent in a swarm
@@ -435,47 +420,6 @@ type BatchProgressInfo struct {
 	FailedTasks    int `json:"failed_tasks"`
 	RunningTasks   int `json:"running_tasks"`
 	PendingTasks   int `json:"pending_tasks"`
-}
-
-// AgentProgressInfo represents detailed progress information for an agent
-type AgentProgressInfo struct {
-	CurrentStep     int     `json:"current_step"`
-	TotalSteps      int     `json:"total_steps"`
-	PercentComplete float64 `json:"percent_complete"`
-	StepName        string  `json:"step_name,omitempty"`
-	Message         string  `json:"message,omitempty"`
-	Timestamp       int64   `json:"timestamp"`
-}
-
-// AgentStepInfo represents information about a workflow step
-type AgentStepInfo struct {
-	StepID      string                 `json:"step_id"`
-	StepName    string                 `json:"step_name"`
-	StepType    string                 `json:"step_type,omitempty"`
-	Status      string                 `json:"status"`
-	Input       interface{}            `json:"input,omitempty"`
-	Output      interface{}            `json:"output,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	Duration    int64                  `json:"duration,omitempty"` // Duration in milliseconds
-	StartedAt   int64                  `json:"started_at,omitempty"`
-	CompletedAt int64                  `json:"completed_at,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// AgentThinkingInfo represents information about agent thinking/reasoning state
-type AgentThinkingInfo struct {
-	IsThinking bool   `json:"is_thinking"`
-	Context    string `json:"context,omitempty"` // What the agent is thinking about
-	Timestamp  int64  `json:"timestamp"`
-}
-
-// AgentEstimateInfo represents time/work estimates from an agent
-type AgentEstimateInfo struct {
-	EstimatedSteps     int    `json:"estimated_steps,omitempty"`
-	EstimatedDurationMs int64 `json:"estimated_duration_ms,omitempty"`
-	Confidence         float64 `json:"confidence,omitempty"` // 0-1 confidence in estimate
-	Message            string `json:"message,omitempty"`
-	Timestamp          int64  `json:"timestamp"`
 }
 
 // WorkflowInfo represents information about a workflow execution
@@ -652,98 +596,6 @@ func NewAgentBatchCompleted(executionID string, results []AgentResultInfo, durat
 		Results:     results,
 		Status:      "completed",
 		Duration:    durationMs,
-	}
-}
-
-// Agent progress message constructors
-
-// NewAgentProgress creates a new agent progress message
-func NewAgentProgress(agentID string, progress *AgentProgressInfo) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:        TypeAgentProgress,
-		AgentID:     agentID,
-		CurrentStep: progress.CurrentStep,
-		TotalSteps:  progress.TotalSteps,
-		StepName:    progress.StepName,
-		Message:     progress.Message,
-		Metadata: map[string]interface{}{
-			"percent_complete": progress.PercentComplete,
-			"timestamp":        progress.Timestamp,
-		},
-	}
-}
-
-// NewAgentStepStarted creates a new agent step started message
-func NewAgentStepStarted(agentID string, step *AgentStepInfo) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:     TypeAgentStepStarted,
-		AgentID:  agentID,
-		StepID:   step.StepID,
-		StepName: step.StepName,
-		StepType: step.StepType,
-		Status:   "running",
-		Metadata: map[string]interface{}{
-			"started_at": step.StartedAt,
-			"input":      step.Input,
-		},
-	}
-}
-
-// NewAgentStepCompleted creates a new agent step completed message
-func NewAgentStepCompleted(agentID string, step *AgentStepInfo) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:     TypeAgentStepCompleted,
-		AgentID:  agentID,
-		StepID:   step.StepID,
-		StepName: step.StepName,
-		Result:   step.Output,
-		Duration: step.Duration,
-		Status:   step.Status,
-		Error:    step.Error,
-		Metadata: map[string]interface{}{
-			"started_at":   step.StartedAt,
-			"completed_at": step.CompletedAt,
-		},
-	}
-}
-
-// NewAgentThinkingStart creates a new agent thinking start message
-func NewAgentThinkingStart(agentID, context string, timestamp int64) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:    TypeAgentThinkingStart,
-		AgentID: agentID,
-		Message: context,
-		Metadata: map[string]interface{}{
-			"is_thinking": true,
-			"timestamp":   timestamp,
-		},
-	}
-}
-
-// NewAgentThinkingEnd creates a new agent thinking end message
-func NewAgentThinkingEnd(agentID string, timestamp int64) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:    TypeAgentThinkingEnd,
-		AgentID: agentID,
-		Metadata: map[string]interface{}{
-			"is_thinking": false,
-			"timestamp":   timestamp,
-		},
-	}
-}
-
-// NewAgentEstimate creates a new agent estimate message
-func NewAgentEstimate(agentID string, estimate *AgentEstimateInfo) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:       TypeAgentEstimate,
-		AgentID:    agentID,
-		TotalSteps: estimate.EstimatedSteps,
-		Message:    estimate.Message,
-		Metadata: map[string]interface{}{
-			"estimated_duration_ms": estimate.EstimatedDurationMs,
-			"confidence":            estimate.Confidence,
-			"timestamp":             estimate.Timestamp,
-		},
 	}
 }
 
@@ -1005,11 +857,43 @@ func NewSwarmList(swarms []SwarmAgentInfo) *OutgoingMessage {
 
 // FileHistoryEntry represents a file history entry for WebSocket messages
 type FileHistoryEntry struct {
-	ID        string `json:"id"`
-	FilePath  string `json:"file_path"`
-	Operation string `json:"operation"`
-	Size      int    `json:"size"`
-	CreatedAt string `json:"created_at"`
+	ID          string  `json:"id"`
+	FilePath    string  `json:"file_path"`
+	Operation   string  `json:"operation"`
+	Size        int     `json:"size"`
+	CreatedAt   string  `json:"created_at"`
+	AgentID     *string `json:"agent_id,omitempty"`
+	AgentName   *string `json:"agent_name,omitempty"`
+	ToolName    *string `json:"tool_name,omitempty"`
+	MessageID   *string `json:"message_id,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+// FileHistoryStatsInfo represents file history statistics for WebSocket messages
+type FileHistoryStatsInfo struct {
+	TotalEntries   int    `json:"total_entries"`
+	TotalFiles     int    `json:"total_files"`
+	TotalSizeBytes int64  `json:"total_size_bytes"`
+	OldestEntry    string `json:"oldest_entry,omitempty"`
+	NewestEntry    string `json:"newest_entry,omitempty"`
+}
+
+// VersionDiffInfo represents a version diff for WebSocket messages
+type VersionDiffInfo struct {
+	HistoryID1 string         `json:"history_id_1"`
+	HistoryID2 string         `json:"history_id_2"`
+	FilePath   string         `json:"file_path"`
+	Additions  int            `json:"additions"`
+	Deletions  int            `json:"deletions"`
+	Changes    []DiffLineInfo `json:"changes"`
+}
+
+// DiffLineInfo represents a diff line for WebSocket messages
+type DiffLineInfo struct {
+	Type    string `json:"type"` // "add", "delete", "unchanged"
+	Content string `json:"content"`
+	OldLine int    `json:"old_line,omitempty"`
+	NewLine int    `json:"new_line,omitempty"`
 }
 
 // NewFileHistoryList creates a new file history list message
@@ -1038,57 +922,45 @@ func NewFileHistoryContent(historyID, filePath, content, operation, createdAt st
 	}
 }
 
-// RestoreResult represents the result of a single file restore operation
-type RestoreResult struct {
-	HistoryID   string `json:"history_id"`
-	FilePath    string `json:"file_path"`
-	Success     bool   `json:"success"`
-	Error       string `json:"error,omitempty"`
-	BackupID    string `json:"backup_id,omitempty"`
-}
-
-// RestoreConflictInfo represents conflict information for WebSocket messages
-type RestoreConflictInfo struct {
-	FilePath         string `json:"file_path"`
-	HistoryTimestamp string `json:"history_timestamp"`
-	CurrentModified  string `json:"current_modified"`
-	HasNewerVersion  bool   `json:"has_newer_version"`
-}
-
-// NewFileHistoryRestored creates a message for single file restore completion
-func NewFileHistoryRestored(historyID, filePath string, success bool, backupID string, err string) *OutgoingMessage {
+// NewFileHistoryTimeline creates a new file history timeline message
+func NewFileHistoryTimeline(entries []FileHistoryEntry, startTime, endTime string, total int) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:     TypeFileHistoryRestored,
-		FilePath: filePath,
-		Success:  success,
-		Error:    err,
+		Type: TypeFileHistoryTimeline,
 		Metadata: map[string]interface{}{
-			"history_id": historyID,
-			"backup_id":  backupID,
+			"entries":    entries,
+			"count":      len(entries),
+			"total":      total,
+			"start_time": startTime,
+			"end_time":   endTime,
 		},
 	}
 }
 
-// NewFileHistoryBatchRestored creates a message for batch restore completion
-func NewFileHistoryBatchRestored(results []RestoreResult, totalSuccess, totalFailed int) *OutgoingMessage {
+// NewFileHistoryDiff creates a new file history diff message
+func NewFileHistoryDiff(diff *VersionDiffInfo) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type:    TypeFileHistoryBatchRestored,
-		Success: totalFailed == 0,
+		Type: TypeFileHistoryDiff,
 		Metadata: map[string]interface{}{
-			"results":       results,
-			"total_success": totalSuccess,
-			"total_failed":  totalFailed,
+			"history_id_1": diff.HistoryID1,
+			"history_id_2": diff.HistoryID2,
+			"file_path":    diff.FilePath,
+			"additions":    diff.Additions,
+			"deletions":    diff.Deletions,
+			"changes":      diff.Changes,
 		},
 	}
 }
 
-// NewFileHistoryConflicts creates a message with restore conflicts
-func NewFileHistoryConflicts(conflicts []RestoreConflictInfo) *OutgoingMessage {
+// NewFileHistoryStats creates a new file history stats message
+func NewFileHistoryStats(stats *FileHistoryStatsInfo) *OutgoingMessage {
 	return &OutgoingMessage{
-		Type: TypeFileHistoryConflicts,
+		Type: TypeFileHistoryStats,
 		Metadata: map[string]interface{}{
-			"conflicts": conflicts,
-			"count":     len(conflicts),
+			"total_entries":    stats.TotalEntries,
+			"total_files":      stats.TotalFiles,
+			"total_size_bytes": stats.TotalSizeBytes,
+			"oldest_entry":     stats.OldestEntry,
+			"newest_entry":     stats.NewestEntry,
 		},
 	}
 }
@@ -1310,106 +1182,5 @@ func NewWorkflowWaitingInput(workflowID, stepID, stepName, promptText string) *O
 		StepName:   stepName,
 		Message:    promptText,
 		Status:     "waiting_input",
-	}
-}
-
-// Attribution message constructors
-
-// AttributionSummaryData represents attribution summary response data
-type AttributionSummaryData struct {
-	TotalChanges    int            `json:"total_changes"`
-	ByAgent         map[string]int `json:"by_agent"`
-	ByTool          map[string]int `json:"by_tool"`
-	ByOperation     map[string]int `json:"by_operation"`
-	TimelineByDay   map[string]int `json:"timeline_by_day"`
-	MostActiveAgent string         `json:"most_active_agent"`
-	MostUsedTool    string         `json:"most_used_tool"`
-}
-
-// AgentActivityData represents agent activity report response data
-type AgentActivityData struct {
-	AgentID        string         `json:"agent_id"`
-	AgentName      string         `json:"agent_name"`
-	TotalChanges   int            `json:"total_changes"`
-	OperationStats map[string]int `json:"operation_stats"`
-	TopFiles       []FileActivityData `json:"top_files"`
-	FirstChange    *int64         `json:"first_change,omitempty"`
-	LastChange     *int64         `json:"last_change,omitempty"`
-}
-
-// FileActivityData represents file activity information
-type FileActivityData struct {
-	FilePath    string `json:"file_path"`
-	ChangeCount int    `json:"change_count"`
-}
-
-// FileChangeData represents a single file change
-type FileChangeData struct {
-	ID             string `json:"id"`
-	FilePath       string `json:"file_path"`
-	Operation      string `json:"operation"`
-	ToolName       string `json:"tool_name,omitempty"`
-	AgentID        string `json:"agent_id,omitempty"`
-	AgentName      string `json:"agent_name,omitempty"`
-	ConversationID string `json:"conversation_id,omitempty"`
-	WorkflowID     string `json:"workflow_id,omitempty"`
-	Timestamp      int64  `json:"timestamp"`
-	Size           int    `json:"size"`
-}
-
-// NewAttributionSummary creates a new attribution summary message
-func NewAttributionSummary(summary *AttributionSummaryData) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type: TypeAttributionSummary,
-		Metadata: map[string]interface{}{
-			"summary": summary,
-		},
-	}
-}
-
-// NewAttributionByAgent creates a new attribution by agent message
-func NewAttributionByAgent(activity *AgentActivityData, changes []FileChangeData) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:    TypeAttributionByAgent,
-		AgentID: activity.AgentID,
-		Metadata: map[string]interface{}{
-			"activity": activity,
-			"changes":  changes,
-		},
-	}
-}
-
-// NewAttributionTimeline creates a new attribution timeline message
-func NewAttributionTimeline(timelineByDay map[string]int, changes []FileChangeData) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type: TypeAttributionTimeline,
-		Metadata: map[string]interface{}{
-			"timeline": timelineByDay,
-			"changes":  changes,
-		},
-	}
-}
-
-// NewAttributionByConversation creates a new attribution by conversation message
-func NewAttributionByConversation(conversationID string, changes []FileChangeData) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:           TypeAttributionByConversation,
-		ConversationID: conversationID,
-		Metadata: map[string]interface{}{
-			"changes":       changes,
-			"total_changes": len(changes),
-		},
-	}
-}
-
-// NewAttributionByWorkflow creates a new attribution by workflow message
-func NewAttributionByWorkflow(workflowID string, changes []FileChangeData) *OutgoingMessage {
-	return &OutgoingMessage{
-		Type:       TypeAttributionByWorkflow,
-		WorkflowID: workflowID,
-		Metadata: map[string]interface{}{
-			"changes":       changes,
-			"total_changes": len(changes),
-		},
 	}
 }

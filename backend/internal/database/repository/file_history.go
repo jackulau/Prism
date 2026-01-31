@@ -2,34 +2,54 @@ package repository
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jacklau/prism/internal/types"
 )
 
-// FileHistory represents a historical version of a file with attribution
+// FileHistory represents a historical version of a file
 type FileHistory struct {
-	ID             string            `json:"id"`
-	UserID         string            `json:"user_id"`
-	FilePath       string            `json:"file_path"`
-	Content        string            `json:"content"`
-	Operation      string            `json:"operation"` // "create", "update", "delete", "rename"
-	CreatedAt      time.Time         `json:"created_at"`
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	FilePath  string    `json:"file_path"`
+	Content   string    `json:"content"`
+	Operation string    `json:"operation"` // "create", "update", "delete"
+	CreatedAt time.Time `json:"created_at"`
 	// Attribution fields
-	AgentID        *string           `json:"agent_id,omitempty"`
-	AgentName      *string           `json:"agent_name,omitempty"`
-	AgentType      *string           `json:"agent_type,omitempty"`
-	ToolName       *string           `json:"tool_name,omitempty"`
-	ToolSlug       *string           `json:"tool_slug,omitempty"`
-	MessageID      *string           `json:"message_id,omitempty"`
-	ConversationID *string           `json:"conversation_id,omitempty"`
-	WorkflowID     *string           `json:"workflow_id,omitempty"`
-	StepID         *string           `json:"step_id,omitempty"`
-	Description    *string           `json:"description,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	AgentID     *string `json:"agent_id,omitempty"`    // Which agent made the change
+	AgentName   *string `json:"agent_name,omitempty"`  // Human-readable agent name
+	ToolName    *string `json:"tool_name,omitempty"`   // Which tool was used
+	MessageID   *string `json:"message_id,omitempty"`  // Related conversation message
+	Description *string `json:"description,omitempty"` // User/agent-provided description
+}
+
+// VersionDiff represents the differences between two file history versions
+type VersionDiff struct {
+	HistoryID1 string     `json:"history_id_1"`
+	HistoryID2 string     `json:"history_id_2"`
+	FilePath   string     `json:"file_path"`
+	Additions  int        `json:"additions"`
+	Deletions  int        `json:"deletions"`
+	Changes    []DiffLine `json:"changes"`
+}
+
+// DiffLine represents a single line in a diff
+type DiffLine struct {
+	Type    string `json:"type"` // "add", "delete", "unchanged"
+	Content string `json:"content"`
+	OldLine int    `json:"old_line,omitempty"`
+	NewLine int    `json:"new_line,omitempty"`
+}
+
+// FileHistoryStats represents statistics about file history for a user
+type FileHistoryStats struct {
+	TotalEntries   int    `json:"total_entries"`
+	TotalFiles     int    `json:"total_files"`
+	TotalSizeBytes int64  `json:"total_size_bytes"`
+	OldestEntry    string `json:"oldest_entry"`
+	NewestEntry    string `json:"newest_entry"`
 }
 
 // FileHistoryRepository handles file history database operations
@@ -69,7 +89,8 @@ func (r *FileHistoryRepository) Create(userID, filePath, content, operation stri
 // ListByFilePath retrieves file history for a specific file
 func (r *FileHistoryRepository) ListByFilePath(userID, filePath string, limit int) ([]*FileHistory, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, file_path, content, operation, created_at
+		`SELECT id, user_id, file_path, content, operation, created_at,
+		        agent_id, agent_name, tool_name, message_id, description
 		 FROM file_history
 		 WHERE user_id = ? AND file_path = ?
 		 ORDER BY created_at DESC
@@ -84,7 +105,8 @@ func (r *FileHistoryRepository) ListByFilePath(userID, filePath string, limit in
 	var history []*FileHistory
 	for rows.Next() {
 		h := &FileHistory{}
-		err := rows.Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt)
+		err := rows.Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt,
+			&h.AgentID, &h.AgentName, &h.ToolName, &h.MessageID, &h.Description)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan file history: %w", err)
 		}
@@ -97,7 +119,8 @@ func (r *FileHistoryRepository) ListByFilePath(userID, filePath string, limit in
 // ListByUserID retrieves all file history entries for a user
 func (r *FileHistoryRepository) ListByUserID(userID string, limit, offset int) ([]*FileHistory, error) {
 	rows, err := r.db.Query(
-		`SELECT id, user_id, file_path, content, operation, created_at
+		`SELECT id, user_id, file_path, content, operation, created_at,
+		        agent_id, agent_name, tool_name, message_id, description
 		 FROM file_history
 		 WHERE user_id = ?
 		 ORDER BY created_at DESC
@@ -112,7 +135,8 @@ func (r *FileHistoryRepository) ListByUserID(userID string, limit, offset int) (
 	var history []*FileHistory
 	for rows.Next() {
 		h := &FileHistory{}
-		err := rows.Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt)
+		err := rows.Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt,
+			&h.AgentID, &h.AgentName, &h.ToolName, &h.MessageID, &h.Description)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan file history: %w", err)
 		}
@@ -126,10 +150,12 @@ func (r *FileHistoryRepository) ListByUserID(userID string, limit, offset int) (
 func (r *FileHistoryRepository) GetByID(id string) (*FileHistory, error) {
 	h := &FileHistory{}
 	err := r.db.QueryRow(
-		`SELECT id, user_id, file_path, content, operation, created_at
+		`SELECT id, user_id, file_path, content, operation, created_at,
+		        agent_id, agent_name, tool_name, message_id, description
 		 FROM file_history WHERE id = ?`,
 		id,
-	).Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt)
+	).Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt,
+		&h.AgentID, &h.AgentName, &h.ToolName, &h.MessageID, &h.Description)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -145,13 +171,15 @@ func (r *FileHistoryRepository) GetByID(id string) (*FileHistory, error) {
 func (r *FileHistoryRepository) GetLatestByFilePath(userID, filePath string) (*FileHistory, error) {
 	h := &FileHistory{}
 	err := r.db.QueryRow(
-		`SELECT id, user_id, file_path, content, operation, created_at
+		`SELECT id, user_id, file_path, content, operation, created_at,
+		        agent_id, agent_name, tool_name, message_id, description
 		 FROM file_history
 		 WHERE user_id = ? AND file_path = ?
 		 ORDER BY created_at DESC
 		 LIMIT 1`,
 		userID, filePath,
-	).Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt)
+	).Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt,
+		&h.AgentID, &h.AgentName, &h.ToolName, &h.MessageID, &h.Description)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -212,105 +240,64 @@ func (r *FileHistoryRepository) GetDistinctFiles(userID string) ([]string, error
 	return files, nil
 }
 
-// CreateWithAttribution creates a new file history entry with attribution information
-func (r *FileHistoryRepository) CreateWithAttribution(
-	userID, filePath, content, operation string,
-	attribution *types.AttributionContext,
-) (*FileHistory, error) {
-	id := uuid.New().String()
-	now := time.Now()
-
-	var metadataJSON *string
-	if attribution != nil && len(attribution.Metadata) > 0 {
-		data, err := json.Marshal(attribution.Metadata)
-		if err == nil {
-			s := string(data)
-			metadataJSON = &s
-		}
+// CreateWithAttribution creates a new file history entry with full attribution metadata
+func (r *FileHistoryRepository) CreateWithAttribution(entry FileHistory) error {
+	if entry.ID == "" {
+		entry.ID = uuid.New().String()
 	}
-
-	var agentID, agentName, agentType, toolName, toolSlug *string
-	var messageID, conversationID, workflowID, stepID, description *string
-
-	if attribution != nil {
-		if attribution.AgentID != "" {
-			agentID = &attribution.AgentID
-		}
-		if attribution.AgentName != "" {
-			agentName = &attribution.AgentName
-		}
-		if attribution.AgentType != "" {
-			agentType = &attribution.AgentType
-		}
-		if attribution.ToolName != "" {
-			toolName = &attribution.ToolName
-		}
-		if attribution.ToolSlug != "" {
-			toolSlug = &attribution.ToolSlug
-		}
-		if attribution.MessageID != "" {
-			messageID = &attribution.MessageID
-		}
-		if attribution.ConversationID != "" {
-			conversationID = &attribution.ConversationID
-		}
-		if attribution.WorkflowID != "" {
-			workflowID = &attribution.WorkflowID
-		}
-		if attribution.StepID != "" {
-			stepID = &attribution.StepID
-		}
-		if attribution.Description != "" {
-			description = &attribution.Description
-		}
+	if entry.CreatedAt.IsZero() {
+		entry.CreatedAt = time.Now()
 	}
 
 	_, err := r.db.Exec(
-		`INSERT INTO file_history (
-			id, user_id, file_path, content, operation, created_at,
-			agent_id, agent_name, agent_type, tool_name, tool_slug,
-			message_id, conversation_id, workflow_id, step_id, description, metadata
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, userID, filePath, content, operation, now,
-		agentID, agentName, agentType, toolName, toolSlug,
-		messageID, conversationID, workflowID, stepID, description, metadataJSON,
+		`INSERT INTO file_history (id, user_id, file_path, content, operation, created_at,
+		                           agent_id, agent_name, tool_name, message_id, description)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		entry.ID, entry.UserID, entry.FilePath, entry.Content, entry.Operation, entry.CreatedAt,
+		entry.AgentID, entry.AgentName, entry.ToolName, entry.MessageID, entry.Description,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create file history with attribution: %w", err)
+		return fmt.Errorf("failed to create file history with attribution: %w", err)
 	}
 
-	h := &FileHistory{
-		ID:             id,
-		UserID:         userID,
-		FilePath:       filePath,
-		Content:        content,
-		Operation:      operation,
-		CreatedAt:      now,
-		AgentID:        agentID,
-		AgentName:      agentName,
-		AgentType:      agentType,
-		ToolName:       toolName,
-		ToolSlug:       toolSlug,
-		MessageID:      messageID,
-		ConversationID: conversationID,
-		WorkflowID:     workflowID,
-		StepID:         stepID,
-		Description:    description,
-	}
-
-	if attribution != nil && len(attribution.Metadata) > 0 {
-		h.Metadata = attribution.Metadata
-	}
-
-	return h, nil
+	return nil
 }
 
-// ListByAgent retrieves file history for changes made by a specific agent
+// ListByTimeRange retrieves file history entries within a date range
+func (r *FileHistoryRepository) ListByTimeRange(userID string, startTime, endTime time.Time, limit, offset int) ([]*FileHistory, error) {
+	rows, err := r.db.Query(
+		`SELECT id, user_id, file_path, content, operation, created_at,
+		        agent_id, agent_name, tool_name, message_id, description
+		 FROM file_history
+		 WHERE user_id = ? AND created_at >= ? AND created_at <= ?
+		 ORDER BY created_at DESC
+		 LIMIT ? OFFSET ?`,
+		userID, startTime, endTime, limit, offset,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list file history by time range: %w", err)
+	}
+	defer rows.Close()
+
+	var history []*FileHistory
+	for rows.Next() {
+		h := &FileHistory{}
+		err := rows.Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt,
+			&h.AgentID, &h.AgentName, &h.ToolName, &h.MessageID, &h.Description)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan file history: %w", err)
+		}
+		history = append(history, h)
+	}
+
+	return history, nil
+}
+
+// ListByAgent retrieves all file history entries made by a specific agent
 func (r *FileHistoryRepository) ListByAgent(userID, agentID string, limit, offset int) ([]*FileHistory, error) {
 	rows, err := r.db.Query(
 		`SELECT id, user_id, file_path, content, operation, created_at,
-			agent_id, agent_name, agent_type, tool_name, tool_slug,
-			message_id, conversation_id, workflow_id, step_id, description, metadata
+		        agent_id, agent_name, tool_name, message_id, description
 		 FROM file_history
 		 WHERE user_id = ? AND agent_id = ?
 		 ORDER BY created_at DESC
@@ -322,258 +309,192 @@ func (r *FileHistoryRepository) ListByAgent(userID, agentID string, limit, offse
 	}
 	defer rows.Close()
 
-	return r.scanHistoryRows(rows)
-}
-
-// ListByConversation retrieves all file changes made in a specific conversation
-func (r *FileHistoryRepository) ListByConversation(userID, conversationID string) ([]*FileHistory, error) {
-	rows, err := r.db.Query(
-		`SELECT id, user_id, file_path, content, operation, created_at,
-			agent_id, agent_name, agent_type, tool_name, tool_slug,
-			message_id, conversation_id, workflow_id, step_id, description, metadata
-		 FROM file_history
-		 WHERE user_id = ? AND conversation_id = ?
-		 ORDER BY created_at DESC`,
-		userID, conversationID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list file history by conversation: %w", err)
-	}
-	defer rows.Close()
-
-	return r.scanHistoryRows(rows)
-}
-
-// ListByWorkflow retrieves all file changes made in a specific workflow
-func (r *FileHistoryRepository) ListByWorkflow(userID, workflowID string) ([]*FileHistory, error) {
-	rows, err := r.db.Query(
-		`SELECT id, user_id, file_path, content, operation, created_at,
-			agent_id, agent_name, agent_type, tool_name, tool_slug,
-			message_id, conversation_id, workflow_id, step_id, description, metadata
-		 FROM file_history
-		 WHERE user_id = ? AND workflow_id = ?
-		 ORDER BY created_at DESC`,
-		userID, workflowID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list file history by workflow: %w", err)
-	}
-	defer rows.Close()
-
-	return r.scanHistoryRows(rows)
-}
-
-// ListByTool retrieves all file changes made by a specific tool
-func (r *FileHistoryRepository) ListByTool(userID, toolName string, limit, offset int) ([]*FileHistory, error) {
-	rows, err := r.db.Query(
-		`SELECT id, user_id, file_path, content, operation, created_at,
-			agent_id, agent_name, agent_type, tool_name, tool_slug,
-			message_id, conversation_id, workflow_id, step_id, description, metadata
-		 FROM file_history
-		 WHERE user_id = ? AND tool_name = ?
-		 ORDER BY created_at DESC
-		 LIMIT ? OFFSET ?`,
-		userID, toolName, limit, offset,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list file history by tool: %w", err)
-	}
-	defer rows.Close()
-
-	return r.scanHistoryRows(rows)
-}
-
-// GetAttributionSummary returns aggregated attribution data for a user within a date range
-func (r *FileHistoryRepository) GetAttributionSummary(userID string, startDate, endDate time.Time) (*types.AttributionSummary, error) {
-	summary := types.NewAttributionSummary()
-
-	// Get total changes
-	err := r.db.QueryRow(
-		`SELECT COUNT(*) FROM file_history WHERE user_id = ? AND created_at BETWEEN ? AND ?`,
-		userID, startDate, endDate,
-	).Scan(&summary.TotalChanges)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get total changes: %w", err)
-	}
-
-	// Get changes by agent
-	rows, err := r.db.Query(
-		`SELECT COALESCE(agent_name, agent_id, 'unknown'), COUNT(*) as cnt
-		 FROM file_history
-		 WHERE user_id = ? AND created_at BETWEEN ? AND ? AND (agent_id IS NOT NULL OR agent_name IS NOT NULL)
-		 GROUP BY COALESCE(agent_name, agent_id)
-		 ORDER BY cnt DESC`,
-		userID, startDate, endDate,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get changes by agent: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var agentKey string
-		var count int
-		if err := rows.Scan(&agentKey, &count); err != nil {
-			return nil, fmt.Errorf("failed to scan agent count: %w", err)
-		}
-		summary.ByAgent[agentKey] = count
-		if summary.MostActiveAgent == "" {
-			summary.MostActiveAgent = agentKey
-		}
-	}
-
-	// Get changes by tool
-	rows, err = r.db.Query(
-		`SELECT COALESCE(tool_name, 'unknown'), COUNT(*) as cnt
-		 FROM file_history
-		 WHERE user_id = ? AND created_at BETWEEN ? AND ? AND tool_name IS NOT NULL
-		 GROUP BY tool_name
-		 ORDER BY cnt DESC`,
-		userID, startDate, endDate,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get changes by tool: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var toolKey string
-		var count int
-		if err := rows.Scan(&toolKey, &count); err != nil {
-			return nil, fmt.Errorf("failed to scan tool count: %w", err)
-		}
-		summary.ByTool[toolKey] = count
-		if summary.MostUsedTool == "" {
-			summary.MostUsedTool = toolKey
-		}
-	}
-
-	// Get changes by operation
-	rows, err = r.db.Query(
-		`SELECT operation, COUNT(*) as cnt
-		 FROM file_history
-		 WHERE user_id = ? AND created_at BETWEEN ? AND ?
-		 GROUP BY operation`,
-		userID, startDate, endDate,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get changes by operation: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var op string
-		var count int
-		if err := rows.Scan(&op, &count); err != nil {
-			return nil, fmt.Errorf("failed to scan operation count: %w", err)
-		}
-		summary.ByOperation[op] = count
-	}
-
-	// Get timeline by day
-	rows, err = r.db.Query(
-		`SELECT DATE(created_at) as day, COUNT(*) as cnt
-		 FROM file_history
-		 WHERE user_id = ? AND created_at BETWEEN ? AND ?
-		 GROUP BY DATE(created_at)
-		 ORDER BY day`,
-		userID, startDate, endDate,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get timeline: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var day string
-		var count int
-		if err := rows.Scan(&day, &count); err != nil {
-			return nil, fmt.Errorf("failed to scan timeline: %w", err)
-		}
-		summary.TimelineByDay[day] = count
-	}
-
-	return summary, nil
-}
-
-// UpdateAttribution updates attribution fields on an existing history entry
-func (r *FileHistoryRepository) UpdateAttribution(historyID string, attribution *types.AttributionContext) error {
-	if attribution == nil {
-		return nil
-	}
-
-	var metadataJSON *string
-	if len(attribution.Metadata) > 0 {
-		data, err := json.Marshal(attribution.Metadata)
-		if err == nil {
-			s := string(data)
-			metadataJSON = &s
-		}
-	}
-
-	_, err := r.db.Exec(
-		`UPDATE file_history SET
-			agent_id = COALESCE(?, agent_id),
-			agent_name = COALESCE(?, agent_name),
-			agent_type = COALESCE(?, agent_type),
-			tool_name = COALESCE(?, tool_name),
-			tool_slug = COALESCE(?, tool_slug),
-			message_id = COALESCE(?, message_id),
-			conversation_id = COALESCE(?, conversation_id),
-			workflow_id = COALESCE(?, workflow_id),
-			step_id = COALESCE(?, step_id),
-			description = COALESCE(?, description),
-			metadata = COALESCE(?, metadata)
-		 WHERE id = ?`,
-		nullIfEmpty(attribution.AgentID),
-		nullIfEmpty(attribution.AgentName),
-		nullIfEmpty(attribution.AgentType),
-		nullIfEmpty(attribution.ToolName),
-		nullIfEmpty(attribution.ToolSlug),
-		nullIfEmpty(attribution.MessageID),
-		nullIfEmpty(attribution.ConversationID),
-		nullIfEmpty(attribution.WorkflowID),
-		nullIfEmpty(attribution.StepID),
-		nullIfEmpty(attribution.Description),
-		metadataJSON,
-		historyID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to update attribution: %w", err)
-	}
-
-	return nil
-}
-
-// scanHistoryRows scans rows into FileHistory structs with attribution fields
-func (r *FileHistoryRepository) scanHistoryRows(rows *sql.Rows) ([]*FileHistory, error) {
 	var history []*FileHistory
 	for rows.Next() {
 		h := &FileHistory{}
-		var metadataJSON sql.NullString
-		err := rows.Scan(
-			&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt,
-			&h.AgentID, &h.AgentName, &h.AgentType, &h.ToolName, &h.ToolSlug,
-			&h.MessageID, &h.ConversationID, &h.WorkflowID, &h.StepID, &h.Description,
-			&metadataJSON,
-		)
+		err := rows.Scan(&h.ID, &h.UserID, &h.FilePath, &h.Content, &h.Operation, &h.CreatedAt,
+			&h.AgentID, &h.AgentName, &h.ToolName, &h.MessageID, &h.Description)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan file history: %w", err)
 		}
-
-		if metadataJSON.Valid && metadataJSON.String != "" {
-			_ = json.Unmarshal([]byte(metadataJSON.String), &h.Metadata)
-		}
-
 		history = append(history, h)
 	}
+
 	return history, nil
 }
 
-// nullIfEmpty returns nil if the string is empty, otherwise returns a pointer to the string
-func nullIfEmpty(s string) *string {
-	if s == "" {
-		return nil
+// GetStats returns statistics about file history for a user
+func (r *FileHistoryRepository) GetStats(userID string) (*FileHistoryStats, error) {
+	stats := &FileHistoryStats{}
+
+	// Get total entries and total size
+	err := r.db.QueryRow(
+		`SELECT COUNT(*), COALESCE(SUM(LENGTH(content)), 0) FROM file_history WHERE user_id = ?`,
+		userID,
+	).Scan(&stats.TotalEntries, &stats.TotalSizeBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file history stats: %w", err)
 	}
-	return &s
+
+	// Get distinct files count
+	err = r.db.QueryRow(
+		`SELECT COUNT(DISTINCT file_path) FROM file_history WHERE user_id = ?`,
+		userID,
+	).Scan(&stats.TotalFiles)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get distinct files count: %w", err)
+	}
+
+	// Get oldest entry timestamp (as string for SQLite compatibility)
+	var oldestTimeStr sql.NullString
+	err = r.db.QueryRow(
+		`SELECT MIN(created_at) FROM file_history WHERE user_id = ?`,
+		userID,
+	).Scan(&oldestTimeStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get oldest entry: %w", err)
+	}
+	if oldestTimeStr.Valid && oldestTimeStr.String != "" {
+		if t, parseErr := time.Parse("2006-01-02 15:04:05.999999999-07:00", oldestTimeStr.String); parseErr == nil {
+			stats.OldestEntry = t.Format(time.RFC3339)
+		} else if t, parseErr := time.Parse("2006-01-02T15:04:05Z", oldestTimeStr.String); parseErr == nil {
+			stats.OldestEntry = t.Format(time.RFC3339)
+		} else if t, parseErr := time.Parse(time.RFC3339, oldestTimeStr.String); parseErr == nil {
+			stats.OldestEntry = t.Format(time.RFC3339)
+		} else {
+			stats.OldestEntry = oldestTimeStr.String
+		}
+	}
+
+	// Get newest entry timestamp (as string for SQLite compatibility)
+	var newestTimeStr sql.NullString
+	err = r.db.QueryRow(
+		`SELECT MAX(created_at) FROM file_history WHERE user_id = ?`,
+		userID,
+	).Scan(&newestTimeStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get newest entry: %w", err)
+	}
+	if newestTimeStr.Valid && newestTimeStr.String != "" {
+		if t, parseErr := time.Parse("2006-01-02 15:04:05.999999999-07:00", newestTimeStr.String); parseErr == nil {
+			stats.NewestEntry = t.Format(time.RFC3339)
+		} else if t, parseErr := time.Parse("2006-01-02T15:04:05Z", newestTimeStr.String); parseErr == nil {
+			stats.NewestEntry = t.Format(time.RFC3339)
+		} else if t, parseErr := time.Parse(time.RFC3339, newestTimeStr.String); parseErr == nil {
+			stats.NewestEntry = t.Format(time.RFC3339)
+		} else {
+			stats.NewestEntry = newestTimeStr.String
+		}
+	}
+
+	return stats, nil
+}
+
+// GetVersionDiff compares two history versions and returns the differences
+func (r *FileHistoryRepository) GetVersionDiff(userID, historyID1, historyID2 string) (*VersionDiff, error) {
+	// Get the first history entry
+	h1, err := r.GetByID(historyID1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get history 1: %w", err)
+	}
+	if h1 == nil {
+		return nil, fmt.Errorf("history entry 1 not found")
+	}
+	if h1.UserID != userID {
+		return nil, fmt.Errorf("history entry 1 not found")
+	}
+
+	// Get the second history entry
+	h2, err := r.GetByID(historyID2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get history 2: %w", err)
+	}
+	if h2 == nil {
+		return nil, fmt.Errorf("history entry 2 not found")
+	}
+	if h2.UserID != userID {
+		return nil, fmt.Errorf("history entry 2 not found")
+	}
+
+	// Compute the diff
+	diff := computeDiff(h1.Content, h2.Content)
+	diff.HistoryID1 = historyID1
+	diff.HistoryID2 = historyID2
+	diff.FilePath = h1.FilePath
+
+	return diff, nil
+}
+
+// computeDiff computes a simple line-by-line diff between two strings
+func computeDiff(content1, content2 string) *VersionDiff {
+	lines1 := strings.Split(content1, "\n")
+	lines2 := strings.Split(content2, "\n")
+
+	diff := &VersionDiff{
+		Changes: make([]DiffLine, 0),
+	}
+
+	// Simple LCS-based diff algorithm
+	m, n := len(lines1), len(lines2)
+
+	// Create LCS matrix
+	lcs := make([][]int, m+1)
+	for i := range lcs {
+		lcs[i] = make([]int, n+1)
+	}
+
+	// Fill LCS matrix
+	for i := 1; i <= m; i++ {
+		for j := 1; j <= n; j++ {
+			if lines1[i-1] == lines2[j-1] {
+				lcs[i][j] = lcs[i-1][j-1] + 1
+			} else {
+				if lcs[i-1][j] > lcs[i][j-1] {
+					lcs[i][j] = lcs[i-1][j]
+				} else {
+					lcs[i][j] = lcs[i][j-1]
+				}
+			}
+		}
+	}
+
+	// Backtrack to find the diff
+	i, j := m, n
+	var changes []DiffLine
+
+	for i > 0 || j > 0 {
+		if i > 0 && j > 0 && lines1[i-1] == lines2[j-1] {
+			changes = append(changes, DiffLine{
+				Type:    "unchanged",
+				Content: lines1[i-1],
+				OldLine: i,
+				NewLine: j,
+			})
+			i--
+			j--
+		} else if j > 0 && (i == 0 || lcs[i][j-1] >= lcs[i-1][j]) {
+			changes = append(changes, DiffLine{
+				Type:    "add",
+				Content: lines2[j-1],
+				NewLine: j,
+			})
+			diff.Additions++
+			j--
+		} else if i > 0 {
+			changes = append(changes, DiffLine{
+				Type:    "delete",
+				Content: lines1[i-1],
+				OldLine: i,
+			})
+			diff.Deletions++
+			i--
+		}
+	}
+
+	// Reverse the changes to get them in order
+	for k := len(changes) - 1; k >= 0; k-- {
+		diff.Changes = append(diff.Changes, changes[k])
+	}
+
+	return diff
 }

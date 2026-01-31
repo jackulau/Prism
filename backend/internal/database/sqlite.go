@@ -299,6 +299,13 @@ func (db *DB) Migrate() error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// Add attribution fields to file_history table
+		`ALTER TABLE file_history ADD COLUMN agent_id TEXT`,
+		`ALTER TABLE file_history ADD COLUMN agent_name TEXT`,
+		`ALTER TABLE file_history ADD COLUMN tool_name TEXT`,
+		`ALTER TABLE file_history ADD COLUMN message_id TEXT`,
+		`ALTER TABLE file_history ADD COLUMN description TEXT`,
+
 		// User workspaces for persistent project directory storage
 		`CREATE TABLE IF NOT EXISTS user_workspaces (
 			id TEXT PRIMARY KEY,
@@ -548,6 +555,9 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_tools_provider ON tools(provider_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_user_id ON file_history(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_file_history_file_path ON file_history(user_id, file_path)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_history_agent ON file_history(agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_history_message ON file_history(message_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_file_history_created_at ON file_history(user_id, created_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_user_id ON user_workspaces(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_workspaces_current ON user_workspaces(user_id, is_current)`,
 		`CREATE INDEX IF NOT EXISTS idx_workspace_todos_user_workspace ON workspace_todos(user_id, workspace_path)`,
