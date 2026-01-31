@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { useAppStore } from '../store';
 import { apiService } from '../services/api';
-import { Github, Key, Bell, Server, CheckCircle, XCircle, ExternalLink, X, Palette, Check, Cpu, Wifi, Plus, Loader2, AlertCircle } from 'lucide-react';
+import { Github, Key, Bell, Server, CheckCircle, XCircle, ExternalLink, X, Palette, Check, Cpu, Wifi, Plus, Loader2, AlertCircle, KeyRound } from 'lucide-react';
 import { themes, type ThemeConfig } from '../config/themes';
 import { RemoteAccessSettings } from '../components/settings/RemoteAccessSettings';
 import { ConnectionInfo } from '../components/settings/ConnectionInfo';
 import { RemoteSessions } from '../components/settings/RemoteSessions';
 import { MCPServerCard } from '../components/settings/MCPServerCard';
 import { useMCPServerStore, type MCPServer } from '../store/mcpServerStore';
+import { APIKeysSettings } from '../components/settings/APIKeysSettings';
 
 interface GitHubStatus {
   connected: boolean;
@@ -264,6 +265,20 @@ export function SettingsPage() {
               </p>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* API Keys */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <KeyRound className="w-5 h-5" />
+          <h2 className="text-xl font-semibold">API Keys</h2>
+        </div>
+        <div className="bg-editor-surface border border-editor-border rounded-lg p-4">
+          <p className="text-editor-muted text-sm mb-4">
+            Manage your personal API keys for programmatic access to Prism.
+          </p>
+          <APIKeysSettings />
         </div>
       </section>
 
