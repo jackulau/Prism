@@ -17,6 +17,9 @@ import Workspace from '../pages/Workspace';
 import Onboarding from '../pages/Onboarding';
 import Activity from '../pages/Activity';
 import Approvals from '../pages/Approvals';
+import AuditLogs from '../pages/settings/AuditLogs';
+import DataExport from '../pages/settings/DataExport';
+import ComplianceReports from '../pages/settings/ComplianceReports';
 
 export const router = createBrowserRouter([
   {
@@ -94,6 +97,18 @@ export const router = createBrowserRouter([
       {
         path: 'activity',
         element: <Activity />,
+      },
+      {
+        path: 'settings/audit-logs',
+        element: <AuditLogs />,
+      },
+      {
+        path: 'settings/data-export',
+        element: <DataExport />,
+      },
+      {
+        path: 'settings/compliance',
+        element: <ComplianceReports />,
       },
     ],
   },

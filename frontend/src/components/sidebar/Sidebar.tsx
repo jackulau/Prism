@@ -11,6 +11,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Plus,
   Github,
   Trash2,
@@ -20,6 +21,9 @@ import {
   CheckSquare,
   Wrench,
   Bell,
+  FileText,
+  Download,
+  Shield,
   type LucideIcon
 } from 'lucide-react';
 import { useAppStore } from '../../store';
@@ -35,6 +39,7 @@ interface NavItem {
   icon: LucideIcon;
   label: string;
   path: string;
+  children?: NavItem[];
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -54,7 +59,16 @@ const NAV_ITEMS: NavItem[] = [
   { icon: BarChart3, label: 'Usage', path: '/usage' },
   { icon: Building, label: 'Organization', path: '/organization' },
   { icon: Users, label: 'Teams', path: '/teams' },
-  { icon: Settings, label: 'Settings', path: '/settings' },
+  {
+    icon: Settings,
+    label: 'Settings',
+    path: '/settings',
+    children: [
+      { icon: FileText, label: 'Audit Logs', path: '/settings/audit-logs' },
+      { icon: Download, label: 'Data Export', path: '/settings/data-export' },
+      { icon: Shield, label: 'Compliance', path: '/settings/compliance' },
+    ],
+  },
 ];
 
 export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
@@ -74,6 +88,20 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
   } = useAppStore();
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+
+  // Auto-expand Settings when on a settings sub-page
+  useEffect(() => {
+    if (location.pathname.startsWith('/settings/')) {
+      setExpandedItems((prev) => (prev.includes('/settings') ? prev : [...prev, '/settings']));
+    }
+  }, [location.pathname]);
+
+  const toggleExpanded = (path: string) => {
+    setExpandedItems((prev) =>
+      prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]
+    );
+  };
 
   // Load conversations on mount
   useEffect(() => {
@@ -145,14 +173,39 @@ export function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
         {/* Main Navigation */}
         <div className="space-y-1">
           {NAV_ITEMS.map((item) => (
-            <NavItemButton
-              key={item.path}
-              icon={item.icon}
-              label={item.label}
-              isCollapsed={isCollapsed}
-              active={isActivePath(item.path)}
-              onClick={() => navigate(item.path)}
-            />
+            <div key={item.path}>
+              <NavItemButton
+                icon={item.icon}
+                label={item.label}
+                isCollapsed={isCollapsed}
+                active={isActivePath(item.path) && !item.children}
+                hasChildren={!!item.children}
+                isExpanded={expandedItems.includes(item.path)}
+                onClick={() => {
+                  if (item.children && !isCollapsed) {
+                    toggleExpanded(item.path);
+                  } else {
+                    navigate(item.path);
+                  }
+                }}
+              />
+              {/* Child items */}
+              {item.children && !isCollapsed && expandedItems.includes(item.path) && (
+                <div className="ml-4 mt-1 space-y-1 border-l border-editor-border pl-2">
+                  {item.children.map((child) => (
+                    <NavItemButton
+                      key={child.path}
+                      icon={child.icon}
+                      label={child.label}
+                      isCollapsed={false}
+                      active={location.pathname === child.path}
+                      onClick={() => navigate(child.path)}
+                      isChild
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
 
@@ -256,10 +309,22 @@ interface NavItemButtonProps {
   label: string;
   isCollapsed: boolean;
   active?: boolean;
+  hasChildren?: boolean;
+  isExpanded?: boolean;
+  isChild?: boolean;
   onClick?: () => void;
 }
 
-function NavItemButton({ icon: Icon, label, isCollapsed, active, onClick }: NavItemButtonProps) {
+function NavItemButton({
+  icon: Icon,
+  label,
+  isCollapsed,
+  active,
+  hasChildren,
+  isExpanded,
+  isChild,
+  onClick,
+}: NavItemButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -267,11 +332,23 @@ function NavItemButton({ icon: Icon, label, isCollapsed, active, onClick }: NavI
         active
           ? 'bg-editor-accent/10 text-editor-accent'
           : 'text-editor-muted hover:text-editor-text hover:bg-sidebar-hover'
-      } ${isCollapsed ? 'justify-center' : ''}`}
+      } ${isCollapsed ? 'justify-center' : ''} ${isChild ? 'py-1.5' : ''}`}
       title={isCollapsed ? label : undefined}
     >
-      <Icon size={18} />
-      {!isCollapsed && <span className="text-sm font-medium">{label}</span>}
+      <Icon size={isChild ? 14 : 18} />
+      {!isCollapsed && (
+        <>
+          <span className={`flex-1 text-left ${isChild ? 'text-xs' : 'text-sm'} font-medium`}>
+            {label}
+          </span>
+          {hasChildren && (
+            <ChevronDown
+              size={14}
+              className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            />
+          )}
+        </>
+      )}
     </button>
   );
 }
