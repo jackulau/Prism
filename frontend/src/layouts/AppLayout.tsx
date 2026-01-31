@@ -16,6 +16,80 @@ import { useShortcutsStore } from '../store/shortcutsStore';
 import { useCommandPaletteStore } from '../store/commandPaletteStore';
 import { applyTheme } from '../config/themes';
 import { useWorkspaceShortcuts } from '../hooks/useWorkspaceShortcuts';
+import { useIdleDetection } from '../hooks/useIdleDetection';
+import { useSessionStore } from '../store/sessionStore';
+import { IdleWarningModal } from '../components/IdleWarningModal';
+import { logoutUser, useAuthStore } from '../store/authStore';
+
+// Session timeout configuration
+// 25 minutes idle before warning (matching backend's 30 min timeout minus 5 min warning)
+const IDLE_TIMEOUT_MS = 25 * 60 * 1000;
+// 5 minute warning before actual logout
+const WARNING_DURATION_MS = 5 * 60 * 1000;
+
+function IdleDetectionWrapper({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuthStore();
+  const {
+    idleWarningVisible,
+    idleCountdown,
+    showIdleWarning,
+    hideIdleWarning,
+    updateIdleCountdown,
+    extendSession,
+  } = useSessionStore();
+
+  const handleIdle = useCallback(async () => {
+    // User has been idle past the warning period, log them out
+    await logoutUser();
+    navigate('/login');
+  }, [navigate]);
+
+  const handleWarning = useCallback(() => {
+    showIdleWarning(Math.ceil(WARNING_DURATION_MS / 1000));
+  }, [showIdleWarning]);
+
+  const handleActive = useCallback(() => {
+    hideIdleWarning();
+  }, [hideIdleWarning]);
+
+  const { remainingTime, resetIdleTimer } = useIdleDetection({
+    idleTimeout: IDLE_TIMEOUT_MS,
+    warningDuration: WARNING_DURATION_MS,
+    onIdle: handleIdle,
+    onWarning: handleWarning,
+    onActive: handleActive,
+    enabled: isAuthenticated,
+  });
+
+  // Update countdown in store when it changes
+  useEffect(() => {
+    updateIdleCountdown(remainingTime);
+  }, [remainingTime, updateIdleCountdown]);
+
+  const handleStayLoggedIn = useCallback(async () => {
+    resetIdleTimer();
+    await extendSession();
+  }, [resetIdleTimer, extendSession]);
+
+  const handleLogoutNow = useCallback(async () => {
+    await logoutUser();
+    navigate('/login');
+  }, [navigate]);
+
+  return (
+    <>
+      {children}
+      {idleWarningVisible && (
+        <IdleWarningModal
+          remainingTime={idleCountdown}
+          onStayLoggedIn={handleStayLoggedIn}
+          onLogout={handleLogoutNow}
+        />
+      )}
+    </>
+  );
+}
 
 export function AppLayout() {
   const navigate = useNavigate();
@@ -78,45 +152,47 @@ export function AppLayout() {
   return (
     <TRPCProvider>
       <AuthGuard fallback={<AuthPage />}>
-        <div className="h-screen w-screen flex bg-editor-bg text-editor-text overflow-hidden">
-          {/* Sidebar */}
-          <Sidebar
-            isCollapsed={isSidebarCollapsed}
-            onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
+        <IdleDetectionWrapper>
+          <div className="h-screen w-screen flex bg-editor-bg text-editor-text overflow-hidden">
+            {/* Sidebar */}
+            <Sidebar
+              isCollapsed={isSidebarCollapsed}
+              onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            />
 
-          {/* Main Content Area */}
-          <main className="flex-1 flex flex-col overflow-hidden">
-            {/* Top Bar with Team Selector */}
-            <div className="flex items-center justify-between px-4 py-2 border-b border-editor-border bg-editor-surface/50">
-              <TeamSelector />
-              <div className="flex items-center gap-2">
-                {/* Additional header actions can go here */}
+            {/* Main Content Area */}
+            <main className="flex-1 flex flex-col overflow-hidden">
+              {/* Top Bar with Team Selector */}
+              <div className="flex items-center justify-between px-4 py-2 border-b border-editor-border bg-editor-surface/50">
+                <TeamSelector />
+                <div className="flex items-center gap-2">
+                  {/* Additional header actions can go here */}
+                </div>
               </div>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <Outlet />
-            </div>
-          </main>
+              <div className="flex-1 overflow-hidden">
+                <Outlet />
+              </div>
+            </main>
 
-          {/* Settings Panel (slide-out) */}
-          <SettingsPanel />
+            {/* Settings Panel (slide-out) */}
+            <SettingsPanel />
 
-          {/* Keyboard Shortcuts Help Modal */}
-          <KeyboardShortcutsHelp />
+            {/* Keyboard Shortcuts Help Modal */}
+            <KeyboardShortcutsHelp />
 
-          {/* Toast Notifications */}
-          <ToastContainer />
+            {/* Toast Notifications */}
+            <ToastContainer />
 
-          {/* Command Palette */}
-          <CommandPalette />
+            {/* Command Palette */}
+            <CommandPalette />
 
-          {/* Emergency Stop Button (floating) */}
-          <FloatingEmergencyStop />
+            {/* Emergency Stop Button (floating) */}
+            <FloatingEmergencyStop />
 
-          {/* Notification Toasts */}
-          <NotificationToastContainer />
-        </div>
+            {/* Notification Toasts */}
+            <NotificationToastContainer />
+          </div>
+        </IdleDetectionWrapper>
       </AuthGuard>
     </TRPCProvider>
   );

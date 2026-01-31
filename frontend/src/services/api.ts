@@ -980,6 +980,46 @@ class ApiService {
       body: JSON.stringify({ session_token: sessionToken, code }),
     });
   }
+
+  // Session Management
+  async listSessions() {
+    return this.request<{
+      sessions: Array<{
+        id: string;
+        user_id: string;
+        device_name: string;
+        ip_address: string;
+        user_agent: string;
+        last_activity_at: string;
+        created_at: string;
+        is_current: boolean;
+      }>;
+    }>('/auth/sessions');
+  }
+
+  async terminateSession(sessionId: string) {
+    return this.request<{ message: string }>(`/auth/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async terminateOtherSessions() {
+    return this.request<{ message: string; terminated_count: number }>('/auth/sessions/others', {
+      method: 'DELETE',
+    });
+  }
+
+  async terminateAllSessions() {
+    return this.request<{ message: string; terminated_count: number }>('/auth/sessions/all', {
+      method: 'DELETE',
+    });
+  }
+
+  async extendSession() {
+    return this.request<{ message: string; expires_at: string }>('/auth/sessions/extend', {
+      method: 'POST',
+    });
+  }
 }
 
 export const apiService = new ApiService();
