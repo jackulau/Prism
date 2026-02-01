@@ -167,7 +167,7 @@ export function useActiveAgents(options: UseAgentStatusOptions = {}) {
     setAgents(
       message.agents.map((agent) => ({
         id: agent.id,
-        name: agent.config.name,
+        name: agent.config.name || 'Unnamed Agent',
         model: agent.config.model,
         provider: agent.config.provider,
         status: agent.status,

@@ -297,11 +297,11 @@ export function ExecutionMonitor({ onStepClick, className = '' }: ExecutionMonit
         ) : (
           <div className="space-y-1">
             {steps.map((step) => (
-              <div key={step.stepId} data-active={step.status === 'running'}>
+              <div key={step.stepId || step.step_id} data-active={step.status === 'running'}>
                 <StepItem
                   step={step}
                   isActive={step.status === 'running'}
-                  onClick={() => onStepClick?.(step.stepId)}
+                  onClick={() => step.stepId && onStepClick?.(step.stepId)}
                 />
               </div>
             ))}

@@ -24,8 +24,9 @@ function formatDuration(ms: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
-function formatTimestamp(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString('en-US', {
+function formatTimestamp(timestamp: number | string): string {
+  const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp);
+  return date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',

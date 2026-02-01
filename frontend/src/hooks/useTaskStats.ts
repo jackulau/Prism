@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiService } from '../services/api';
-import type { TaskStats } from '../types/tasks';
+import type { TaskStats } from './useTasks';
 
 interface UseTaskStatsOptions {
   /** Enable polling for live updates (default: false) */
@@ -62,7 +62,7 @@ export function useTaskStats(options: UseTaskStatsOptions = {}): UseTaskStatsRes
         setError(response.error);
         setStats(null);
       } else if (response.data) {
-        setStats(response.data.stats);
+        setStats(response.data);
         setError(null);
       }
     } catch (err) {

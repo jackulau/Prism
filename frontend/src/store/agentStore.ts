@@ -5,11 +5,10 @@ import type {
   AgentExecutionState,
   AgentToolCall,
   AgentResult,
-  AgentExecution,
 } from '../types/agent';
 
 // Re-export types for convenience
-export type { AgentExecutionStatus, AgentExecution } from '../types/agent';
+export type { AgentExecutionStatus } from '../types/agent';
 
 interface AgentStoreState {
   // Current agent execution state

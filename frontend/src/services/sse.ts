@@ -566,15 +566,17 @@ export class SSEService {
     const existingSwarm = progressStore.getSwarmProgress(data.swarm_id);
     if (!existingSwarm) {
       // Create swarm with known agent IDs
-      const agentIds = Object.keys(data.agent_progress);
+      const agentIds = data.agent_progress ? Object.keys(data.agent_progress) : [];
       progressStore.startSwarm(data.swarm_id, agentIds);
     }
 
     // Update individual agent progress from swarm data
-    for (const [agentId, percent] of Object.entries(data.agent_progress)) {
-      const agent = progressStore.getAgentProgress(agentId);
-      if (agent) {
-        progressStore.updateProgress(agentId, { percentComplete: percent });
+    if (data.agent_progress) {
+      for (const [agentId, percent] of Object.entries(data.agent_progress)) {
+        const agent = progressStore.getAgentProgress(agentId);
+        if (agent) {
+          progressStore.updateProgress(agentId, { percentComplete: percent });
+        }
       }
     }
 

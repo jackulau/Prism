@@ -7,7 +7,7 @@ import {
   StopCircle,
 } from 'lucide-react'
 
-export type AgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type AgentStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 interface AgentStatusBadgeProps {
   status: AgentStatus
@@ -21,6 +21,12 @@ const statusConfig: Record<AgentStatus, {
   spin: boolean
   label: string
 }> = {
+  idle: {
+    color: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+    icon: Clock,
+    spin: false,
+    label: 'Idle',
+  },
   pending: {
     color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
     icon: Clock,

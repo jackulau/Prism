@@ -28,7 +28,8 @@ export function ToolStepConfig({ nodeId }: ToolStepConfigProps) {
   const [jsonValue, setJsonValue] = useState('');
 
   const node = getSelectedNode();
-  const config = node?.data.config.toolConfig;
+  const nodeData = node?.data as { config?: { toolConfig?: ToolConfig } } | undefined;
+  const config = nodeData?.config?.toolConfig || node?.config?.toolConfig;
 
   if (!node || !config) return null;
 

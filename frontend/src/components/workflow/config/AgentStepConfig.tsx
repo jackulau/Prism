@@ -15,7 +15,8 @@ export function AgentStepConfig({ nodeId }: AgentStepConfigProps) {
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
   const node = getSelectedNode();
-  const config = node?.data.config.agentConfig;
+  const nodeData = node?.data as { config?: { agentConfig?: AgentConfig } } | undefined;
+  const config = nodeData?.config?.agentConfig || node?.config?.agentConfig;
 
   // Load providers on mount
   useEffect(() => {

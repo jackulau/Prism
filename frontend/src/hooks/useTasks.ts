@@ -88,7 +88,8 @@ export function useTasks(filters: TaskFiltersState = {}) {
         filteredTasks = filteredTasks.filter((task) => task.created_at <= toDate);
       }
 
-      setTasks(filteredTasks);
+      // Cast tasks to ensure status is TaskStatus
+      setTasks(filteredTasks as Task[]);
       setPagination((prev) => ({
         ...prev,
         total: response.data?.total ?? 0,

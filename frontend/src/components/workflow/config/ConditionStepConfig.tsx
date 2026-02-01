@@ -14,7 +14,8 @@ export function ConditionStepConfig({ nodeId }: ConditionStepConfigProps) {
   const [showRawExpression, setShowRawExpression] = useState(false);
 
   const node = getSelectedNode();
-  const config = node?.data.config.conditionConfig;
+  const nodeData = node?.data as { config?: { conditionConfig?: ConditionConfig } } | undefined;
+  const config = nodeData?.config?.conditionConfig || node?.config?.conditionConfig;
 
   if (!node || !config) return null;
 
@@ -65,7 +66,7 @@ export function ConditionStepConfig({ nodeId }: ConditionStepConfigProps) {
   // Get available steps for branch selection (excluding current node)
   const availableSteps = nodes
     .filter((n) => n.id !== nodeId)
-    .map((n) => ({ id: n.id, name: n.data.name }));
+    .map((n) => ({ id: n.id, name: n.name || (n.data as Record<string, unknown>)?.name as string || n.id }));
 
   return (
     <div className="space-y-4">

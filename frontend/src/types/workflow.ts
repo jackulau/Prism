@@ -12,22 +12,27 @@ export type WaitType = 'user_input' | 'webhook' | 'timeout';
 // Condition operators for condition step configuration
 export type ConditionOperator = 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'greater_than_or_equal' | 'less_than_or_equal' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'matches' | 'exists' | 'not_exists' | 'is_empty' | 'is_not_empty';
 
-export const CONDITION_OPERATORS: ConditionOperator[] = [
-  'equals',
-  'not_equals',
-  'greater_than',
-  'less_than',
-  'greater_than_or_equal',
-  'less_than_or_equal',
-  'contains',
-  'not_contains',
-  'starts_with',
-  'ends_with',
-  'matches',
-  'exists',
-  'not_exists',
-  'is_empty',
-  'is_not_empty',
+export interface ConditionOperatorOption {
+  value: ConditionOperator;
+  label: string;
+}
+
+export const CONDITION_OPERATORS: ConditionOperatorOption[] = [
+  { value: 'equals', label: 'equals' },
+  { value: 'not_equals', label: 'not equals' },
+  { value: 'greater_than', label: 'greater than' },
+  { value: 'less_than', label: 'less than' },
+  { value: 'greater_than_or_equal', label: 'greater than or equal' },
+  { value: 'less_than_or_equal', label: 'less than or equal' },
+  { value: 'contains', label: 'contains' },
+  { value: 'not_contains', label: 'not contains' },
+  { value: 'starts_with', label: 'starts with' },
+  { value: 'ends_with', label: 'ends with' },
+  { value: 'matches', label: 'matches' },
+  { value: 'exists', label: 'exists' },
+  { value: 'not_exists', label: 'not exists' },
+  { value: 'is_empty', label: 'is empty' },
+  { value: 'is_not_empty', label: 'is not empty' },
 ];
 
 // State variable type for workflow state

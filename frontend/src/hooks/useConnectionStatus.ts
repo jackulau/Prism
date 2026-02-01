@@ -11,12 +11,11 @@ export function useConnectionStatus() {
     if (connectionStatus === 'connected') {
       setLastConnectedAt(new Date());
       setReconnectAttempts(0);
+    } else if (connectionStatus === 'connecting') {
+      // Increment reconnect attempts when trying to reconnect
+      setReconnectAttempts((prev) => prev + 1);
     }
   }, [connectionStatus]);
-
-  useEffect(() => {
-    return wsService.onReconnectAttempt(setReconnectAttempts);
-  }, []);
 
   const reconnect = useCallback(() => {
     wsService.manualReconnect();

@@ -141,7 +141,7 @@ export function ConfigPanel() {
               </label>
               <input
                 type="text"
-                value={selectedNode.data.name}
+                value={selectedNode.name || (selectedNode.data as Record<string, unknown>)?.name as string || ''}
                 onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="Enter step name..."
                 className="w-full px-3 py-2 bg-editor-surface border border-editor-border rounded-lg text-editor-text placeholder-editor-muted focus:outline-none focus:border-editor-accent"
@@ -155,7 +155,7 @@ export function ConfigPanel() {
                 <span className="text-editor-muted font-normal ml-1">(optional)</span>
               </label>
               <textarea
-                value={selectedNode.data.description || ''}
+                value={selectedNode.description || (selectedNode.data as Record<string, unknown>)?.description as string || ''}
                 onChange={(e) => handleDescriptionChange(e.target.value)}
                 placeholder="Describe what this step does..."
                 rows={2}

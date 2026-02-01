@@ -25,7 +25,8 @@ export function ParallelStepConfig({ nodeId }: ParallelStepConfigProps) {
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
 
   const node = getSelectedNode();
-  const config = node?.data.config.parallelConfig;
+  const nodeData = node?.data as { config?: { parallelConfig?: ParallelConfig } } | undefined;
+  const config = nodeData?.config?.parallelConfig || node?.config?.parallelConfig;
 
   if (!node || !config) return null;
 

@@ -635,30 +635,32 @@ export type WorkflowExecutionStatus = 'idle' | 'pending' | 'running' | 'complete
 export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'retrying';
 
 export interface WorkflowStepResult {
-  step_id: string;
+  step_id?: string;
   stepId?: string;
   stepName?: string;
   stepType?: string;
   status: WorkflowStepStatus;
   output?: unknown;
   error?: string;
-  started_at?: string;
-  startedAt?: string;
-  completed_at?: string;
-  completedAt?: string;
+  started_at?: string | number;
+  startedAt?: string | number;
+  completed_at?: string | number;
+  completedAt?: string | number;
   duration?: number;
   retryCount?: number;
 }
 
 export interface WorkflowInfo {
   id: string;
-  name: string;
+  name?: string;
   description?: string;
-  steps: WorkflowStepInfo[];
+  steps?: WorkflowStepInfo[];
   totalSteps?: number;
+  currentStep?: number;
   status?: WorkflowExecutionStatus;
-  created_at: string;
-  updated_at: string;
+  startedAt?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type WorkflowMessageType =
@@ -683,12 +685,20 @@ export interface WorkflowWSMessage {
   workflow_id: string;
   step_id?: string;
   step_name?: string;
+  step_type?: string;
   status?: WorkflowExecutionStatus | WorkflowStepStatus;
   progress?: number;
   message?: string;
   output?: unknown;
   error?: string;
   timestamp?: string;
+  // Additional fields for workflow execution
+  workflow_info?: WorkflowInfo;
+  current_step?: number;
+  total_steps?: number;
+  state?: Record<string, unknown>;
+  result?: unknown;
+  duration?: number;
 }
 
 export interface WorkflowStepInfo {

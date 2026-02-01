@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Variable, ChevronDown, Copy, Check } from 'lucide-react';
 import { useWorkflowStore } from '../../../store/workflowStore';
-import type { StateVariable } from '../../../types/workflow';
 
 interface StateVariablePickerProps {
   nodeId: string;
@@ -15,7 +14,9 @@ export function StateVariablePicker({ nodeId, onInsert, className = '' }: StateV
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { getAvailableStateVariables } = useWorkflowStore();
 
-  const variables = getAvailableStateVariables(nodeId);
+  // nodeId is available for future filtering by upstream nodes
+  void nodeId;
+  const variables = getAvailableStateVariables();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -28,14 +29,14 @@ export function StateVariablePicker({ nodeId, onInsert, className = '' }: StateV
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleInsert = (variable: StateVariable) => {
-    const template = `{{state.${variable.key}}}`;
+  const handleInsert = (variable: { name: string; type: string; sourceStepId?: string }) => {
+    const template = `{{state.${variable.name}}}`;
     onInsert(template);
-    setCopiedKey(variable.key);
+    setCopiedKey(variable.name);
     setTimeout(() => setCopiedKey(null), 1500);
   };
 
-  const getTypeColor = (type: StateVariable['type']) => {
+  const getTypeColor = (type: string) => {
     switch (type) {
       case 'string':
         return 'text-green-400';
@@ -84,19 +85,19 @@ export function StateVariablePicker({ nodeId, onInsert, className = '' }: StateV
             </div>
             {variables.map((variable) => (
               <button
-                key={variable.key}
+                key={variable.name}
                 onClick={() => handleInsert(variable)}
                 className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-editor-surface text-left transition-colors group"
               >
                 <code className="flex-1 text-sm font-mono text-editor-text">
                   <span className="text-editor-muted">{'{{state.'}</span>
-                  <span className="text-editor-accent">{variable.key}</span>
+                  <span className="text-editor-accent">{variable.name}</span>
                   <span className="text-editor-muted">{'}}'}</span>
                 </code>
                 <span className={`text-xs ${getTypeColor(variable.type)}`}>
                   {variable.type}
                 </span>
-                {copiedKey === variable.key ? (
+                {copiedKey === variable.name ? (
                   <Check size={14} className="text-editor-success" />
                 ) : (
                   <Copy size={14} className="text-editor-muted opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -106,7 +107,7 @@ export function StateVariablePicker({ nodeId, onInsert, className = '' }: StateV
           </div>
           <div className="border-t border-editor-border px-3 py-2">
             <div className="text-xs text-editor-muted">
-              From: {variables.map((v) => v.source).filter((v, i, a) => a.indexOf(v) === i).join(', ')}
+              From: {variables.map((v) => v.sourceStepId).filter((v, i, a) => v && a.indexOf(v) === i).join(', ') || 'workflow state'}
             </div>
           </div>
         </div>

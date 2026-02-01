@@ -41,7 +41,8 @@ export function WaitStepConfig({ nodeId }: WaitStepConfigProps) {
   const { getSelectedNode, updateNodeConfig } = useWorkflowStore();
 
   const node = getSelectedNode();
-  const config = node?.data.config.waitConfig;
+  const nodeData = node?.data as { config?: { waitConfig?: WaitConfig } } | undefined;
+  const config = nodeData?.config?.waitConfig || node?.config?.waitConfig;
 
   if (!node || !config) return null;
 

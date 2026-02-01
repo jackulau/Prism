@@ -124,11 +124,12 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set, ge
     const newResults = new Map(state.stepResults);
     const existing = newResults.get(stepId);
     if (existing) {
+      const startTime = typeof existing.startedAt === 'number' ? existing.startedAt : 0;
       newResults.set(stepId, {
         ...existing,
         status: 'completed',
         completedAt: Date.now(),
-        duration: duration ?? (existing.startedAt ? Date.now() - existing.startedAt : 0),
+        duration: duration ?? (startTime ? Date.now() - startTime : 0),
         output,
       });
     }
@@ -139,11 +140,12 @@ export const useWorkflowExecutionStore = create<WorkflowExecutionState>((set, ge
     const newResults = new Map(state.stepResults);
     const existing = newResults.get(stepId);
     if (existing) {
+      const startTime = typeof existing.startedAt === 'number' ? existing.startedAt : 0;
       newResults.set(stepId, {
         ...existing,
         status: 'failed',
         completedAt: Date.now(),
-        duration: existing.startedAt ? Date.now() - existing.startedAt : 0,
+        duration: startTime ? Date.now() - startTime : 0,
         error,
       });
     }

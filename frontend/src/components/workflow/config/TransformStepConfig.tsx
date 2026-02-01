@@ -32,7 +32,8 @@ export function TransformStepConfig({ nodeId }: TransformStepConfigProps) {
   const { getSelectedNode, updateNodeConfig } = useWorkflowStore();
 
   const node = getSelectedNode();
-  const config = node?.data.config.transformConfig;
+  const nodeData = node?.data as { config?: { transformConfig?: TransformConfig } } | undefined;
+  const config = nodeData?.config?.transformConfig || node?.config?.transformConfig;
 
   if (!node || !config) return null;
 

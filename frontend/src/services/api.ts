@@ -1040,6 +1040,56 @@ class ApiService {
       method: 'POST',
     });
   }
+
+  // Task Management
+  async getTasks(params: { status?: string; limit?: number; offset?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params.status) queryParams.set('status', params.status);
+    if (params.limit) queryParams.set('limit', params.limit.toString());
+    if (params.offset) queryParams.set('offset', params.offset.toString());
+
+    return this.request<{
+      tasks: Array<{
+        id: string;
+        user_id: string;
+        prompt: string;
+        context?: string;
+        priority: number;
+        status: string;
+        agent_config?: Record<string, unknown>;
+        metadata?: Record<string, unknown>;
+        result?: Record<string, unknown>;
+        error?: string;
+        callback_url?: string;
+        created_at: number;
+        started_at?: number;
+        completed_at?: number;
+      }>;
+      total: number;
+    }>(`/tasks?${queryParams.toString()}`);
+  }
+
+  async getTaskStats() {
+    return this.request<{
+      total: number;
+      pending: number;
+      running: number;
+      completed: number;
+      failed: number;
+    }>('/tasks/stats');
+  }
+
+  async cancelTask(taskId: string) {
+    return this.request<{ success: boolean }>(`/tasks/${taskId}/cancel`, {
+      method: 'POST',
+    });
+  }
+
+  async retryTask(taskId: string) {
+    return this.request<{ success: boolean }>(`/tasks/${taskId}/retry`, {
+      method: 'POST',
+    });
+  }
 }
 
 export const apiService = new ApiService();
