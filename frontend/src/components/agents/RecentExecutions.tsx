@@ -1,7 +1,7 @@
 import { Clock, CheckCircle, XCircle, AlertCircle, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { useAgentStore } from '../../store/agentStore';
-import type { AgentResult, AgentExecutionStatus } from '../../types/agent';
+import type { AgentResult } from '../../types/agent';
 
 export function RecentExecutions() {
   const { executionHistory, clearHistory } = useAgentStore();

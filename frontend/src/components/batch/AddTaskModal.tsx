@@ -29,7 +29,16 @@ export function AddTaskModal({ isOpen, editingTask, onClose, onSave }: AddTaskMo
     if (editingTask) {
       setPrompt(editingTask.prompt);
       setContext(editingTask.context || '');
-      setPriority(editingTask.priority);
+      // Handle numeric priority or string priority
+      const priorityValue = editingTask.priority;
+      if (typeof priorityValue === 'number') {
+        const priorityMap: Record<number, BatchTaskPriority> = { 0: 'low', 1: 'normal', 2: 'high', 3: 'critical' };
+        setPriority(priorityMap[priorityValue] ?? 'normal');
+      } else if (priorityValue) {
+        setPriority(priorityValue as unknown as BatchTaskPriority);
+      } else {
+        setPriority('normal');
+      }
     } else {
       setPrompt('');
       setContext('');
@@ -61,7 +70,7 @@ export function AddTaskModal({ isOpen, editingTask, onClose, onSave }: AddTaskMo
       return;
     }
 
-    onSave(result.data);
+    onSave({ ...result.data, name: prompt.slice(0, 50) });
     onClose();
   };
 

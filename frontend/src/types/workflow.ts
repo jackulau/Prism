@@ -3,6 +3,42 @@
 // Step types matching backend StepType constants
 export type StepType = 'agent' | 'tool' | 'condition' | 'parallel' | 'wait' | 'transform';
 
+// Transform types for transform step configuration
+export type TransformType = 'jq' | 'template' | 'script';
+
+// Wait types for wait step configuration
+export type WaitType = 'user_input' | 'webhook' | 'timeout';
+
+// Condition operators for condition step configuration
+export type ConditionOperator = 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'greater_than_or_equal' | 'less_than_or_equal' | 'contains' | 'not_contains' | 'starts_with' | 'ends_with' | 'matches' | 'exists' | 'not_exists' | 'is_empty' | 'is_not_empty';
+
+export const CONDITION_OPERATORS: ConditionOperator[] = [
+  'equals',
+  'not_equals',
+  'greater_than',
+  'less_than',
+  'greater_than_or_equal',
+  'less_than_or_equal',
+  'contains',
+  'not_contains',
+  'starts_with',
+  'ends_with',
+  'matches',
+  'exists',
+  'not_exists',
+  'is_empty',
+  'is_not_empty',
+];
+
+// State variable type for workflow state
+export interface StateVariable {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'any';
+  description?: string;
+  defaultValue?: unknown;
+  sourceStepId?: string;
+}
+
 // Workflow status types matching backend WorkflowStatus
 export type WorkflowStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
@@ -134,6 +170,8 @@ export interface WorkflowNode {
   // Connection targets
   onSuccess?: string;
   onFailure?: string;
+  // Node data for React Flow compatibility
+  data?: Record<string, unknown>;
 }
 
 // Edge connecting two nodes

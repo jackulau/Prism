@@ -10,6 +10,7 @@ import type {
 } from '../../types/agent';
 
 const DEFAULT_STATE: SingleAgentFormState = {
+  name: '',
   provider: '',
   model: '',
   prompt: '',
@@ -17,7 +18,9 @@ const DEFAULT_STATE: SingleAgentFormState = {
   maxTokens: 4096,
   systemPrompt: '',
   enabledTools: [],
+  selectedTools: [],
   showAdvanced: false,
+  errors: {},
 };
 
 /**

@@ -12,36 +12,47 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useBatchStore } from '../../store/batchStore';
-import type { BatchResult, BatchTaskStatus } from '../../types/batch';
+import type { BatchTask, BatchTaskStatus } from '../../types/batch';
 
 type SortField = 'taskId' | 'status' | 'duration' | 'tokensUsed';
 type SortDirection = 'asc' | 'desc';
 
 export function BatchResults() {
-  const { results, exportResults, clearResults } = useBatchStore();
+  const { getCompletedTasks, getFailedTasks, reset } = useBatchStore();
+  const completedTasks = getCompletedTasks();
+  const failedTasks = getFailedTasks();
+  const results = [...completedTasks, ...failedTasks];
+
   const [statusFilter, setStatusFilter] = useState<BatchTaskStatus | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('taskId');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
-  const filteredResults = results.filter((r) =>
+  const filteredResults = results.filter((r: BatchTask) =>
     statusFilter === 'all' ? true : r.status === statusFilter
   );
 
-  const sortedResults = [...filteredResults].sort((a, b) => {
+  const sortedResults = [...filteredResults].sort((a: BatchTask, b: BatchTask) => {
     let comparison = 0;
     switch (sortField) {
       case 'taskId':
-        comparison = a.taskId.localeCompare(b.taskId);
+        comparison = a.id.localeCompare(b.id);
         break;
       case 'status':
         comparison = a.status.localeCompare(b.status);
         break;
-      case 'duration':
-        comparison = (a.duration || 0) - (b.duration || 0);
+      case 'duration': {
+        const aDuration = a.startedAt && a.completedAt
+          ? new Date(a.completedAt).getTime() - new Date(a.startedAt).getTime()
+          : 0;
+        const bDuration = b.startedAt && b.completedAt
+          ? new Date(b.completedAt).getTime() - new Date(b.startedAt).getTime()
+          : 0;
+        comparison = aDuration - bDuration;
         break;
+      }
       case 'tokensUsed':
-        comparison = (a.tokensUsed || 0) - (b.tokensUsed || 0);
+        comparison = (a.tokenUsage?.total || 0) - (b.tokenUsage?.total || 0);
         break;
     }
     return sortDirection === 'asc' ? comparison : -comparison;
@@ -54,6 +65,39 @@ export function BatchResults() {
       setSortField(field);
       setSortDirection('asc');
     }
+  };
+
+  const exportResults = (format: 'json' | 'csv'): string => {
+    if (format === 'json') {
+      return JSON.stringify(results.map((r: BatchTask) => ({
+        id: r.id,
+        name: r.name,
+        prompt: r.prompt,
+        status: r.status,
+        output: r.output,
+        error: r.error,
+        tokenUsage: r.tokenUsage,
+        startedAt: r.startedAt,
+        completedAt: r.completedAt,
+      })), null, 2);
+    }
+
+    // CSV format
+    const headers = ['ID', 'Name', 'Status', 'Duration (ms)', 'Tokens', 'Error'];
+    const rows = results.map((r: BatchTask) => {
+      const duration = r.startedAt && r.completedAt
+        ? new Date(r.completedAt).getTime() - new Date(r.startedAt).getTime()
+        : '';
+      return [
+        r.id,
+        r.name,
+        r.status,
+        duration,
+        r.tokenUsage?.total || '',
+        r.error || '',
+      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',');
+    });
+    return [headers.join(','), ...rows].join('\n');
   };
 
   const handleExport = (format: 'json' | 'csv') => {
@@ -96,9 +140,6 @@ export function BatchResults() {
     }
   };
 
-  const completedCount = results.filter((r) => r.status === 'completed').length;
-  const failedCount = results.filter((r) => r.status === 'failed').length;
-
   if (results.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-editor-muted">
@@ -120,17 +161,17 @@ export function BatchResults() {
           <div className="flex items-center gap-2 text-xs">
             <span className="flex items-center gap-1 text-editor-success">
               <CheckCircle2 size={12} />
-              {completedCount}
+              {completedTasks.length}
             </span>
             <span className="flex items-center gap-1 text-editor-error">
               <XCircle size={12} />
-              {failedCount}
+              {failedTasks.length}
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={clearResults}
+            onClick={reset}
             className="px-2 py-1 text-xs text-editor-muted hover:text-editor-text transition-colors"
           >
             Clear
@@ -210,12 +251,12 @@ export function BatchResults() {
             </tr>
           </thead>
           <tbody className="divide-y divide-editor-border">
-            {sortedResults.map((result) => (
+            {sortedResults.map((result: BatchTask) => (
               <ResultRow
-                key={result.taskId}
+                key={result.id}
                 result={result}
-                isExpanded={expandedRows.has(result.taskId)}
-                onToggle={() => toggleRow(result.taskId)}
+                isExpanded={expandedRows.has(result.id)}
+                onToggle={() => toggleRow(result.id)}
                 getStatusIcon={getStatusIcon}
               />
             ))}
@@ -227,13 +268,17 @@ export function BatchResults() {
 }
 
 interface ResultRowProps {
-  result: BatchResult;
+  result: BatchTask;
   isExpanded: boolean;
   onToggle: () => void;
   getStatusIcon: (status: BatchTaskStatus) => JSX.Element;
 }
 
 function ResultRow({ result, isExpanded, onToggle, getStatusIcon }: ResultRowProps) {
+  const duration = result.startedAt && result.completedAt
+    ? new Date(result.completedAt).getTime() - new Date(result.startedAt).getTime()
+    : null;
+
   return (
     <>
       <tr
@@ -257,10 +302,10 @@ function ResultRow({ result, isExpanded, onToggle, getStatusIcon }: ResultRowPro
           {result.prompt}
         </td>
         <td className="px-3 py-2 text-right text-editor-muted text-xs">
-          {result.duration ? `${(result.duration / 1000).toFixed(1)}s` : '-'}
+          {duration ? `${(duration / 1000).toFixed(1)}s` : '-'}
         </td>
         <td className="px-3 py-2 text-right text-editor-muted text-xs">
-          {result.tokensUsed?.toLocaleString() || '-'}
+          {result.tokenUsage?.total?.toLocaleString() || '-'}
         </td>
       </tr>
       {isExpanded && (
@@ -273,11 +318,11 @@ function ResultRow({ result, isExpanded, onToggle, getStatusIcon }: ResultRowPro
                   {result.prompt}
                 </p>
               </div>
-              {result.result && (
+              {result.output && (
                 <div>
                   <span className="text-xs text-editor-muted block mb-1">Result:</span>
                   <p className="text-sm text-editor-text bg-editor-bg p-2 rounded border border-editor-border whitespace-pre-wrap">
-                    {result.result}
+                    {result.output}
                   </p>
                 </div>
               )}

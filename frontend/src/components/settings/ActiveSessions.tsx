@@ -28,7 +28,7 @@ export function ActiveSessions() {
     return () => clearInterval(interval);
   }, [refreshSessions]);
 
-  const handleTerminateSession = async (sessionId: number) => {
+  const handleTerminateSession = async (sessionId: string) => {
     await terminateSession(sessionId);
   };
 

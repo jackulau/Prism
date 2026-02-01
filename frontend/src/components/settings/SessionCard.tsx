@@ -67,7 +67,7 @@ export function SessionCard({ session, onTerminate }: SessionCardProps) {
                 <span>IP: {session.ip_address}</span>
               </div>
               <div>
-                Active: {formatRelativeTime(session.last_activity)}
+                Active: {formatRelativeTime(session.last_activity_at)}
               </div>
               <div>
                 Started: {formatSessionDate(session.created_at)}

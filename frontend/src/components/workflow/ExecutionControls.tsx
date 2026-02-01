@@ -13,6 +13,7 @@ interface ExecutionControlsProps {
 
 const STATUS_COLORS: Record<WorkflowExecutionStatus, string> = {
   idle: 'bg-gray-500',
+  pending: 'bg-gray-400',
   running: 'bg-blue-500',
   paused: 'bg-yellow-500',
   completed: 'bg-green-500',
@@ -23,6 +24,7 @@ const STATUS_COLORS: Record<WorkflowExecutionStatus, string> = {
 
 const STATUS_LABELS: Record<WorkflowExecutionStatus, string> = {
   idle: 'Idle',
+  pending: 'Pending',
   running: 'Running',
   paused: 'Paused',
   completed: 'Completed',

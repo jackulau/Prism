@@ -5,7 +5,7 @@ import { useAppStore } from '../../store';
 import type { BatchExecutionConfig } from '../../types/batch';
 
 export function BatchConfigForm() {
-  const { execution, startBatch } = useBatchStore();
+  const { execution } = useBatchStore();
   const { providers, loadProviders } = useAppStore();
 
   // Local config state

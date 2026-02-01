@@ -13,13 +13,16 @@ const priorityColors: Record<BatchTaskPriority, string> = {
   low: 'bg-gray-500/20 text-gray-400',
   normal: 'bg-blue-500/20 text-blue-400',
   high: 'bg-orange-500/20 text-orange-400',
+  critical: 'bg-red-500/20 text-red-400',
 };
 
 const statusIcons: Record<BatchTask['status'], React.ReactNode> = {
   pending: <Clock size={16} className="text-editor-muted" />,
+  queued: <Clock size={16} className="text-blue-400" />,
   running: <Loader2 size={16} className="text-blue-400 animate-spin" />,
   completed: <CheckCircle size={16} className="text-green-400" />,
   failed: <XCircle size={16} className="text-red-400" />,
+  cancelled: <XCircle size={16} className="text-yellow-400" />,
 };
 
 export function BatchTaskItem({ task, onEdit, onDelete, disabled = false }: BatchTaskItemProps) {
@@ -54,9 +57,17 @@ export function BatchTaskItem({ task, onEdit, onDelete, disabled = false }: Batc
         </div>
 
         {/* Priority Badge */}
-        <span className={`flex-shrink-0 px-2 py-0.5 text-xs rounded-full ${priorityColors[task.priority]}`}>
-          {task.priority}
-        </span>
+        {task.priority !== undefined && (
+          <span className={`flex-shrink-0 px-2 py-0.5 text-xs rounded-full ${
+            typeof task.priority === 'number'
+              ? Object.values(priorityColors)[task.priority] || priorityColors.normal
+              : priorityColors[task.priority as keyof typeof priorityColors] || priorityColors.normal
+          }`}>
+            {typeof task.priority === 'number'
+              ? (['low', 'normal', 'high', 'critical'][task.priority] || 'normal')
+              : task.priority}
+          </span>
+        )}
 
         {/* Actions */}
         <div className="flex items-center gap-1">

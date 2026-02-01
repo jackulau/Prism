@@ -13,14 +13,21 @@ import { useBatchStore } from '../../store/batchStore';
 import type { BatchTask, BatchTaskStatus } from '../../types/batch';
 
 export function BatchTaskList() {
-  const { tasks, addTask, removeTask, clearTasks, isRunning } = useBatchStore();
+  const { addTask, removeTask, clearTasks, isRunning, getOrderedTasks } = useBatchStore();
+  const tasks = getOrderedTasks();
+  const running = isRunning();
   const [newPrompt, setNewPrompt] = useState('');
   const [newSystemPrompt, setNewSystemPrompt] = useState('');
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
 
   const handleAddTask = () => {
     if (!newPrompt.trim()) return;
-    addTask(newPrompt.trim(), newSystemPrompt.trim() || undefined);
+    addTask({
+      id: `task-${Date.now()}`,
+      name: newPrompt.trim().slice(0, 50),
+      prompt: newPrompt.trim(),
+      metadata: newSystemPrompt.trim() ? { systemPrompt: newSystemPrompt.trim() } : undefined,
+    });
     setNewPrompt('');
     setNewSystemPrompt('');
   };
@@ -47,10 +54,10 @@ export function BatchTaskList() {
     }
   };
 
-  const pendingCount = tasks.filter((t) => t.status === 'pending').length;
-  const runningCount = tasks.filter((t) => t.status === 'running').length;
-  const completedCount = tasks.filter((t) => t.status === 'completed').length;
-  const failedCount = tasks.filter((t) => t.status === 'failed').length;
+  const pendingCount = tasks.filter((t: BatchTask) => t.status === 'pending' || t.status === 'queued').length;
+  const runningCount = tasks.filter((t: BatchTask) => t.status === 'running').length;
+  const completedCount = tasks.filter((t: BatchTask) => t.status === 'completed').length;
+  const failedCount = tasks.filter((t: BatchTask) => t.status === 'failed').length;
 
   return (
     <div className="space-y-4">
@@ -58,7 +65,7 @@ export function BatchTaskList() {
         <h3 className="text-sm font-semibold text-editor-text">
           Tasks ({tasks.length})
         </h3>
-        {tasks.length > 0 && !isRunning && (
+        {tasks.length > 0 && !running && (
           <button
             onClick={clearTasks}
             className="text-xs text-editor-muted hover:text-editor-error transition-colors"
@@ -99,7 +106,7 @@ export function BatchTaskList() {
       )}
 
       {/* Add Task Form */}
-      {!isRunning && (
+      {!running && (
         <div className="space-y-2">
           <div className="flex gap-2">
             <textarea
@@ -146,14 +153,14 @@ export function BatchTaskList() {
             <p className="text-xs mt-1">Add prompts above to create a batch</p>
           </div>
         ) : (
-          tasks.map((task, index) => (
+          tasks.map((task: BatchTask, index: number) => (
             <TaskItem
               key={task.id}
               task={task}
               index={index}
               onRemove={() => removeTask(task.id)}
               getStatusIcon={getStatusIcon}
-              disabled={isRunning}
+              disabled={running}
             />
           ))
         )}
@@ -171,6 +178,8 @@ interface TaskItemProps {
 }
 
 function TaskItem({ task, index, onRemove, getStatusIcon, disabled }: TaskItemProps) {
+  const systemPrompt = task.metadata?.systemPrompt as string | undefined;
+
   return (
     <div
       className={`flex items-start gap-2 p-3 rounded-lg border transition-colors ${
@@ -192,9 +201,9 @@ function TaskItem({ task, index, onRemove, getStatusIcon, disabled }: TaskItemPr
 
       <div className="flex-1 min-w-0">
         <p className="text-sm text-editor-text line-clamp-2">{task.prompt}</p>
-        {task.systemPrompt && (
+        {systemPrompt && (
           <p className="text-xs text-editor-muted mt-1 line-clamp-1">
-            System: {task.systemPrompt}
+            System: {systemPrompt}
           </p>
         )}
         {task.status === 'running' && task.progress !== undefined && (

@@ -25,12 +25,16 @@ interface WorkflowState {
   pendingConnection: PendingConnection | null;
   isDragging: boolean;
   isPanning: boolean;
+  isConfigPanelOpen: boolean;
 
   // Workflow metadata
   workflowId: string | null;
   workflowName: string;
   workflowDescription: string;
   isDirty: boolean;
+
+  // Validation
+  validationErrors: Record<string, string[]>;
 
   // History for undo/redo
   history: { nodes: WorkflowNode[]; edges: Edge[] }[];
@@ -82,6 +86,15 @@ interface WorkflowActions {
   clearSelection: () => void;
   deleteSelected: () => void;
   selectAll: () => void;
+
+  // Config panel actions
+  openConfigPanel: () => void;
+  closeConfigPanel: () => void;
+  getSelectedNode: () => WorkflowNode | null;
+  updateNodeConfig: (nodeId: string, config: Partial<StepConfig>) => void;
+  updateNodeData: (nodeId: string, data: Record<string, unknown>) => void;
+  deleteNode: (nodeId: string) => void;
+  getAvailableStateVariables: () => Array<{ name: string; type: string; sourceStepId?: string }>;
 }
 
 type WorkflowStore = WorkflowState & WorkflowActions;
@@ -149,10 +162,12 @@ const initialState: WorkflowState = {
   pendingConnection: null,
   isDragging: false,
   isPanning: false,
+  isConfigPanelOpen: false,
   workflowId: null,
   workflowName: 'Untitled Workflow',
   workflowDescription: '',
   isDirty: false,
+  validationErrors: {},
   history: [],
   historyIndex: -1,
 };
@@ -537,4 +552,88 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
       set({ selectedNodeId: state.nodes[0].id });
     }
   },
+
+  // Config panel actions
+  openConfigPanel: () => {
+    set({ isConfigPanelOpen: true });
+  },
+
+  closeConfigPanel: () => {
+    set({ isConfigPanelOpen: false });
+  },
+
+  getSelectedNode: () => {
+    const state = get();
+    if (!state.selectedNodeId) return null;
+    return state.nodes.find((n) => n.id === state.selectedNodeId) || null;
+  },
+
+  updateNodeConfig: (nodeId, config) => {
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId
+          ? { ...n, config: { ...n.config, ...config } }
+          : n
+      ),
+      isDirty: true,
+    }));
+  },
+
+  updateNodeData: (nodeId, data) => {
+    set((state) => ({
+      nodes: state.nodes.map((n) =>
+        n.id === nodeId
+          ? { ...n, data: { ...(n.data || {}), ...data } }
+          : n
+      ),
+      isDirty: true,
+    }));
+  },
+
+  deleteNode: (nodeId) => {
+    get().removeNode(nodeId);
+  },
+
+  getAvailableStateVariables: () => {
+    const state = get();
+    const variables: Array<{ name: string; type: string; sourceStepId?: string }> = [];
+
+    // Extract output keys from nodes
+    for (const node of state.nodes) {
+      let outputKey: string | undefined;
+
+      if (node.config.agentConfig?.outputKey) {
+        outputKey = node.config.agentConfig.outputKey;
+      } else if (node.config.toolConfig?.outputKey) {
+        outputKey = node.config.toolConfig.outputKey;
+      } else if (node.config.waitConfig?.outputKey) {
+        outputKey = node.config.waitConfig.outputKey;
+      } else if (node.config.transformConfig?.outputKey) {
+        outputKey = node.config.transformConfig.outputKey;
+      }
+
+      if (outputKey) {
+        variables.push({
+          name: outputKey,
+          type: 'any',
+          sourceStepId: node.id,
+        });
+      }
+    }
+
+    return variables;
+  },
 }));
+
+// Helper function to get step type label
+export function getStepTypeLabel(type: StepType): string {
+  const labels: Record<StepType, string> = {
+    agent: 'AI Agent',
+    tool: 'Tool',
+    condition: 'Condition',
+    parallel: 'Parallel',
+    wait: 'Wait',
+    transform: 'Transform',
+  };
+  return labels[type] || type;
+}

@@ -8,27 +8,35 @@ import {
   Activity,
 } from 'lucide-react';
 import { useBatchStore } from '../../store/batchStore';
+import type { BatchTask } from '../../types/batch';
 
 export function BatchProgressTracker() {
-  const { tasks, execution, isRunning } = useBatchStore();
+  const { execution, getOrderedTasks, isRunning } = useBatchStore();
 
+  const tasks = getOrderedTasks();
+  const running = isRunning();
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === 'completed').length;
-  const failedTasks = tasks.filter((t) => t.status === 'failed').length;
-  const runningTasks = tasks.filter((t) => t.status === 'running').length;
-  const pendingTasks = tasks.filter((t) => t.status === 'pending').length;
-  const cancelledTasks = tasks.filter((t) => t.status === 'cancelled').length;
+  const completedTasks = tasks.filter((t: BatchTask) => t.status === 'completed').length;
+  const failedTasks = tasks.filter((t: BatchTask) => t.status === 'failed').length;
+  const runningTasks = tasks.filter((t: BatchTask) => t.status === 'running').length;
+  const pendingTasks = tasks.filter((t: BatchTask) => t.status === 'pending' || t.status === 'queued').length;
+  const cancelledTasks = tasks.filter((t: BatchTask) => t.status === 'cancelled').length;
 
   const progressPercent = totalTasks > 0
     ? Math.round(((completedTasks + failedTasks + cancelledTasks) / totalTasks) * 100)
     : 0;
 
-  const totalTokens = tasks.reduce((sum, t) => sum + (t.tokensUsed || 0), 0);
-  const totalDuration = tasks.reduce((sum, t) => sum + (t.duration || 0), 0);
+  const totalTokens = tasks.reduce((sum: number, t: BatchTask) => sum + (t.tokenUsage?.total || 0), 0);
+  const totalDuration = tasks.reduce((sum: number, t: BatchTask) => {
+    if (t.startedAt && t.completedAt) {
+      return sum + (new Date(t.completedAt).getTime() - new Date(t.startedAt).getTime());
+    }
+    return sum;
+  }, 0);
   const avgDuration = completedTasks > 0 ? totalDuration / completedTasks : 0;
 
   const elapsedTime = execution?.startedAt
-    ? Date.now() - execution.startedAt.getTime()
+    ? Date.now() - new Date(execution.startedAt).getTime()
     : 0;
 
   const formatDuration = (ms: number) => {
@@ -57,7 +65,7 @@ export function BatchProgressTracker() {
           <Activity size={16} />
           Progress
         </h3>
-        {isRunning && (
+        {running && (
           <span className="flex items-center gap-1 text-xs text-editor-accent">
             <Loader2 size={12} className="animate-spin" />
             Running
@@ -115,7 +123,7 @@ export function BatchProgressTracker() {
           <span>
             {completedTasks + failedTasks + cancelledTasks} / {totalTasks} tasks
           </span>
-          {isRunning && <span>{runningTasks} running</span>}
+          {running && <span>{runningTasks} running</span>}
         </div>
       </div>
 
@@ -199,7 +207,7 @@ export function BatchProgressTracker() {
         <div className="space-y-2 pt-4 border-t border-editor-border">
           <span className="text-xs text-editor-muted">Task Status</span>
           <div className="max-h-[200px] overflow-y-auto space-y-1">
-            {tasks.map((task, index) => (
+            {tasks.map((task: BatchTask, index: number) => (
               <div
                 key={task.id}
                 className="flex items-center gap-2 p-2 rounded bg-editor-surface/50 text-xs"
@@ -209,9 +217,9 @@ export function BatchProgressTracker() {
                 <span className="flex-1 truncate text-editor-text">
                   {task.prompt.slice(0, 40)}...
                 </span>
-                {task.duration && (
+                {task.startedAt && task.completedAt && (
                   <span className="text-editor-muted">
-                    {formatDuration(task.duration)}
+                    {formatDuration(new Date(task.completedAt).getTime() - new Date(task.startedAt).getTime())}
                   </span>
                 )}
               </div>

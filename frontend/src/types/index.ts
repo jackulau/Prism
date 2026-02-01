@@ -37,6 +37,15 @@ export type MessageType =
   | 'workflow.completed'
   | 'workflow.failed'
   | 'workflow.cancelled'
+  | 'workflow.paused'
+  | 'workflow.resumed'
+  | 'workflow.progress'
+  | 'workflow.status'
+  | 'workflow.step_started'
+  | 'workflow.step_completed'
+  | 'workflow.step_failed'
+  | 'workflow.step_skipped'
+  | 'workflow.waiting_input'
   // Swarm message types
   | 'swarm.run'
   | 'swarm.stop'
@@ -622,12 +631,14 @@ export interface SwarmProgressMessage {
 // Workflow Execution Types
 // ============================================================================
 
-export type WorkflowExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'waiting_input';
+export type WorkflowExecutionStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused' | 'waiting_input';
 export type WorkflowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'retrying';
 
 export interface WorkflowStepResult {
   step_id: string;
   stepId?: string;
+  stepName?: string;
+  stepType?: string;
   status: WorkflowStepStatus;
   output?: unknown;
   error?: string;
@@ -635,6 +646,8 @@ export interface WorkflowStepResult {
   startedAt?: string;
   completed_at?: string;
   completedAt?: string;
+  duration?: number;
+  retryCount?: number;
 }
 
 export interface WorkflowInfo {
@@ -643,8 +656,39 @@ export interface WorkflowInfo {
   description?: string;
   steps: WorkflowStepInfo[];
   totalSteps?: number;
+  status?: WorkflowExecutionStatus;
   created_at: string;
   updated_at: string;
+}
+
+export type WorkflowMessageType =
+  | 'workflow.paused'
+  | 'workflow.resumed'
+  | 'workflow.progress'
+  | 'workflow.status'
+  | 'workflow.step_started'
+  | 'workflow.step_completed'
+  | 'workflow.step_failed'
+  | 'workflow.step_skipped'
+  | 'workflow.waiting_input'
+  | 'workflow.run'
+  | 'workflow.stop'
+  | 'workflow.started'
+  | 'workflow.completed'
+  | 'workflow.failed'
+  | 'workflow.cancelled';
+
+export interface WorkflowWSMessage {
+  type: WorkflowMessageType;
+  workflow_id: string;
+  step_id?: string;
+  step_name?: string;
+  status?: WorkflowExecutionStatus | WorkflowStepStatus;
+  progress?: number;
+  message?: string;
+  output?: unknown;
+  error?: string;
+  timestamp?: string;
 }
 
 export interface WorkflowStepInfo {

@@ -2,9 +2,16 @@
 
 export type AgentExecutionStatus = 'idle' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+export interface AgentExecutionConfig {
+  temperature?: number;
+  maxTokens?: number;
+  systemPrompt?: string;
+  enabledTools?: string[];
+}
+
 export interface AgentConfig {
   id?: string;
-  name: string;
+  name?: string;
   model: string;
   provider: string;
   systemPrompt?: string;
@@ -14,6 +21,7 @@ export interface AgentConfig {
   temperature?: number;
   maxTokens?: number;
   metadata?: Record<string, unknown>;
+  executionConfig?: AgentExecutionConfig;
 }
 
 // Tool configuration
@@ -27,14 +35,25 @@ export interface AvailableTool {
 
 // Component props
 export interface AgentConfigSectionProps {
-  config: Partial<AgentConfig>;
-  onChange: (config: Partial<AgentConfig>) => void;
+  temperature: number;
+  onTemperatureChange: (value: number) => void;
+  maxTokens: number;
+  onMaxTokensChange: (value: number) => void;
+  systemPrompt: string;
+  onSystemPromptChange: (value: string) => void;
+  enabledTools: string[];
+  onToolsChange: (tools: string[]) => void;
   availableTools?: AvailableTool[];
+  defaultCollapsed?: boolean;
   disabled?: boolean;
 }
 
 export interface SingleAgentFormProps {
-  onSubmit: (config: AgentConfig) => void;
+  onSubmit: (config: AgentConfig) => Promise<void> | void;
+  onClose?: () => void;
+  initialValues?: Partial<SingleAgentFormState>;
+  isSubmitting?: boolean;
+  availableTools?: AvailableTool[];
   disabled?: boolean;
   initialConfig?: Partial<AgentConfig>;
 }
@@ -48,6 +67,8 @@ export interface SingleAgentFormState {
   temperature: number;
   maxTokens: number;
   selectedTools: string[];
+  enabledTools: string[];
+  showAdvanced: boolean;
   errors: Record<string, string>;
 }
 

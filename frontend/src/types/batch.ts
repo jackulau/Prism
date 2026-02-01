@@ -62,6 +62,8 @@ export interface BatchTask extends BatchTaskConfig {
   error?: string;
   /** Task output/result if completed */
   output?: string;
+  /** Result alias for output (UI compatibility) */
+  result?: string;
   /** When the task started executing */
   startedAt?: Date;
   /** When the task finished */
@@ -72,6 +74,12 @@ export interface BatchTask extends BatchTaskConfig {
     output: number;
     total: number;
   };
+  /** System prompt for this task */
+  systemPrompt?: string;
+  /** Context for this task */
+  context?: string;
+  /** Execution progress (0-100) */
+  progress?: number;
 }
 
 /**
@@ -104,6 +112,8 @@ export interface BatchProgressInfo {
 export interface BatchResult {
   /** Unique identifier for this batch execution */
   batchId: string;
+  /** Task ID if this is a task result */
+  taskId?: string;
   /** Final status of the batch */
   status: BatchStatus;
   /** All tasks and their final states */
@@ -116,14 +126,22 @@ export interface BatchResult {
   completedAt: Date;
   /** Total execution time in milliseconds */
   totalDuration: number;
+  /** Duration alias for UI compatibility */
+  duration?: number;
   /** Combined token usage across all tasks */
   totalTokenUsage: {
     input: number;
     output: number;
     total: number;
   };
+  /** Tokens used alias for UI compatibility */
+  tokensUsed?: number;
   /** Batch-level error if any */
   error?: string;
+  /** Prompt that was executed */
+  prompt?: string;
+  /** Result output */
+  result?: string;
 }
 
 /**

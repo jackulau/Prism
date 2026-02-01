@@ -9,6 +9,7 @@ interface ExecutionMonitorProps {
 
 const STATUS_COLORS: Record<WorkflowExecutionStatus, string> = {
   idle: 'text-gray-400 bg-gray-400/10',
+  pending: 'text-gray-400 bg-gray-400/10',
   running: 'text-blue-400 bg-blue-400/10',
   paused: 'text-yellow-400 bg-yellow-400/10',
   completed: 'text-green-400 bg-green-400/10',
@@ -19,6 +20,7 @@ const STATUS_COLORS: Record<WorkflowExecutionStatus, string> = {
 
 const STATUS_LABELS: Record<WorkflowExecutionStatus, string> = {
   idle: 'Idle',
+  pending: 'Pending',
   running: 'Running',
   paused: 'Paused',
   completed: 'Completed',
