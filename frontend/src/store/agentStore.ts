@@ -5,7 +5,11 @@ import type {
   AgentExecutionState,
   AgentToolCall,
   AgentResult,
+  AgentExecution,
 } from '../types/agent';
+
+// Re-export types for convenience
+export type { AgentExecutionStatus, AgentExecution } from '../types/agent';
 
 interface AgentStoreState {
   // Current agent execution state
@@ -50,6 +54,12 @@ interface AgentStoreState {
   // Getters
   getExecution: (agentId: string) => AgentExecutionState | undefined;
   isRunning: (agentId?: string) => boolean;
+
+  // Computed properties for UI
+  recentExecutions: AgentResult[];
+
+  // History actions
+  clearHistory: () => void;
 }
 
 const initialExecutionState: AgentExecutionState = {
@@ -408,4 +418,16 @@ export const useAgentStore = create<AgentStoreState>((set, get) => ({
     }
     return get().currentExecution.status === 'running';
   },
+
+  // Recent executions (last 10, reversed for most recent first)
+  recentExecutions: [],
+
+  // Clear execution history
+  clearHistory: () => {
+    set({ executionHistory: [], recentExecutions: [] });
+  },
 }));
+
+// Selector for recent executions
+export const selectRecentExecutions = (state: AgentStoreState) =>
+  state.executionHistory.slice(-10).reverse();

@@ -8,9 +8,60 @@ export interface AgentConfig {
   model: string;
   provider: string;
   systemPrompt?: string;
+  prompt?: string;
   tools?: string[];
   maxIterations?: number;
+  temperature?: number;
+  maxTokens?: number;
   metadata?: Record<string, unknown>;
+}
+
+// Tool configuration
+export interface AvailableTool {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  enabled?: boolean;
+}
+
+// Component props
+export interface AgentConfigSectionProps {
+  config: Partial<AgentConfig>;
+  onChange: (config: Partial<AgentConfig>) => void;
+  availableTools?: AvailableTool[];
+  disabled?: boolean;
+}
+
+export interface SingleAgentFormProps {
+  onSubmit: (config: AgentConfig) => void;
+  disabled?: boolean;
+  initialConfig?: Partial<AgentConfig>;
+}
+
+export interface SingleAgentFormState {
+  name: string;
+  provider: string;
+  model: string;
+  systemPrompt: string;
+  prompt: string;
+  temperature: number;
+  maxTokens: number;
+  selectedTools: string[];
+  errors: Record<string, string>;
+}
+
+// Execution history
+export interface AgentExecution {
+  id: string;
+  agentId: string;
+  config: AgentConfig;
+  status: AgentExecutionStatus;
+  output: string[];
+  error?: string;
+  startedAt: Date;
+  completedAt?: Date;
+  iterationCount: number;
 }
 
 export interface AgentExecutionState {

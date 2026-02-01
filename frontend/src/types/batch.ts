@@ -132,14 +132,26 @@ export interface BatchResult {
 export interface BatchExecutionConfig {
   /** Maximum concurrent tasks to run */
   maxConcurrency?: number;
+  /** Alias for maxConcurrency for UI compatibility */
+  maxConcurrent?: number;
   /** Whether to stop all tasks on first failure */
   stopOnFirstFailure?: boolean;
   /** Global timeout for the entire batch in milliseconds */
   timeoutMs?: number;
+  /** Alias for timeout in ms for UI compatibility */
+  timeout?: number;
   /** Per-task timeout in milliseconds */
   taskTimeoutMs?: number;
   /** Default provider for all tasks */
   defaultProvider?: string;
+  /** Provider alias for UI compatibility */
+  provider?: string;
+  /** Model for all tasks */
+  model?: string;
+  /** Temperature for generation */
+  temperature?: number;
+  /** Max tokens for generation */
+  maxTokens?: number;
   /** Default model for all tasks */
   defaultModel?: string;
 }
@@ -231,4 +243,33 @@ export interface BatchHistoryEntry {
   completedAt?: Date;
   /** Total duration in ms */
   duration?: number;
+}
+
+/**
+ * Task priority levels
+ */
+export type BatchTaskPriority = 'low' | 'normal' | 'high' | 'critical';
+
+/**
+ * Form data for creating/editing a batch task
+ */
+export interface BatchTaskFormData {
+  name: string;
+  prompt: string;
+  systemPrompt?: string;
+  priority: BatchTaskPriority;
+  maxRetries?: number;
+  context?: string;
+}
+
+/**
+ * Batch configuration for execution
+ */
+export interface BatchConfig {
+  provider: string;
+  model: string;
+  maxConcurrent: number;
+  timeout: number;
+  temperature: number;
+  maxTokens: number;
 }
